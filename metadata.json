@@ -1,0 +1,6 @@
+{
+  "name": "Prime Telecare",
+  "description": "Connecting families with licensed doctors for consultations, prescriptions, and health records.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
