@@ -156,6 +156,23 @@ export const WireframeScreen: React.FC<WireframeScreenProps> = ({
               <span>Restore Connection & Load Live View</span>
             </button>
           )}
+
+          {onNavigate && (
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/60">
+              <button
+                onClick={() => onNavigate('patient-home')}
+                className="bg-slate-700/80 hover:bg-slate-700 text-white font-bold font-outfit text-xs py-2 px-3 rounded-xl border border-slate-600 transition-colors"
+              >
+                Cached Dashboard
+              </button>
+              <button
+                onClick={() => onNavigate('health-records')}
+                className="bg-slate-700/80 hover:bg-slate-700 text-white font-bold font-outfit text-xs py-2 px-3 rounded-xl border border-slate-600 transition-colors"
+              >
+                Cached Health Records
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

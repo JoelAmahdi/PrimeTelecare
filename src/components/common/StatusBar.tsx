@@ -10,23 +10,48 @@ interface StatusBarProps {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
-  time = '9:41',
+  time,
   carrier = '5G',
   batteryLevel = 98,
   className = '',
   dark = false,
 }) => {
+  const [currentTime, setCurrentTime] = React.useState<string>(() => {
+    if (time) return time;
+    try {
+      return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch {
+      return '9:41';
+    }
+  });
+
+  React.useEffect(() => {
+    if (time) {
+      setCurrentTime(time);
+      return;
+    }
+    const update = () => {
+      try {
+        setCurrentTime(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+      } catch {
+        // fallback
+      }
+    };
+    const interval = setInterval(update, 30000);
+    return () => clearInterval(interval);
+  }, [time]);
+
   const textColor = dark ? 'text-white' : 'text-slate-700';
   const badgeBg = dark ? 'bg-white/15' : 'bg-slate-200/70';
   const bgStyle = dark ? 'bg-slate-950/85' : 'bg-[#f6fafd]/90';
 
   return (
     <div
-      className={`sticky top-0 z-50 flex items-center justify-between text-xs font-semibold py-2.5 px-4 sm:px-6 select-none backdrop-blur-md transition-colors ${bgStyle} ${textColor} ${className}`}
+      className={`relative z-20 flex items-center justify-between text-xs font-semibold py-2 px-4 sm:px-6 select-none backdrop-blur-md transition-colors ${bgStyle} ${textColor} ${className}`}
     >
       {/* Left Side: Time and Carrier Badge */}
       <div className="flex items-center space-x-2">
-        <span className="font-outfit font-bold tracking-tight text-sm">{time}</span>
+        <span className="font-outfit font-bold tracking-tight text-sm">{currentTime}</span>
         {carrier && (
           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badgeBg} opacity-90 tracking-wider uppercase`}>
             {carrier}

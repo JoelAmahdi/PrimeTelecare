@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Prime Telecare - Digital Health Network",
+  "short_name": "PrimeTelecare",
+  "description": "Connecting Nigerian families with verified clinicians for tele-consultations, e-prescriptions, and offline EHR records.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6fafd",
+  "theme_color": "#022434",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

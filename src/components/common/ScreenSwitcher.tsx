@@ -74,7 +74,8 @@ export const ScreenSwitcher: React.FC<ScreenSwitcherProps> = ({
                 <button
                   onClick={() => {
                     onRoleChange('patient');
-                    if (currentScreen === 'doctor-home') onNavigate('patient-home');
+                    onNavigate('patient-home');
+                    setIsOpen(false);
                   }}
                   className={`flex items-center justify-center space-x-1.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     role === 'patient'
@@ -88,7 +89,8 @@ export const ScreenSwitcher: React.FC<ScreenSwitcherProps> = ({
                 <button
                   onClick={() => {
                     onRoleChange('doctor');
-                    if (currentScreen === 'patient-home') onNavigate('doctor-home');
+                    onNavigate('doctor-home');
+                    setIsOpen(false);
                   }}
                   className={`flex items-center justify-center space-x-1.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     role === 'doctor'
@@ -108,6 +110,11 @@ export const ScreenSwitcher: React.FC<ScreenSwitcherProps> = ({
                 <button
                   key={s.id}
                   onClick={() => {
+                    if (s.id === 'doctor-home' || s.id === 'new-prescription') {
+                      onRoleChange('doctor');
+                    } else if (s.category === 'patient' || s.id === 'patient-home') {
+                      onRoleChange('patient');
+                    }
                     onNavigate(s.id);
                     setIsOpen(false);
                   }}

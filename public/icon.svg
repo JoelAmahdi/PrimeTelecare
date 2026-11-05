@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="108" fill="#022434"/>
+  <circle cx="256" cy="256" r="180" fill="#004830" opacity="0.5"/>
+  <!-- Medical Cross with Stethoscope Arc -->
+  <path d="M216 140h80v76h76v80h-76v76h-80v-76h-76v-80h76z" fill="#77daa4"/>
+  <circle cx="256" cy="256" r="28" fill="#022434"/>
+  <circle cx="256" cy="256" r="16" fill="#ffffff"/>
+</svg>

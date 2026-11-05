@@ -23,9 +23,17 @@ import {
   ArrowDownLeft,
   X,
   Sparkles,
+  Bell,
+  Download,
+  Trash2,
+  Printer,
+  SlidersHorizontal,
 } from 'lucide-react';
-import { ScreenId, User } from '../../types';
+import { ScreenId, User, CommunicationPreferences, OptionalConsents } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
+import { DataSubjectRightsModal } from '../common/DataSubjectRightsModal';
+import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
+import { showToast } from '../../utils/toast';
 
 interface AccountDetailsScreenProps {
   user: User;
@@ -62,9 +70,63 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
   // Editable Profile details state
   const [fullName, setFullName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
-  const [phone, setPhone] = useState(user.phone || '+234 803 123 4567');
+  const [phone, setPhone] = useState(user.phone || '+234 801 234 5678');
+  const [dob, setDob] = useState(user.dob || '1998-05-14');
+  const [gender, setGender] = useState(user.gender || 'Female');
+  const [stateOfResidence, setStateOfResidence] = useState(user.stateOfResidence || 'Lagos State');
+  const [lga, setLga] = useState(user.lga || 'Eti-Osa');
+  const [address, setAddress] = useState(user.address || '15 Admiralty Way, Lekki Phase 1, Lagos');
+  
+  // Emergency Contact
+  const [emergencyName, setEmergencyName] = useState(user.emergencyContact?.name || 'Chidi Okonkwo');
+  const [emergencyRelationship, setEmergencyRelationship] = useState(user.emergencyContact?.relationship || 'Brother');
+  const [emergencyPhone, setEmergencyPhone] = useState(user.emergencyContact?.phone || '+234 803 987 6543');
+  
+  // Medical & Clinical
+  const [bloodGroup, setBloodGroup] = useState(user.bloodGroup || 'O+');
+  const [allergiesText, setAllergiesText] = useState((user.allergies || ['Penicillin', 'Peanuts']).join(', '));
+  const [existingConditionsText, setExistingConditionsText] = useState((user.existingConditions || ['Seasonal Asthma']).join(', '));
+  const [currentMedicationsText, setCurrentMedicationsText] = useState(user.currentMedications || 'Cetirizine 10mg daily');
+
+  // Preferences & Consents State
+  const [commPrefs, setCommPrefs] = useState<CommunicationPreferences>(
+    user.communicationPreferences || {
+      smsAlerts: true,
+      emailSummaries: true,
+      whatsappPrescriptions: true,
+      promotionalHealthTips: false,
+    }
+  );
+
+  const [optionalConsents, setOptionalConsents] = useState<OptionalConsents>(
+    user.optionalConsents || {
+      marketingConsent: false,
+      anonymizedResearchConsent: true,
+    }
+  );
+
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
+
+  // Modals state
+  const [isDataRightsModalOpen, setIsDataRightsModalOpen] = useState(false);
+  const [dataRightsModalMode, setDataRightsModalMode] = useState<'access' | 'consent' | 'deletion'>('access');
+  const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
+
+  const handleSaveProfile = () => {
+    triggerHaptic('success');
+    setIsEditingProfile(false);
+    showToast('Profile information and clinical records updated successfully!');
+    
+  };
+
+  const handleToggleCommPref = (key: keyof CommunicationPreferences) => {
+    triggerHaptic('selection');
+    const updated = { ...commPrefs, [key]: !commPrefs[key] };
+    setCommPrefs(updated);
+    showToast('Communication preferences updated!');
+    
+  };
 
   // Financial Balance State
   const [walletBalance, setWalletBalance] = useState<number>(
@@ -160,11 +222,11 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
 
   const handleOpenPinModal = () => {
     if (numAmount < 1000) {
-      alert('Minimum withdrawal amount is ₦1,000.');
+      showToast('Minimum withdrawal amount is ₦1,000.');
       return;
     }
     if (totalDeduction > walletBalance) {
-      alert('Insufficient wallet balance for this withdrawal request.');
+      showToast('Insufficient wallet balance for this withdrawal request.');
       return;
     }
     setIsPinModalOpen(true);
@@ -209,7 +271,7 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
   const handleAddBank = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAccNum || newAccNum.length < 10) {
-      alert('Please enter a valid 10-digit account number.');
+      showToast('Please enter a valid 10-digit account number.');
       return;
     }
 
@@ -227,6 +289,7 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
     setNewAccNum('');
     setNewAccName('');
     triggerHaptic('light');
+    showToast('Bank account added successfully.');
   };
 
   return (
@@ -240,7 +303,7 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
         onBack={() => onNavigate('settings')}
       />
 
-      <div className="px-1 sm:px-3 space-y-4 mt-2">
+      <div className="w-full max-w-full min-w-0 space-y-4 mt-2">
         {/* Wallet & Account Summary Banner */}
         <div className="bg-gradient-to-br from-[#022434] via-[#1c3a4a] to-[#012f45] text-white rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden border border-slate-700/60">
           <div className="absolute -top-12 -right-12 w-44 h-44 bg-[#77daa4]/20 rounded-full blur-3xl pointer-events-none" />
@@ -366,28 +429,40 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
         {/* TAB 1: ACCOUNT DETAILS PROFILE */}
         {activeTab === 'details' && (
           <div className="space-y-4">
+            {/* 1. PERSONAL & CONTACT INFORMATION */}
             <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="font-extrabold font-outfit text-base text-[#022434]">
-                    Personal Information
+                    Personal & Demographics Information
                   </h3>
                   <p className="text-xs text-slate-500 font-nunito">
-                    Manage your verified contact details and clinical profile
+                    View and correct your personal details and contact information
                   </p>
                 </div>
                 <button
-                  onClick={() => setIsEditingProfile(!isEditingProfile)}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold font-outfit text-xs rounded-xl flex items-center space-x-1"
+                  onClick={() => {
+                    if (isEditingProfile) {
+                      handleSaveProfile();
+                    } else {
+                      triggerHaptic('selection');
+                      setIsEditingProfile(true);
+                    }
+                  }}
+                  className={`px-3.5 py-2 rounded-xl font-bold font-outfit text-xs flex items-center space-x-1.5 transition-all ${
+                    isEditingProfile
+                      ? 'bg-[#006c44] text-white shadow-sm'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
                 >
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>{isEditingProfile ? 'Save Details' : 'Edit Profile'}</span>
+                  <span>{isEditingProfile ? 'Save Changes' : 'Correct Information'}</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
                 <div>
-                  <label className="text-xs font-bold font-outfit text-slate-500 block mb-1">
+                  <label className="font-bold font-outfit text-slate-500 block mb-1">
                     Full Legal Name
                   </label>
                   <input
@@ -395,12 +470,12 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
                     disabled={!isEditingProfile}
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold font-outfit text-slate-500 block mb-1">
+                  <label className="font-bold font-outfit text-slate-500 block mb-1">
                     Email Address
                   </label>
                   <input
@@ -408,12 +483,12 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
                     disabled={!isEditingProfile}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold font-outfit text-slate-500 block mb-1">
+                  <label className="font-bold font-outfit text-slate-500 block mb-1">
                     Phone Number
                   </label>
                   <input
@@ -421,21 +496,281 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
                     disabled={!isEditingProfile}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold font-outfit text-slate-500 block mb-1">
-                    {user.role === 'doctor' ? 'Medical License Number' : 'Patient ID Code'}
+                  <label className="font-bold font-outfit text-slate-500 block mb-1">
+                    Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    disabled={!isEditingProfile}
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold font-outfit text-slate-500 block mb-1">
+                    Gender
+                  </label>
+                  <select
+                    disabled={!isEditingProfile}
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
+                  >
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                    <option value="Other">Other / Prefer not to say</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold font-outfit text-slate-500 block mb-1">
+                    State of Residence
                   </label>
                   <input
                     type="text"
-                    disabled
-                    value={user.role === 'doctor' ? 'MDCN/2019/88492' : 'PT-9948-2026'}
-                    className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700"
+                    disabled={!isEditingProfile}
+                    value={stateOfResidence}
+                    onChange={(e) => setStateOfResidence(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
                   />
                 </div>
+
+                <div className="sm:col-span-2">
+                  <label className="font-bold font-outfit text-slate-500 block mb-1">
+                    Residential Address
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isEditingProfile}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none focus:border-[#006c44] disabled:opacity-80"
+                  />
+                </div>
+              </div>
+
+              {/* Emergency Contact Sub-section */}
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <span className="font-bold font-outfit text-xs text-[#022434] uppercase tracking-wider block">
+                  Next of Kin / Emergency Contact
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="font-bold font-outfit text-slate-500 block mb-1">Contact Name</label>
+                    <input
+                      type="text"
+                      disabled={!isEditingProfile}
+                      value={emergencyName}
+                      onChange={(e) => setEmergencyName(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none disabled:opacity-80"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold font-outfit text-slate-500 block mb-1">Relationship</label>
+                    <input
+                      type="text"
+                      disabled={!isEditingProfile}
+                      value={emergencyRelationship}
+                      onChange={(e) => setEmergencyRelationship(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none disabled:opacity-80"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold font-outfit text-slate-500 block mb-1">Emergency Phone</label>
+                    <input
+                      type="text"
+                      disabled={!isEditingProfile}
+                      value={emergencyPhone}
+                      onChange={(e) => setEmergencyPhone(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none disabled:opacity-80"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {user.role === 'patient' && (
+                <div className="pt-3 border-t border-slate-100 space-y-3">
+                  <span className="font-bold font-outfit text-xs text-[#022434] uppercase tracking-wider block">
+                    Clinical Allergies & Medical History
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="font-bold font-outfit text-slate-500 block mb-1">Blood Group</label>
+                      <select
+                        disabled={!isEditingProfile}
+                        value={bloodGroup}
+                        onChange={(e) => setBloodGroup(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none disabled:opacity-80"
+                      >
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold font-outfit text-slate-500 block mb-1">Known Allergies</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfile}
+                        value={allergiesText}
+                        onChange={(e) => setAllergiesText(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none disabled:opacity-80"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold font-outfit text-slate-500 block mb-1">Current Medications</label>
+                      <input
+                        type="text"
+                        disabled={!isEditingProfile}
+                        value={currentMedicationsText}
+                        onChange={(e) => setCurrentMedicationsText(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-[#022434] focus:outline-none disabled:opacity-80"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. COMMUNICATION PREFERENCES CARD */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-3">
+              <div className="flex items-center space-x-2">
+                <Bell className="w-5 h-5 text-[#006c44]" />
+                <div>
+                  <h3 className="font-extrabold font-outfit text-sm text-[#022434]">
+                    Communication Preferences
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-nunito">
+                    Manage how you receive consultation alerts, summaries, and notifications.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 pt-1 text-xs">
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <span className="font-bold font-outfit text-[#022434] block">SMS Notifications</span>
+                    <span className="text-[11px] text-slate-500">Security OTPs and appointment reminders</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={commPrefs.smsAlerts}
+                    onChange={() => handleToggleCommPref('smsAlerts')}
+                    className="w-4 h-4 rounded text-[#006c44] focus:ring-[#006c44]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <span className="font-bold font-outfit text-[#022434] block">Email Consultation Summaries</span>
+                    <span className="text-[11px] text-slate-500">Encrypted PDF clinical reports sent via email</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={commPrefs.emailSummaries}
+                    onChange={() => handleToggleCommPref('emailSummaries')}
+                    className="w-4 h-4 rounded text-[#006c44] focus:ring-[#006c44]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <span className="font-bold font-outfit text-[#022434] block">WhatsApp Prescription Tracking</span>
+                    <span className="text-[11px] text-slate-500">Care journey packing dispatch updates & dosage reminders</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={commPrefs.whatsappPrescriptions}
+                    onChange={() => handleToggleCommPref('whatsappPrescriptions')}
+                    className="w-4 h-4 rounded text-[#006c44] focus:ring-[#006c44]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. NDPA DATA SUBJECT RIGHTS CARD */}
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-3">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="w-5 h-5 text-[#006c44]" />
+                <div>
+                  <h3 className="font-extrabold font-outfit text-sm text-[#022434]">
+                    NDPA 2023 Statutory Data Subject Rights
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-nunito">
+                    Exercise your statutory rights under Nigeria Data Protection Act 2023.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs font-outfit">
+                <button
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setDataRightsModalMode('access');
+                    setIsDataRightsModalOpen(true);
+                  }}
+                  className="p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 text-left font-bold text-[#022434] flex flex-col justify-between space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span>1. Request Records Access</span>
+                    <Download className="w-4 h-4 text-[#006c44]" />
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-normal">
+                    Download complete data package (JSON/PDF)
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setDataRightsModalMode('consent');
+                    setIsDataRightsModalOpen(true);
+                  }}
+                  className="p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 text-left font-bold text-[#022434] flex flex-col justify-between space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span>2. Withdraw Optional Consent</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-normal">
+                    Manage marketing & research consents
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setDataRightsModalMode('deletion');
+                    setIsDataRightsModalOpen(true);
+                  }}
+                  className="p-3 bg-slate-50 hover:bg-rose-50 rounded-2xl border border-slate-200 hover:border-rose-200 text-left font-bold text-rose-700 flex flex-col justify-between space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span>3. Request Data Deletion</span>
+                    <Trash2 className="w-4 h-4 text-rose-600" />
+                  </div>
+                  <span className="text-[10px] text-rose-500 font-normal">
+                    Submit erasure request (NDPA Sec 34)
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -475,79 +810,126 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
 
         {/* TAB 2: DEDICATED WITHDRAWAL PAGE */}
         {activeTab === 'withdrawal' && (
-          <div className="space-y-5">
-            {/* Withdrawal Card Form */}
-            <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-xs space-y-5">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="w-full max-w-full space-y-4 overflow-hidden">
+            {/* Main Withdrawal Card */}
+            <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/90 shadow-xs space-y-5 w-full max-w-full overflow-hidden">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="font-extrabold font-outfit text-base text-[#022434] flex items-center space-x-2">
-                    <Wallet className="w-5 h-5 text-emerald-600" />
+                    <Wallet className="w-5 h-5 text-[#006c44]" />
                     <span>Request Fund Withdrawal</span>
                   </h3>
-                  <p className="text-xs text-slate-500 font-nunito">
-                    Transfer funds directly to your verified bank account or mobile wallet
+                  <p className="text-xs text-slate-500 font-nunito mt-0.5">
+                    Direct electronic transfer to your verified Nigerian bank account
                   </p>
                 </div>
 
-                <span className="bg-emerald-100 text-[#006c44] text-xs font-bold px-3 py-1 rounded-full font-outfit">
-                  Instant Payout Ready
-                </span>
-              </div>
-
-              {/* 1. Amount Input */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold font-outfit text-slate-600 block">
-                  Enter Withdrawal Amount (₦)
-                </label>
-
-                <div className="relative">
-                  <span className="absolute left-4 top-3 text-lg font-bold text-slate-400 font-outfit">
-                    ₦
-                  </span>
-                  <input
-                    type="number"
-                    value={withdrawalAmount}
-                    onChange={(e) => setWithdrawalAmount(e.target.value)}
-                    placeholder="10000"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-extrabold font-outfit text-[#022434] focus:outline-none focus:border-[#006c44]"
-                  />
-                </div>
-
-                {/* Preset Chips */}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {[5000, 10000, 25000, walletBalance].map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => handlePresetAmount(amt)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold font-outfit border transition-all ${
-                        numAmount === amt
-                          ? 'bg-[#006c44] text-white border-[#006c44]'
-                          : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-                      }`}
-                    >
-                      {amt === walletBalance ? 'Withdraw Max' : `₦${amt.toLocaleString()}`}
-                    </button>
-                  ))}
+                <div className="inline-flex items-center space-x-1.5 self-start sm:self-auto bg-emerald-50 text-[#006c44] border border-emerald-200 px-3 py-1 rounded-full text-xs font-bold font-outfit">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>CBN Regulated Gateway</span>
                 </div>
               </div>
 
-              {/* 2. Destination Bank Account Selector */}
-              <div className="space-y-2">
+              {/* 1. Amount Input Card */}
+              <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold font-outfit text-slate-600">
-                    Select Destination Bank Account
+                  <label className="text-xs font-bold font-outfit text-slate-700">
+                    Withdrawal Amount
                   </label>
+                  <span className="text-xs font-nunito text-slate-500">
+                    Available:{' '}
+                    <strong className="font-outfit text-[#022434] font-bold">
+                      ₦{walletBalance.toLocaleString()}
+                    </strong>
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 border-2 border-slate-200/90 focus-within:border-[#006c44] focus-within:bg-white rounded-2xl p-3 sm:p-4 transition-all flex items-center justify-between gap-2 w-full min-w-0">
+                  <div className="flex items-center space-x-2 flex-1 min-w-0">
+                    <span className="text-lg sm:text-xl font-extrabold font-outfit text-slate-400 select-none shrink-0">
+                      ₦
+                    </span>
+                    <input
+                      type="number"
+                      value={withdrawalAmount}
+                      onChange={(e) => setWithdrawalAmount(e.target.value)}
+                      placeholder="0"
+                      className="w-full min-w-0 bg-transparent text-xl sm:text-2xl font-extrabold font-outfit text-[#022434] placeholder:text-slate-300 focus:outline-none"
+                    />
+                  </div>
+
                   <button
-                    onClick={() => setIsAddBankModalOpen(true)}
-                    className="text-xs font-bold text-[#006c44] hover:underline flex items-center space-x-1"
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      handlePresetAmount(walletBalance);
+                    }}
+                    className="shrink-0 px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-[#006c44] text-[11px] font-extrabold font-outfit rounded-lg transition-colors active:scale-95"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Bank Account</span>
+                    MAX
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Preset Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                  <span className="text-[11px] font-bold text-slate-400 font-outfit mr-1">Quick:</span>
+                  {[5000, 10000, 25000, 50000].map((amt) => {
+                    const isSelected = numAmount === amt;
+                    return (
+                      <button
+                        key={'preset-' + amt}
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('light');
+                          handlePresetAmount(amt);
+                        }}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold font-outfit transition-all ${
+                          isSelected
+                            ? 'bg-[#006c44] text-white shadow-2xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        ₦{amt.toLocaleString()}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Validation Warnings */}
+                {numAmount > walletBalance && (
+                  <div className="bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-xl text-xs flex items-center space-x-2 animate-fadeIn">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Amount exceeds your available wallet balance of ₦{walletBalance.toLocaleString()}.</span>
+                  </div>
+                )}
+                {numAmount > 0 && numAmount < 1000 && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-xl text-xs flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Minimum single withdrawal amount is ₦1,000.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Destination Bank Account Selector */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold font-outfit text-slate-700">
+                    Destination Bank Account
+                  </label>
+                  <button
+                    onClick={() => {
+                      triggerHaptic('light');
+                      setIsAddBankModalOpen(true);
+                    }}
+                    className="text-xs font-bold text-[#006c44] hover:text-[#005234] flex items-center space-x-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Bank</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full min-w-0">
                   {savedBanks.map((bank) => {
                     const isSelected = selectedBankId === bank.id;
                     return (
@@ -557,27 +939,39 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
                           setSelectedBankId(bank.id);
                           triggerHaptic('selection');
                         }}
-                        className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between min-w-0 ${
                           isSelected
-                            ? 'border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                            ? 'border-[#006c44] bg-emerald-50/40 ring-2 ring-emerald-600/20'
+                            : 'border-slate-200/90 hover:border-slate-300 bg-white'
                         }`}
                       >
-                        <div className="flex items-center space-x-3">
-                          <div className={`p-2 rounded-xl ${isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <div className="flex items-center space-x-3 min-w-0 flex-1 pr-2">
+                          <div
+                            className={`p-2.5 rounded-xl shrink-0 ${
+                              isSelected ? 'bg-[#006c44] text-white' : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
                             <Building2 className="w-4 h-4" />
                           </div>
-                          <div>
-                            <span className="font-bold font-outfit text-xs text-[#022434] block">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-extrabold font-outfit text-xs text-[#022434] truncate block">
                               {bank.bankName}
                             </span>
-                            <span className="text-[11px] font-mono text-slate-500">
-                              ****{bank.accountNumber.slice(-4)} • {bank.accountName}
+                            <span className="text-[11px] font-mono text-slate-500 truncate block mt-0.5">
+                              •••• {bank.accountNumber.slice(-4)} • {bank.accountName}
                             </span>
                           </div>
                         </div>
 
-                        {isSelected && <Check className="w-4 h-4 text-emerald-600 font-bold" />}
+                        <div
+                          className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
+                            isSelected
+                              ? 'bg-[#006c44] border-[#006c44] text-white'
+                              : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
                       </div>
                     );
                   })}
@@ -585,75 +979,119 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
               </div>
 
               {/* 3. Payout Speed */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold font-outfit text-slate-600 block">
+              <div className="space-y-2.5">
+                <label className="text-xs font-bold font-outfit text-slate-700 block">
                   Select Payout Speed
                 </label>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full min-w-0">
                   <div
-                    onClick={() => setPayoutSpeed('instant')}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setPayoutSpeed('instant');
+                    }}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all min-w-0 ${
                       payoutSpeed === 'instant'
-                        ? 'border-emerald-500 bg-emerald-50/50 font-bold'
-                        : 'border-slate-200 bg-white'
+                        ? 'border-[#006c44] bg-emerald-50/40 ring-2 ring-emerald-600/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-outfit text-[#022434]">Instant Payout</span>
-                      <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center space-x-1.5 min-w-0">
+                        <Clock className="w-4 h-4 text-[#006c44] shrink-0" />
+                        <span className="text-xs font-extrabold font-outfit text-[#022434] truncate">
+                          Instant Payout
+                        </span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold shrink-0">
                         Under 5 Mins
                       </span>
                     </div>
-                    <span className="text-[11px] text-slate-500 font-nunito block mt-1">
+                    <span className="text-[11px] text-slate-500 font-nunito block mt-1.5">
                       Fee: ₦50 processing charge
                     </span>
                   </div>
 
                   <div
-                    onClick={() => setPayoutSpeed('standard')}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setPayoutSpeed('standard');
+                    }}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all min-w-0 ${
                       payoutSpeed === 'standard'
-                        ? 'border-emerald-500 bg-emerald-50/50 font-bold'
-                        : 'border-slate-200 bg-white'
+                        ? 'border-[#006c44] bg-emerald-50/40 ring-2 ring-emerald-600/20'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-outfit text-[#022434]">Standard Payout</span>
-                      <span className="text-[10px] bg-slate-200 text-slate-800 px-2 py-0.5 rounded-full font-bold">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center space-x-1.5 min-w-0">
+                        <Building2 className="w-4 h-4 text-slate-500 shrink-0" />
+                        <span className="text-xs font-extrabold font-outfit text-[#022434] truncate">
+                          Standard Transfer
+                        </span>
+                      </div>
+                      <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-bold shrink-0">
                         24 Hours
                       </span>
                     </div>
-                    <span className="text-[11px] text-slate-500 font-nunito block mt-1">
+                    <span className="text-[11px] text-slate-500 font-nunito block mt-1.5">
                       Fee: Free (₦0 charge)
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Breakdown */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70 space-y-2 text-xs font-nunito">
-                <div className="flex justify-between text-slate-600">
+              {/* 4. Financial Breakdown Receipt */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2.5 text-xs font-nunito w-full min-w-0">
+                <div className="flex justify-between items-center text-slate-600">
                   <span>Withdrawal Amount:</span>
-                  <span className="font-bold text-slate-900">₦{numAmount.toLocaleString()}</span>
+                  <span className="font-bold text-slate-900 font-outfit text-sm">
+                    ₦{numAmount.toLocaleString()}
+                  </span>
                 </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>Processing Fee:</span>
-                  <span className="font-bold text-slate-900">₦{processingFee}</span>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Payment Gateway Fee:</span>
+                  <span className="font-bold text-slate-900 font-outfit">
+                    {processingFee === 0 ? '₦0 (Free)' : `₦${processingFee}`}
+                  </span>
                 </div>
-                <div className="flex justify-between pt-2 border-t border-slate-200 text-sm font-extrabold font-outfit text-[#022434]">
-                  <span>Total Wallet Deduction:</span>
-                  <span className="text-emerald-700">₦{totalDeduction.toLocaleString()}</span>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Estimated Delivery:</span>
+                  <span className="font-semibold text-slate-800">
+                    {payoutSpeed === 'instant' ? 'Within 5 minutes' : 'Next business day'}
+                  </span>
+                </div>
+
+                <div className="pt-2.5 border-t border-slate-200/90 flex justify-between items-center">
+                  <div>
+                    <span className="text-xs font-extrabold font-outfit text-[#022434] block">
+                      Total Wallet Deduction:
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      Includes withdrawal and service fees
+                    </span>
+                  </div>
+                  <span className="text-base font-extrabold font-outfit text-[#006c44]">
+                    ₦{totalDeduction.toLocaleString()}
+                  </span>
                 </div>
               </div>
 
-              {/* Submit Button */}
+              {/* 5. Submit Button */}
               <button
                 onClick={handleOpenPinModal}
-                className="w-full py-4 bg-[#006c44] hover:bg-[#022434] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all transform active:scale-98 flex items-center justify-center space-x-2"
+                disabled={numAmount < 1000 || totalDeduction > walletBalance || !selectedBankId}
+                className={`w-full py-3.5 px-4 font-extrabold font-outfit text-sm rounded-2xl shadow-md transition-all flex items-center justify-center space-x-2 ${
+                  numAmount >= 1000 && totalDeduction <= walletBalance && selectedBankId
+                    ? 'bg-[#006c44] hover:bg-[#022434] text-white active:scale-98 cursor-pointer'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                }`}
               >
                 <ArrowUpRight className="w-5 h-5" />
-                <span>Confirm & Request Withdrawal</span>
+                <span>
+                  Confirm & Request Withdrawal
+                  {numAmount >= 1000 ? ` (₦${numAmount.toLocaleString()})` : ''}
+                </span>
               </button>
             </div>
           </div>
@@ -855,6 +1293,22 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* NDPA Data Subject Rights Modal */}
+      <DataSubjectRightsModal
+        isOpen={isDataRightsModalOpen}
+        user={user}
+        initialMode={dataRightsModalMode}
+        onClose={() => setIsDataRightsModalOpen(false)}
+        onUpdateOptionalConsents={(updated) => setOptionalConsents(updated)}
+      />
+
+      {/* Consultation Summary PDF Modal */}
+      <ConsultationSummaryPDFModal
+        isOpen={isConsultationModalOpen}
+        user={user}
+        onClose={() => setIsConsultationModalOpen(false)}
+      />
     </div>
   );
 };

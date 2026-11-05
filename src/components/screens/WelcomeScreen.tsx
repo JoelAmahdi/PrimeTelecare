@@ -29,7 +29,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onNavigate }) => {
       </div>
 
       {/* Action Buttons */}
-      <div className="space-y-4 pb-8 w-full">
+      <div className="space-y-4 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] w-full">
         <button
           onClick={() => onNavigate('signup')}
           className="w-full py-4 bg-[#1c3a4a] text-white font-bold font-outfit text-base rounded-2xl shadow-lg hover:bg-[#022434] transition-all transform active:scale-98"

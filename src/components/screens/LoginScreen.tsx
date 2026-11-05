@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { Mail, Lock, Eye, EyeOff, Fingerprint, ScanFace, ShieldCheck, CheckCircle2, RefreshCw, X } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Fingerprint, ScanFace, ShieldCheck, CheckCircle2, RefreshCw, X, AlertCircle } from 'lucide-react';
 import { ScreenId, UserRole } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
+import { showToast } from '../../utils/toast';
+import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
+import { BiometricAuthModal } from '../common/BiometricAuthModal';
 
 interface LoginScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -12,35 +15,110 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuccess }) => {
   const [email, setEmail] = useState('patient@telecare.com');
-  const [password, setPassword] = useState('password123');
+  const [password, setPassword] = useState('Password@123');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Rate Limiter State
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutTimer, setLockoutTimer] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (lockoutTimer !== null && lockoutTimer > 0) {
+      interval = setInterval(() => {
+        setLockoutTimer((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            setFailedAttempts(0);
+            setErrorMsg(null);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [lockoutTimer]);
 
   // Biometric Auth Modal State
   const [showBiometricModal, setShowBiometricModal] = useState(false);
-  const [biometricStatus, setBiometricStatus] = useState<'idle' | 'scanning' | 'success' | 'failed'>('idle');
+  const [biometricType, setBiometricType] = useState<BiometricType>(() => {
+    try {
+      return getBiometricSettings().type;
+    } catch {
+      return 'faceid';
+    }
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     triggerHaptic('medium');
-    const role: UserRole = email.includes('doctor') || email.includes('dr') ? 'doctor' : 'patient';
+
+    if (lockoutTimer !== null && lockoutTimer > 0) {
+      triggerHaptic('error');
+      return;
+    }
+
+    if (password !== 'Password@123') {
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+      if (newAttempts >= 3) {
+        setLockoutTimer(30);
+        setErrorMsg('Too many failed attempts. Try again in 30 seconds.');
+      } else {
+        setErrorMsg(`Incorrect password. ${3 - newAttempts} attempts remaining.`);
+      }
+      triggerHaptic('error');
+      return;
+    }
+
+    setErrorMsg(null);
+    let role: UserRole = 'patient';
+    if (email.includes('admin')) {
+      role = 'admin';
+    } else if (email.includes('doctor') || email.includes('dr')) {
+      role = 'doctor';
+    }
+    
     onLoginSuccess(role);
+  };
+
+  const getPasswordStrength = (pass: string) => {
+    let score = 0;
+    if (pass.length >= 8) score += 1;
+    if (/[A-Z]/.test(pass)) score += 1;
+    if (/[a-z]/.test(pass)) score += 1;
+    if (/[0-9]/.test(pass)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+    return score;
+  };
+
+  const getPasswordColorClasses = (pass: string) => {
+    if (pass.length === 0) return "border-slate-300 focus-within:border-[#006c44] focus-within:ring-2 focus-within:ring-[#006c44]/20";
+    const score = getPasswordStrength(pass);
+    if (score <= 2) return "border-red-400 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20";
+    if (score <= 4) return "border-amber-400 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20";
+    return "border-emerald-500 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-600/20";
+  };
+
+  const getPasswordFeedback = (pass: string) => {
+    const missing = [];
+    if (pass.length < 8) missing.push('8+ chars');
+    if (!/[A-Z]/.test(pass)) missing.push('uppercase');
+    if (!/[a-z]/.test(pass)) missing.push('lowercase');
+    if (!/[0-9]/.test(pass)) missing.push('numbers');
+    if (!/[^A-Za-z0-9]/.test(pass)) missing.push('symbols');
+    
+    if (missing.length === 0) return 'Strong password!';
+    return `Add: ${missing.join(', ')}`;
   };
 
   const handleStartBiometric = () => {
     triggerHaptic('medium');
+    const settings = getBiometricSettings();
+    setBiometricType(settings.type);
     setShowBiometricModal(true);
-    setBiometricStatus('scanning');
-
-    // Simulate biometric scanning sequence
-    setTimeout(() => {
-      triggerHaptic('success');
-      setBiometricStatus('success');
-      setTimeout(() => {
-        setShowBiometricModal(false);
-        const role: UserRole = email.includes('doctor') || email.includes('dr') ? 'doctor' : 'patient';
-        onLoginSuccess(role);
-      }, 1100);
-    }, 1500);
   };
 
   return (
@@ -59,24 +137,65 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             </span>
           </div>
 
-          {/* Quick Biometric Login Card */}
-          <div className="bg-gradient-to-r from-[#1c3a4a] to-[#022434] p-4 rounded-2xl text-white shadow-md mb-6 flex items-center justify-between">
+          {/* Quick Demo Role Selectors */}
+          <div className="bg-slate-100 p-1.5 rounded-2xl mb-4 flex items-center justify-between border border-slate-200">
+            <span className="text-[11px] font-bold text-slate-500 font-outfit px-2 hidden sm:inline">Demo Role:</span>
+            <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setEmail('patient@telecare.com');
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold font-outfit transition-all text-center ${
+                  email.includes('patient') ? 'bg-white text-[#022434] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Patient
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setEmail('dr.emeka@primetelecare.com');
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold font-outfit transition-all text-center ${
+                  email.includes('doctor') || email.includes('dr') ? 'bg-[#1c3a4a] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Doctor
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setEmail('admin@primetelecare.com');
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold font-outfit transition-all text-center ${
+                  email.includes('admin') ? 'bg-[#006c44] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Admin
+              </button>
+            </div>
+          </div>
+          {/* Apple-style Biometric Sign-in Banner */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs mb-5 flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-11 h-11 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20 text-[#77daa4]">
-                <ScanFace className="w-6 h-6 animate-pulse" />
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-800">
+                <ScanFace className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-slate-300 font-medium">Fast & Secure Access</p>
-                <p className="text-sm font-bold font-outfit text-white">Log in with Face ID / Touch ID</p>
+                <p className="text-xs font-bold text-slate-900 font-outfit">Sign in with Face ID</p>
+                <p className="text-[11px] text-slate-500 font-nunito">Or use Touch ID or Passcode</p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleStartBiometric}
-              className="px-3.5 py-2 bg-[#77daa4] text-[#022434] hover:bg-emerald-300 font-bold font-outfit text-xs rounded-xl transition-all flex items-center space-x-1.5 shadow-sm active:scale-95"
+              className="px-3.5 py-2 bg-black hover:bg-neutral-800 text-white font-semibold font-outfit text-xs rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs"
             >
-              <Fingerprint className="w-4 h-4" />
-              <span>Authenticate</span>
+              Verify
             </button>
           </div>
 
@@ -97,8 +216,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
               </div>
             </div>
 
+                        {errorMsg && (
+              <div className="flex items-center space-x-2 bg-red-50 text-red-700 p-3 rounded-2xl border border-red-200 text-xs font-semibold font-nunito transition-all animate-in fade-in slide-in-from-top-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg} {lockoutTimer !== null && lockoutTimer > 0 && `(${lockoutTimer}s)`}</span>
+              </div>
+            )}
             {/* Password Field */}
-            <div className="border border-slate-300 rounded-2xl p-3 bg-white focus-within:border-[#006c44] focus-within:ring-2 focus-within:ring-[#006c44]/20 transition-all">
+            <div className={`border rounded-2xl p-3 bg-white transition-all ${getPasswordColorClasses(password)}`}>
               <label className="block text-xs font-semibold text-slate-500 mb-1">Password</label>
               <div className="flex items-center space-x-2">
                 <Lock className="w-5 h-5 text-slate-400" />
@@ -118,14 +243,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              
+              {/* Password Strength Feedback */}
+              {password.length > 0 && (
+                <div className="pt-2 border-t border-slate-100 mt-2">
+                  <p className={`text-[10px] font-nunito ${getPasswordStrength(password) === 5 ? 'text-emerald-600 font-bold' : 'text-slate-500'}`}>
+                    {getPasswordFeedback(password)}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Forgot Password Link */}
             <div className="text-left pt-1">
               <button
                 type="button"
-                onClick={() => alert('Password reset link sent to your email!')}
-                className="text-xs font-semibold text-[#006c44] hover:underline"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  showToast('Password reset link sent to your email!', 'info');
+                }}
+                className="text-xs font-semibold text-[#006c44] hover:underline cursor-pointer"
               >
                 Forgot Password?
               </button>
@@ -145,15 +282,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200"></div>
             </div>
-            <span className="relative bg-[#f6fafd] px-4 text-xs text-slate-400 font-nunito">or</span>
+            <span className="relative bg-[#f6fafd] px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 font-outfit">
+              or continue with
+            </span>
           </div>
 
           {/* Social Logins */}
           <div className="space-y-3">
             <button
               type="button"
-              onClick={() => onLoginSuccess('patient')}
-              className="w-full py-3 bg-white border border-slate-300 rounded-full flex items-center justify-center space-x-3 text-sm font-bold font-outfit text-slate-800 shadow-sm hover:bg-slate-50 transition-all"
+              onClick={() => {
+                triggerHaptic('selection');
+                onLoginSuccess('patient');
+              }}
+              className="w-full py-3 bg-white border border-slate-300 rounded-2xl flex items-center justify-center space-x-3 text-sm font-bold font-outfit text-slate-800 shadow-xs hover:bg-slate-50 transition-all active:scale-98"
             >
               {/* Google G icon */}
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -179,8 +321,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
 
             <button
               type="button"
-              onClick={() => onLoginSuccess('patient')}
-              className="w-full py-3 bg-black text-white rounded-full flex items-center justify-center space-x-3 text-sm font-bold font-outfit shadow-sm hover:bg-slate-900 transition-all"
+              onClick={() => {
+                triggerHaptic('selection');
+                onLoginSuccess('patient');
+              }}
+              className="w-full py-3 bg-black text-white rounded-2xl flex items-center justify-center space-x-3 text-sm font-bold font-outfit shadow-xs hover:bg-slate-900 transition-all active:scale-98"
             >
               {/* Apple icon */}
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -202,66 +347,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
         </button>
       </div>
 
-      {/* Biometric Authentication Overlay Modal */}
-      {showBiometricModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl relative border border-slate-100 space-y-5">
-            <button
-              onClick={() => setShowBiometricModal(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="space-y-1">
-              <h3 className="text-lg font-bold font-outfit text-[#022434]">Biometric Authentication</h3>
-              <p className="text-xs text-slate-500 font-nunito">
-                Verifying Face ID / Fingerprint to access sensitive medical records
-              </p>
-            </div>
-
-            {/* Scanning Graphic Container */}
-            <div className="relative w-28 h-28 mx-auto flex items-center justify-center my-4">
-              {biometricStatus === 'scanning' && (
-                <>
-                  <div className="absolute inset-0 rounded-full border-4 border-[#77daa4] animate-ping opacity-30"></div>
-                  <div className="absolute inset-2 rounded-full border-2 border-[#006c44] animate-spin border-t-transparent"></div>
-                  <ScanFace className="w-14 h-14 text-[#1c3a4a] animate-pulse" />
-                </>
-              )}
-
-              {biometricStatus === 'success' && (
-                <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center text-[#006c44] animate-bounce">
-                  <CheckCircle2 className="w-14 h-14" />
-                </div>
-              )}
-            </div>
-
-            {/* Status Message */}
-            <div>
-              {biometricStatus === 'scanning' && (
-                <div className="flex items-center justify-center space-x-2 text-slate-700 text-sm font-semibold font-outfit">
-                  <RefreshCw className="w-4 h-4 animate-spin text-[#006c44]" />
-                  <span>Scanning Face / Fingerprint...</span>
-                </div>
-              )}
-
-              {biometricStatus === 'success' && (
-                <div className="text-emerald-700 text-sm font-bold font-outfit">
-                  Identity Verified! Redirecting...
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setShowBiometricModal(false)}
-              className="text-xs text-slate-400 hover:text-slate-600 font-semibold underline pt-2"
-            >
-              Cancel & Use Password Instead
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Real WebAuthn Biometric Authentication Modal */}
+      <BiometricAuthModal
+        isOpen={showBiometricModal}
+        biometricType={biometricType}
+        title="Sign In with Face ID"
+        subtitle="Confirm your identity to sign into your account"
+        onClose={() => setShowBiometricModal(false)}
+        onSuccess={() => {
+          setShowBiometricModal(false);
+          let role: UserRole = 'patient';
+          if (email.includes('admin')) {
+            role = 'admin';
+          } else if (email.includes('doctor') || email.includes('dr')) {
+            role = 'doctor';
+          }
+          onLoginSuccess(role);
+        }}
+      />
     </div>
   );
 };

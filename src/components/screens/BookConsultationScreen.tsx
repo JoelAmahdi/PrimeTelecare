@@ -1,16 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { BottomNav } from '../common/BottomNav';
-import { Star, MessageSquare, Phone, Video, CheckCircle2, Camera, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ScreenId, Doctor, UserRole } from '../../types';
-import { mockDoctors } from '../../data/mockData';
+import { ClinicalTriageModal } from '../common/ClinicalTriageModal';
+import {
+  Zap,
+  Calendar,
+  Clock,
+  Video,
+  Phone,
+  MessageSquare,
+  ShieldCheck,
+  Check,
+  Search,
+  X,
+  Paperclip,
+  FileText,
+  Star,
+  Info,
+  ChevronDown,
+} from 'lucide-react';
+import { ScreenId, Doctor, UserRole, BookingSummary } from '../../types';
+import { mockDoctors, currentUserPatient } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';
+import { DependentSwitcher } from '../common/DependentSwitcher';
+import { NotificationsDrawer } from '../common/NotificationsDrawer';
 
 interface BookConsultationScreenProps {
   selectedDoctorId?: string;
   onNavigate: (screen: ScreenId) => void;
   onSelectDoctor: (doctorId: string) => void;
+  onSaveBookingSummary?: (summary: BookingSummary) => void;
   role?: UserRole;
 }
 
@@ -18,235 +37,653 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   selectedDoctorId,
   onNavigate,
   onSelectDoctor,
+  onSaveBookingSummary,
   role = 'patient',
 }) => {
+  // Two distinct paths: 'instant' vs 'scheduled'
+  const [bookingMode, setBookingMode] = useState<'instant' | 'scheduled'>('instant');
+
+  // Physician selection
+  const [chosenDoctorId, setChosenDoctorId] = useState<string>(
+    selectedDoctorId || mockDoctors[0].id
+  );
+  const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
+  const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (selectedDoctorId) {
+      setChosenDoctorId(selectedDoctorId);
+    }
+  }, [selectedDoctorId]);
+
   const currentDoctor: Doctor =
-    mockDoctors.find((d) => d.id === selectedDoctorId) || mockDoctors[0];
+    mockDoctors.find((d) => d.id === chosenDoctorId) || mockDoctors[0];
 
-  const [consultationType, setConsultationType] = useState<'Chat' | 'Voice' | 'Video'>('Video');
-  const [selectedDateIndex, setSelectedDateIndex] = useState(2); // Wed 23
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState('10:30 AM');
+  // Consultation Format: Video / Voice / Chat
+  const [consultationType, setConsultationType] = useState<'Video' | 'Voice' | 'Chat'>('Video');
 
-  const dates = [
-    { day: 'Mon', date: '21' },
-    { day: 'Tue', date: '22' },
-    { day: 'Wed', date: '23' },
-    { day: 'Thu', date: '24' },
-    { day: 'Fri', date: '25' },
-    { day: 'Sat', date: '26' },
+  // Schedule Dates (for 'scheduled' mode)
+  const availableDates = [
+    { label: 'Today', day: 'Wed', date: 'Oct 24', fullDate: 'Wed, Oct 24, 2026' },
+    { label: 'Tomorrow', day: 'Thu', date: 'Oct 25', fullDate: 'Thu, Oct 25, 2026' },
+    { label: 'Fri', day: 'Fri', date: 'Oct 26', fullDate: 'Fri, Oct 26, 2026' },
+    { label: 'Sat', day: 'Sat', date: 'Oct 27', fullDate: 'Sat, Oct 27, 2026' },
+    { label: 'Sun', day: 'Sun', date: 'Oct 28', fullDate: 'Sun, Oct 28, 2026' },
+    { label: 'Mon', day: 'Mon', date: 'Oct 29', fullDate: 'Mon, Oct 29, 2026' },
   ];
+  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
 
   const timeSlots = [
-    { time: '9:00 AM', status: 'available', color: 'bg-emerald-500' },
-    { time: '10:30 AM', status: 'available', color: 'bg-emerald-500' },
-    { time: '1:00 PM', status: 'busy', color: 'bg-amber-400' },
-    { time: '3:15 PM', status: 'available', color: 'bg-emerald-500' },
-    { time: '4:45 PM', status: 'full', color: 'bg-rose-500' },
+    { time: '09:00 AM', label: 'Morning' },
+    { time: '10:30 AM', label: 'Morning' },
+    { time: '01:00 PM', label: 'Afternoon' },
+    { time: '03:15 PM', label: 'Afternoon' },
+    { time: '05:00 PM', label: 'Evening' },
+    { time: '06:30 PM', label: 'Evening' },
   ];
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState('10:30 AM');
 
-  const prices = {
-    Chat: currentDoctor.prices.chat,
-    Voice: currentDoctor.prices.voice,
-    Video: currentDoctor.prices.video,
+  // Simple Visit Reason & Optional Attachment
+  const [symptomsInput, setSymptomsInput] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<{ id: string; name: string; size: string }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setIsUploading(true);
+      triggerHaptic('light');
+
+      setTimeout(() => {
+        setUploadedFiles((prev) => [
+          ...prev,
+          {
+            id: `f-${Date.now()}`,
+            name: file.name,
+            size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+          },
+        ]);
+        setIsUploading(false);
+        triggerHaptic('success');
+      }, 500);
+    }
   };
 
+  const handleRemoveFile = (fileId: string) => {
+    triggerHaptic('light');
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
+  };
+
+  // Pricing calculations
+  const baseConsultationFee =
+    consultationType === 'Video'
+      ? currentDoctor.prices.video
+      : consultationType === 'Voice'
+      ? currentDoctor.prices.voice
+      : currentDoctor.prices.chat;
+
+  const platformServiceFee = 500;
+  const totalAmountPayable = baseConsultationFee + platformServiceFee;
+
+  const consultationDuration =
+    consultationType === 'Video'
+      ? '30 mins'
+      : consultationType === 'Voice'
+      ? '20 mins'
+      : 'Async 24h';
+
+  // Safety Triage & Notifications
+  const [isTriageModalOpen, setIsTriageModalOpen] = useState(false);
+  const [isTriageCleared, setIsTriageCleared] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  const proceedToCheckout = () => {
+    const isInstant = bookingMode === 'instant';
+    const chosenDateStr = isInstant
+      ? 'Today (Instant Consultation)'
+      : availableDates[selectedDateIndex].fullDate;
+    const chosenTimeStr = isInstant ? 'Immediate Queue (2–5 mins wait)' : selectedTimeSlot;
+
+    const summary: BookingSummary = {
+      doctorId: currentDoctor.id,
+      consultationType,
+      bookingMode,
+      symptomsDescription: symptomsInput.trim() || undefined,
+      date: chosenDateStr,
+      timeSlot: chosenTimeStr,
+      duration: consultationDuration,
+      baseFee: baseConsultationFee,
+      serviceFee: platformServiceFee,
+      totalFee: totalAmountPayable,
+      connectionMethod:
+        consultationType === 'Video'
+          ? 'Encrypted HD Video Call via WebRTC'
+          : consultationType === 'Voice'
+          ? 'Encrypted Audio Call'
+          : 'Secured End-to-End Encrypted Chat',
+      uploadedFiles,
+      reminderPreferences: { sms: true, email: true, push: true, whatsapp: true },
+      timeZone: 'West Africa Time (WAT) • GMT+1',
+      cancellationPolicy: 'Free cancellation & 100% full refund up to 2 hours prior to scheduled start.',
+      reschedulePolicy: 'Free 1-click rescheduling available from dashboard.',
+    };
+
+    if (onSaveBookingSummary) {
+      onSaveBookingSummary(summary);
+    }
+
+    onNavigate('payment');
+  };
+
+  const handleConfirmAction = () => {
+    triggerHaptic('heavy');
+    if (!isTriageCleared) {
+      setIsTriageModalOpen(true);
+      return;
+    }
+    proceedToCheckout();
+  };
+
+  const filteredDoctors = mockDoctors.filter((doc) => {
+    const q = doctorSearchQuery.toLowerCase().trim();
+    return (
+      !q ||
+      doc.name.toLowerCase().includes(q) ||
+      doc.specialty.toLowerCase().includes(q)
+    );
+  });
+
+  const fullName = currentDoctor.fullNameWithTitle || currentDoctor.name;
+  const licenseNo = currentDoctor.verification?.licenseNumber || 'MDCN/2018/74920';
+
   return (
-    <div className="min-h-screen bg-[#f6fafd] pb-24 w-full max-w-4xl mx-auto px-4 sm:px-6 text-[#171c1f]">
-      <StatusBar className="-mx-4 sm:-mx-6" time="9:41 AM" batteryLevel={100} />
+    <div className="min-h-screen bg-slate-50 pb-32 w-full max-w-3xl mx-auto px-4 sm:px-6 text-[#0f172a] font-nunito">
+      <StatusBar className="-mx-4 sm:-mx-6" />
 
       <Header
-        title="Book a Consultation"
+        title="Book Consultation"
         showBack
         onBack={() => onNavigate('patient-home')}
         showBell
         bellCount={1}
+        onBellClick={() => {
+          triggerHaptic('light');
+          setIsNotificationsOpen(true);
+        }}
       />
 
-      <div className="px-5 space-y-5 mt-2">
-        {/* Selected Doctor Summary Card */}
-        <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <img src={currentDoctor.avatarUrl} alt={currentDoctor.name} className="w-14 h-14 rounded-2xl object-cover" />
-            <div>
-              <h3 className="font-bold font-outfit text-[#022434] text-base">{currentDoctor.name}</h3>
-              <p className="text-xs text-slate-500 font-nunito">{currentDoctor.specialty}</p>
-              <div className="flex items-center space-x-1 text-xs mt-0.5">
-                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                <span className="font-bold text-[#022434]">{currentDoctor.rating}</span>
-                <span className="text-slate-400">({currentDoctor.reviewsCount} reviews)</span>
+      <NotificationsDrawer
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        onNavigate={onNavigate}
+      />
+
+      <div className="mt-2 space-y-4">
+        {/* COMPACT PATIENT / DEPENDENT SELECTOR */}
+        <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-xs">
+          <span className="text-xs text-slate-500 font-medium">Consultation For</span>
+          <DependentSwitcher user={currentUserPatient} compact />
+        </div>
+
+        {/* 1. TWO DISTINCT PATHS SEGMENTED CONTROL */}
+        <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
+          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+            {/* Path A: Instant Consultation */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('selection');
+                setBookingMode('instant');
+              }}
+              className={`py-3 px-3 rounded-lg text-left transition-all ${
+                bookingMode === 'instant'
+                  ? 'bg-white text-[#006c44] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center space-x-1.5">
+                <Zap className="w-4 h-4 fill-emerald-500 text-emerald-600 shrink-0" />
+                <span className="font-outfit font-bold text-sm">Instant Consultation</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5 pl-5">
+                Connect live in 2–5 mins
+              </p>
+            </button>
+
+            {/* Path B: Scheduled Appointment */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('selection');
+                setBookingMode('scheduled');
+              }}
+              className={`py-3 px-3 rounded-lg text-left transition-all ${
+                bookingMode === 'scheduled'
+                  ? 'bg-white text-[#022434] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center space-x-1.5">
+                <Calendar className="w-4 h-4 text-[#022434] shrink-0" />
+                <span className="font-outfit font-bold text-sm">Scheduled Appointment</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5 pl-5">
+                Pick a future date & time
+              </p>
+            </button>
+          </div>
+        </div>
+
+        {/* 2. ATTENDING CLINICIAN CARD */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-3 min-w-0">
+            <div className="relative shrink-0">
+              <img
+                src={currentDoctor.avatarUrl}
+                alt={fullName}
+                className="w-12 h-12 rounded-xl object-cover border border-slate-100"
+              />
+              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-outfit font-bold text-sm text-[#022434] truncate">
+                {fullName}
+              </h3>
+              <p className="text-xs text-slate-500 truncate">
+                {currentDoctor.specialty}
+              </p>
+              <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
+                <span className="flex items-center text-amber-600 font-semibold">
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400 mr-0.5" />
+                  {currentDoctor.rating}
+                </span>
+                <span>·</span>
+                <span>{licenseNo}</span>
               </div>
             </div>
           </div>
 
           <button
-            onClick={() => onNavigate('doctor-profile')}
-            className="text-xs font-bold text-[#006c44] hover:underline whitespace-nowrap"
+            type="button"
+            onClick={() => {
+              triggerHaptic('light');
+              setIsDoctorModalOpen(true);
+            }}
+            className="text-xs font-bold font-outfit text-[#006c44] hover:text-[#022434] border border-slate-200 px-3 py-1.5 rounded-lg shrink-0 transition-colors"
           >
-            Change doctor
+            Change
           </button>
         </div>
 
-        {/* Select Consultation Type */}
-        <div>
-          <h3 className="font-bold font-outfit text-[#022434] text-base mb-3">Select Consultation Type</h3>
-
-          <div className="grid grid-cols-3 gap-2.5">
-            {/* Chat Option */}
-            <button
-              onClick={() => {
-                triggerHaptic('selection');
-                setConsultationType('Chat');
-              }}
-              className={`relative p-3 rounded-2xl border flex flex-col items-center justify-between h-32 text-center transition-all ${
-                consultationType === 'Chat'
-                  ? 'border-[#006c44] bg-[#e6f9f0] ring-2 ring-[#006c44]/20 shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
-              }`}
-            >
-              {consultationType === 'Chat' && (
-                <CheckCircle2 className="w-4 h-4 text-[#006c44] absolute top-2 right-2 fill-[#006c44] text-white" />
-              )}
-              <MessageSquare className="w-6 h-6 text-[#022434] mt-1" />
-              <div>
-                <span className="font-bold font-outfit text-sm text-[#022434] block">Chat</span>
-                <span className="text-[10px] text-slate-500 leading-tight block">Text-based consultation.</span>
+        {/* 3. PATH-SPECIFIC AVAILABILITY SECTION */}
+        {bookingMode === 'instant' ? (
+          /* Instant Consultation Availability Banner */
+          <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <h4 className="font-outfit font-bold text-sm text-emerald-950">
+                  Doctor On Call · Immediate Queue
+                </h4>
               </div>
-              <span className="text-xs font-bold font-data bg-slate-100 text-[#022434] px-2 py-0.5 rounded-full">
-                ₦{prices.Chat.toLocaleString()}
+              <span className="text-xs font-mono font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200">
+                Wait: ~2–5 mins
               </span>
-            </button>
-
-            {/* Voice Option */}
-            <button
-              onClick={() => {
-                triggerHaptic('selection');
-                setConsultationType('Voice');
-              }}
-              className={`relative p-3 rounded-2xl border flex flex-col items-center justify-between h-32 text-center transition-all ${
-                consultationType === 'Voice'
-                  ? 'border-[#006c44] bg-[#e6f9f0] ring-2 ring-[#006c44]/20 shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
-              }`}
-            >
-              {consultationType === 'Voice' && (
-                <CheckCircle2 className="w-4 h-4 text-[#006c44] absolute top-2 right-2 fill-[#006c44] text-white" />
-              )}
-              <Phone className="w-6 h-6 text-[#022434] mt-1" />
-              <div>
-                <span className="font-bold font-outfit text-sm text-[#022434] block">Voice</span>
-                <span className="text-[10px] text-slate-500 leading-tight block">Audio call.</span>
+            </div>
+            <p className="text-xs text-emerald-800/90 leading-relaxed">
+              Your consultation starts immediately upon payment confirmation. You will enter the secured video/audio room directly.
+            </p>
+          </div>
+        ) : (
+          /* Scheduled Appointment Date & Time Selection */
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            {/* Date Selection */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold font-outfit text-slate-700">
+                  1. Select Appointment Date
+                </label>
+                <span className="text-[11px] text-slate-400">WAT (GMT+1)</span>
               </div>
-              <span className="text-xs font-bold font-data bg-slate-100 text-[#022434] px-2 py-0.5 rounded-full">
-                ₦{prices.Voice.toLocaleString()}
-              </span>
-            </button>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {availableDates.map((item, idx) => {
+                  const isSelected = selectedDateIndex === idx;
+                  return (
+                    <button
+                      key={item.fullDate}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setSelectedDateIndex(idx);
+                      }}
+                      className={`p-2.5 rounded-xl border text-center transition-all ${
+                        isSelected
+                          ? 'bg-[#006c44] text-white border-[#006c44] shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className={`block text-[10px] font-semibold uppercase ${isSelected ? 'text-emerald-100' : 'text-slate-400'}`}>
+                        {item.label}
+                      </span>
+                      <span className="block text-xs font-outfit font-bold mt-0.5">
+                        {item.date}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-            {/* Video Option */}
+            {/* Time Slot Selection */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold font-outfit text-slate-700 block mb-2">
+                2. Select Time Slot
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {timeSlots.map((slot) => {
+                  const isSelected = selectedTimeSlot === slot.time;
+                  return (
+                    <button
+                      key={slot.time}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setSelectedTimeSlot(slot.time);
+                      }}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-outfit font-bold border transition-all text-center ${
+                        isSelected
+                          ? 'bg-[#022434] text-white border-[#022434] shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {slot.time}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 4. CONSULTATION FORMAT & PRICING OPTIONS */}
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-outfit font-bold text-xs uppercase tracking-wider text-slate-500">
+              Select Consultation Format
+            </h4>
+            <span className="text-xs text-slate-500 font-medium">
+              Duration: {consultationDuration}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {/* Video Call */}
             <button
+              type="button"
               onClick={() => {
                 triggerHaptic('selection');
                 setConsultationType('Video');
               }}
-              className={`relative p-3 rounded-2xl border flex flex-col items-center justify-between h-32 text-center transition-all ${
+              className={`p-3.5 rounded-xl border text-left transition-all ${
                 consultationType === 'Video'
-                  ? 'border-[#006c44] bg-[#e6f9f0] ring-2 ring-[#006c44]/20 shadow-sm'
+                  ? 'border-[#006c44] bg-emerald-50/50 ring-1 ring-[#006c44]'
                   : 'border-slate-200 bg-white hover:border-slate-300'
               }`}
             >
-              {consultationType === 'Video' && (
-                <CheckCircle2 className="w-4 h-4 text-[#006c44] absolute top-2 right-2 fill-[#006c44] text-white" />
-              )}
-              <Video className="w-6 h-6 text-[#022434] mt-1" />
-              <div>
-                <span className="font-bold font-outfit text-sm text-[#022434] block">Video</span>
-                <span className="text-[10px] text-slate-500 leading-tight block">Face-to-face call.</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className={`p-2 rounded-lg ${consultationType === 'Video' ? 'bg-[#006c44] text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  <Video className="w-4 h-4" />
+                </div>
+                {consultationType === 'Video' && <Check className="w-4 h-4 text-[#006c44]" />}
               </div>
-              <span className="text-xs font-bold font-data bg-[#77daa4] text-[#022434] px-2 py-0.5 rounded-full">
-                ₦{prices.Video.toLocaleString()}
-              </span>
+              <h5 className="font-outfit font-bold text-xs text-[#022434]">HD Video Call</h5>
+              <p className="text-[11px] text-slate-500">Face-to-face · 30m</p>
+              <p className="text-sm font-outfit font-bold text-[#006c44] mt-2 font-mono">
+                ₦{currentDoctor.prices.video.toLocaleString()}
+              </p>
+            </button>
+
+            {/* Voice Call */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('selection');
+                setConsultationType('Voice');
+              }}
+              className={`p-3.5 rounded-xl border text-left transition-all ${
+                consultationType === 'Voice'
+                  ? 'border-[#006c44] bg-emerald-50/50 ring-1 ring-[#006c44]'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className={`p-2 rounded-lg ${consultationType === 'Voice' ? 'bg-[#006c44] text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  <Phone className="w-4 h-4" />
+                </div>
+                {consultationType === 'Voice' && <Check className="w-4 h-4 text-[#006c44]" />}
+              </div>
+              <h5 className="font-outfit font-bold text-xs text-[#022434]">Voice Call</h5>
+              <p className="text-[11px] text-slate-500">Audio only · 20m</p>
+              <p className="text-sm font-outfit font-bold text-[#006c44] mt-2 font-mono">
+                ₦{currentDoctor.prices.voice.toLocaleString()}
+              </p>
+            </button>
+
+            {/* Live Chat */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('selection');
+                setConsultationType('Chat');
+              }}
+              className={`p-3.5 rounded-xl border text-left transition-all ${
+                consultationType === 'Chat'
+                  ? 'border-[#006c44] bg-emerald-50/50 ring-1 ring-[#006c44]'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className={`p-2 rounded-lg ${consultationType === 'Chat' ? 'bg-[#006c44] text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                {consultationType === 'Chat' && <Check className="w-4 h-4 text-[#006c44]" />}
+              </div>
+              <h5 className="font-outfit font-bold text-xs text-[#022434]">Live Chat</h5>
+              <p className="text-[11px] text-slate-500">Messaging · 24h</p>
+              <p className="text-sm font-outfit font-bold text-[#006c44] mt-2 font-mono">
+                ₦{currentDoctor.prices.chat.toLocaleString()}
+              </p>
             </button>
           </div>
         </div>
 
-        {/* Select Date Horizontal Row */}
-        <div>
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-bold font-outfit text-[#022434] text-base">Select Date</h3>
-            <div className="flex items-center space-x-1 text-xs font-bold text-[#022434]">
-              <ChevronLeft className="w-4 h-4 cursor-pointer text-slate-400" />
-              <span>October 2024</span>
-              <ChevronRight className="w-4 h-4 cursor-pointer" />
+        {/* 5. BRIEF SYMPTOM / REASON NOTE (CLEAN 1-ROW OPTIONAL) */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold font-outfit text-slate-700">
+              Reason for Visit (Optional)
+            </label>
+            <label className="inline-flex items-center space-x-1 text-xs text-[#006c44] hover:underline cursor-pointer font-semibold">
+              <Paperclip className="w-3.5 h-3.5" />
+              <span>{isUploading ? 'Attaching...' : 'Attach File'}</span>
+              <input
+                type="file"
+                onChange={handleFileUpload}
+                className="hidden"
+                accept="image/*,.pdf,.doc"
+              />
+            </label>
+          </div>
+
+          <input
+            type="text"
+            placeholder="e.g. Persistent fever, rash review, medication refill"
+            value={symptomsInput}
+            onChange={(e) => setSymptomsInput(e.target.value)}
+            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#006c44]"
+          />
+
+          {uploadedFiles.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              {uploadedFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center justify-between px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200 text-xs"
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <FileText className="w-3.5 h-3.5 text-[#006c44] shrink-0" />
+                    <span className="truncate font-semibold text-slate-700">{file.name}</span>
+                    <span className="text-[10px] text-slate-400">({file.size})</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFile(file.id)}
+                    className="p-1 text-slate-400 hover:text-rose-500"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 6. TRANSPARENT PRICING BREAKDOWN */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2 text-xs">
+          <div className="flex items-center justify-between text-slate-600">
+            <span>{consultationType} Consultation Fee</span>
+            <span className="font-mono font-semibold text-slate-800">
+              ₦{baseConsultationFee.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-slate-600">
+            <span className="flex items-center space-x-1">
+              <span>Platform & Encryption Fee</span>
+              <Info className="w-3 h-3 text-slate-400" />
+            </span>
+            <span className="font-mono font-semibold text-slate-800">
+              ₦{platformServiceFee.toLocaleString()}
+            </span>
+          </div>
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-sm">
+            <span className="font-outfit font-bold text-[#022434]">Total Amount</span>
+            <span className="font-outfit font-bold text-[#006c44] font-mono text-base">
+              ₦{totalAmountPayable.toLocaleString()}
+            </span>
+          </div>
+          <div className="pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={handleConfirmAction}
+              className="w-full py-4 px-5 bg-[#006c44] hover:bg-[#005536] text-white font-outfit font-bold text-sm sm:text-base rounded-2xl shadow-md transition-all active:scale-98 flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-emerald-300" />
+              <span>
+                {bookingMode === 'instant' ? 'Connect with Doctor Now' : 'Schedule Appointment'} · ₦{totalAmountPayable.toLocaleString()}
+              </span>
+            </button>
+            <p className="text-[11px] text-center text-emerald-700 font-semibold pt-2">
+              {bookingMode === 'instant'
+                ? '⚡ Live triage in ~2–5 mins · Priority Queue'
+                : `📅 Scheduled for ${availableDates[selectedDateIndex].date} at ${selectedTimeSlot}`}
+            </p>
+          </div>
+
+          <p className="text-[11px] text-slate-400 pt-1 flex items-center justify-center space-x-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span>NDPA Encrypted · 100% full refund if canceled up to 2h prior</span>
+          </p>
+        </div>
+      </div>
+
+      {/* DOCTOR SELECTION MODAL (Keeps main booking flow clean) */}
+      {isDoctorModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-slate-100 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="font-outfit font-bold text-base text-[#022434]">
+                Choose Clinician
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsDoctorModalOpen(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search physician or specialty..."
+                value={doctorSearchQuery}
+                onChange={(e) => setDoctorSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#006c44]"
+              />
+            </div>
+
+            <div className="overflow-y-auto space-y-2 flex-1 pr-1">
+              {filteredDoctors.map((doc) => {
+                const isSelected = doc.id === currentDoctor.id;
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setChosenDoctorId(doc.id);
+                      onSelectDoctor(doc.id);
+                      setIsDoctorModalOpen(false);
+                    }}
+                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                      isSelected
+                        ? 'border-[#006c44] bg-emerald-50/60'
+                        : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <img
+                        src={doc.avatarUrl}
+                        alt={doc.name}
+                        className="w-10 h-10 rounded-xl object-cover shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#022434] truncate">
+                          {doc.fullNameWithTitle || doc.name}
+                        </p>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {doc.specialty}
+                        </p>
+                        <p className="text-[10px] text-emerald-700 font-mono">
+                          Video: ₦{doc.prices.video.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <Check className="w-4 h-4 text-[#006c44] shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
-
-          <div className="grid grid-cols-6 gap-2">
-            {dates.map((item, idx) => (
-              <button
-                key={idx}
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setSelectedDateIndex(idx);
-                }}
-                className={`py-3 rounded-2xl flex flex-col items-center justify-center transition-all border ${
-                  selectedDateIndex === idx
-                    ? 'bg-[#1c3a4a] text-white border-[#1c3a4a] shadow-md'
-                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <span className="text-xs font-medium opacity-80">{item.day}</span>
-                <span className="text-base font-extrabold font-outfit">{item.date}</span>
-              </button>
-            ))}
-          </div>
         </div>
+      )}
 
-        {/* Select Time Heatmap Indicators */}
-        <div>
-          <h3 className="font-bold font-outfit text-[#022434] text-base mb-2">Select Time</h3>
-
-          {/* Availability Heat Blocks */}
-          <div className="grid grid-cols-12 gap-1 mb-2">
-            {[
-              'bg-emerald-500', 'bg-emerald-500', 'bg-emerald-500', 'bg-emerald-500',
-              'bg-emerald-500', 'bg-emerald-500', 'bg-amber-400', 'bg-amber-400',
-              'bg-emerald-500', 'bg-rose-500', 'bg-rose-500', 'bg-rose-500'
-            ].map((color, i) => (
-              <div key={i} className={`h-6 rounded-md ${color}`}></div>
-            ))}
-          </div>
-
-          <div className="flex justify-between text-[11px] font-semibold text-slate-600 font-data px-1">
-            <span>9:00 AM</span>
-            <span>10:30 AM</span>
-            <span>1:00 PM</span>
-            <span>3:15 PM</span>
-            <span>4:45 PM</span>
-          </div>
-        </div>
-
-        {/* Upload photos optional button */}
-        <button
-          onClick={() => {
-            triggerHaptic('light');
-            onNavigate('upload-media');
-          }}
-          className="w-full border-2 border-dashed border-[#77daa4] bg-emerald-50/50 p-4 rounded-2xl flex items-center justify-center space-x-2 text-sm font-bold text-[#006c44] hover:bg-emerald-100/50 transition-all"
-        >
-          <Camera className="w-5 h-5" />
-          <span>Upload photos (optional)</span>
-        </button>
-
-        {/* Proceed to Payment Button */}
-        <button
-          onClick={() => {
-            triggerHaptic('medium');
-            onNavigate('payment');
-          }}
-          className="w-full py-4 bg-[#1c3a4a] text-white font-bold font-outfit text-base rounded-2xl shadow-lg hover:bg-[#022434] transition-all transform active:scale-98 mt-4"
-        >
-          Proceed to Payment
-        </button>
-      </div>
+      {/* MANDATORY PRE-CONSULTATION CLINICAL TRIAGE MODAL */}
+      <ClinicalTriageModal
+        isOpen={isTriageModalOpen}
+        onClose={() => setIsTriageModalOpen(false)}
+        doctorName={fullName}
+        onTriageComplete={(result) => {
+          if (result.cleared) {
+            setIsTriageCleared(true);
+            setIsTriageModalOpen(false);
+            proceedToCheckout();
+          }
+        }}
+      />
     </div>
   );
 };

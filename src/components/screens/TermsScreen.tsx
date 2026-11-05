@@ -23,6 +23,7 @@ export const TermsScreen: React.FC<TermsScreenProps> = ({
     '03': true,
     '04': true,
     '05': true,
+    '06': true,
   });
 
   const toggleSection = (id: string) => {
@@ -79,6 +80,40 @@ export const TermsScreen: React.FC<TermsScreenProps> = ({
       title: 'Limitation of Liability',
       content:
         'Prime Telecare acts as a platform connecting users with independent licensed healthcare practitioners. Any medical diagnosis, treatment plan, or advice provided during consultations is the sole professional responsibility of the attending practitioner.',
+    },
+    {
+      id: '06',
+      title: 'Operational SLA & Clinical Contingencies',
+      content: (
+        <div className="space-y-2.5 text-xs text-slate-600 font-nunito">
+          <p className="font-semibold text-[#022434]">
+            Prime Telecare enforces strict operational service level agreements (SLAs) for all virtual consultations:
+          </p>
+          <ul className="list-disc pl-5 space-y-2">
+            <li>
+              <strong>When Doctor Does Not Join (Doctor No-Show):</strong> Doctors have a 10-minute entry window. If the doctor fails to join within 10 minutes, the session is auto-cancelled, and the patient receives a 100% instant wallet refund, a ₦2,000 compensation goodwill credit, and priority specialist rebooking.
+            </li>
+            <li>
+              <strong>When Patient Cannot Connect:</strong> A 15-minute connection grace period is provided with SMS reminder alerts. Low-Bandwidth Audio-Only or Text Chat fallback modes activate automatically. If un-connectable, patient gets 1 free instant reschedule within 48 hours.
+            </li>
+            <li>
+              <strong>When Consultation is Interrupted:</strong> Real-time WebRTC re-handshake runs for 5 minutes. All chat messages and EHR notes are saved continuously. If un-restorable, doctor converts session to async text follow-up or issues a free continuation call voucher.
+            </li>
+            <li>
+              <strong>When Clinical Emergency Occurs:</strong> Attending doctor triggers Emergency Referral Mode, generating an Urgent Clinical Referral Slip with patient NIN/Blood group, pre-notifying tertiary hospital ERs (e.g. LUTH/FMC/Lagoon), and unlocking 112 dispatch guidance.
+            </li>
+            <li>
+              <strong>When Patient Cancels:</strong> 100% full refund for cancellations &gt;2 hours prior to scheduled start time; 50% partial refund for cancellations &lt;2 hours prior. Rescheduling is 100% free with no cancellation penalty.
+            </li>
+            <li>
+              <strong>When Doctor Reschedules:</strong> Immediate SMS/Push alert allows patient to accept proposed new slot, choose an alternative slot, re-assign to another top specialist in the same field at no cost, or claim 100% refund + 10% apology voucher.
+            </li>
+            <li>
+              <strong>When Payment Debited but Booking Fails:</strong> Automated webhook reconciliation engine detects unlinked debits within 60 seconds and auto-credits Telecare Wallet (or initiates NUBAN bank reversal within 15 mins).
+            </li>
+          </ul>
+        </div>
+      ),
     },
   ];
 
@@ -171,7 +206,13 @@ export const TermsScreen: React.FC<TermsScreenProps> = ({
                 {/* Section Content */}
                 {isOpen && (
                   <div className="px-5 pb-5 pt-1 border-t border-slate-50 text-xs font-nunito text-slate-600 leading-relaxed">
-                    {sec.content && <p className="mb-2">{sec.content}</p>}
+                    {sec.content && (
+                      typeof sec.content === 'string' ? (
+                        <p className="mb-2">{sec.content}</p>
+                      ) : (
+                        <div className="mb-2">{sec.content}</div>
+                      )
+                    )}
 
                     {/* Table View for Payments & Refunds */}
                     {sec.hasTable && sec.tableData && (
@@ -223,7 +264,7 @@ export const TermsScreen: React.FC<TermsScreenProps> = ({
       </div>
 
       {/* Bottom Sticky Agreement Bar */}
-      <div className="fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-100 p-4 sm:p-5 shadow-2xl z-40">
+      <div className="fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-slate-100 p-4 sm:p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-2xl z-40">
         <div className="max-w-2xl mx-auto space-y-3">
           {/* Checkbox */}
           <div

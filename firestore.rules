@@ -1,0 +1,217 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. GLOBAL SAFETY NET: Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. GLOBAL HARDENED HELPERS
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'joelyoung931@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 3. ENTITY VALIDATION BLUEPRINTS
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'role']) &&
+        data.keys().hasOnly(['id', 'name', 'email', 'role', 'avatarUrl', 'phone', 'gender', 'age', 'stateOfResidence', 'lga', 'walletBalance', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
+        data.role in ['patient', 'doctor', 'admin'] &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+        (!('walletBalance' in data) || data.walletBalance is number);
+    }
+
+    function isValidDoctor(data) {
+      return data.keys().hasAll(['id', 'name', 'specialty', 'isOnline']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.specialty is string && data.specialty.size() > 0 && data.specialty.size() <= 100 &&
+        data.isOnline is bool &&
+        (!('about' in data) || (data.about is string && data.about.size() <= 2000)) &&
+        (!('isActive' in data) || data.isActive is bool);
+    }
+
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['id', 'doctorId', 'doctorName', 'patientName', 'scheduledDate', 'timeSlot', 'type', 'status']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.doctorId is string && data.doctorId.size() <= 128 &&
+        data.doctorName is string && data.doctorName.size() <= 100 &&
+        data.patientName is string && data.patientName.size() <= 100 &&
+        data.scheduledDate is string && data.scheduledDate.size() <= 50 &&
+        data.timeSlot is string && data.timeSlot.size() <= 30 &&
+        data.type in ['Video', 'Voice', 'Chat'] &&
+        data.status in ['upcoming', 'completed', 'cancelled', 'paid'] &&
+        (!('price' in data) || data.price is number) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000));
+    }
+
+    function isValidPrescription(data) {
+      return data.keys().hasAll(['id', 'referenceNo', 'patientName', 'doctorName', 'doctorLicense', 'isVerified']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.referenceNo is string && data.referenceNo.size() <= 50 &&
+        data.patientName is string && data.patientName.size() <= 100 &&
+        data.doctorName is string && data.doctorName.size() <= 100 &&
+        data.doctorLicense is string && data.doctorLicense.size() <= 50 &&
+        data.isVerified is bool &&
+        (!('doctorNotes' in data) || (data.doctorNotes is string && data.doctorNotes.size() <= 2000));
+    }
+
+    function isValidClinicalRecord(data) {
+      return data.keys().hasAll(['id', 'patientId', 'patientName', 'doctorName']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.patientId is string && data.patientId.size() <= 128 &&
+        data.patientName is string && data.patientName.size() <= 100 &&
+        data.doctorName is string && data.doctorName.size() <= 100 &&
+        (!('patientComplaint' in data) || (data.patientComplaint is string && data.patientComplaint.size() <= 1000)) &&
+        (!('diagnosis' in data) || (data.diagnosis is string && data.diagnosis.size() <= 500)) &&
+        (!('carePlan' in data) || (data.carePlan is string && data.carePlan.size() <= 2000));
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'timestamp', 'accessedBy', 'recordAccessed', 'actionType']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.timestamp is string && data.timestamp.size() <= 50 &&
+        data.accessedBy is string && data.accessedBy.size() <= 100 &&
+        data.recordAccessed is string && data.recordAccessed.size() <= 200 &&
+        data.actionType is string && data.actionType.size() <= 50;
+    }
+
+    function isValidChatMessage(data) {
+      return data.keys().hasAll(['id', 'sender', 'senderName', 'timestamp']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.sender in ['patient', 'doctor'] &&
+        data.senderName is string && data.senderName.size() <= 100 &&
+        data.timestamp is string && data.timestamp.size() <= 50 &&
+        (!('text' in data) || (data.text is string && data.text.size() <= 2000));
+    }
+
+    // 4. COLLECTION ROUTE MATCHERS
+
+    // USERS COLLECTION (PII isolation & owner/admin access)
+    match /users/{userId} {
+      allow get: if isVerifiedUser() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerifiedUser() && isValidId(userId) && request.auth.uid == userId &&
+        isValidUser(incoming()) && (incoming().role != 'admin' || isAdmin());
+      allow update: if isVerifiedUser() && isValidId(userId) && isValidUser(incoming()) && (
+        isAdmin() ||
+        (request.auth.uid == userId && incoming().role == existing().role &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'avatarUrl', 'phone', 'gender', 'age', 'stateOfResidence', 'lga', 'walletBalance', 'updatedAt']))
+      );
+      allow delete: if isAdmin();
+    }
+
+    // DOCTORS COLLECTION (Public read for discovery, doctor/admin write)
+    match /doctors/{doctorId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isVerifiedUser() && isValidId(doctorId) && isValidDoctor(incoming()) && (
+        isAdmin() || request.auth.uid == doctorId
+      );
+      allow update: if isVerifiedUser() && isValidId(doctorId) && isValidDoctor(incoming()) && (
+        isAdmin() ||
+        (request.auth.uid == doctorId && incoming().diff(existing()).affectedKeys().hasOnly(['isOnline', 'isActive', 'about', 'specialty', 'updatedAt']))
+      );
+      allow delete: if isAdmin();
+    }
+
+    // APPOINTMENTS COLLECTION
+    match /appointments/{appointmentId} {
+      allow get: if isVerifiedUser() && isValidId(appointmentId) && (
+        isAdmin() ||
+        (resource.data.patientId == request.auth.uid || resource.data.doctorId == request.auth.uid)
+      );
+      allow list: if isVerifiedUser() && (
+        isAdmin() ||
+        (resource.data.patientId == request.auth.uid || resource.data.doctorId == request.auth.uid)
+      );
+      allow create: if isVerifiedUser() && isValidId(appointmentId) && isValidAppointment(incoming()) && (
+        isAdmin() || incoming().patientId == request.auth.uid
+      );
+      allow update: if isVerifiedUser() && isValidId(appointmentId) && isValidAppointment(incoming()) && (
+        isAdmin() ||
+        ((existing().patientId == request.auth.uid || existing().doctorId == request.auth.uid) &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'googleCalendarEventId', 'updatedAt']))
+      );
+      allow delete: if isAdmin();
+    }
+
+    // PRESCRIPTIONS COLLECTION
+    match /prescriptions/{prescriptionId} {
+      allow get: if isVerifiedUser() && isValidId(prescriptionId) && (
+        isAdmin() ||
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorLicense != null
+      );
+      allow list: if isVerifiedUser() && (
+        isAdmin() ||
+        resource.data.patientId == request.auth.uid
+      );
+      allow create: if isVerifiedUser() && isValidId(prescriptionId) && isValidPrescription(incoming()) && (
+        isAdmin() || request.auth.token.email != null
+      );
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // CLINICAL RECORDS COLLECTION (Strict patient/doctor/admin confidentiality)
+    match /clinicalRecords/{recordId} {
+      allow get: if isVerifiedUser() && isValidId(recordId) && (
+        isAdmin() || resource.data.patientId == request.auth.uid
+      );
+      allow list: if isVerifiedUser() && (
+        isAdmin() || resource.data.patientId == request.auth.uid
+      );
+      allow create: if isVerifiedUser() && isValidId(recordId) && isValidClinicalRecord(incoming());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // AUDIT LOGS COLLECTION (NDPA Compliance: Append-only, non-deletable)
+    match /auditLogs/{logId} {
+      allow get: if isVerifiedUser() && isValidId(logId) && (
+        isAdmin() || resource.data.accessedBy == request.auth.token.email
+      );
+      allow list: if isAdmin();
+      allow create: if isVerifiedUser() && isValidId(logId) && isValidAuditLog(incoming());
+      allow update: if false; // Immutable audit log
+      allow delete: if false; // Permanent retention
+    }
+
+    // CHATS SUBCOLLECTION
+    match /consultationChats/{chatId}/messages/{messageId} {
+      allow get, list: if isVerifiedUser() && isValidId(chatId);
+      allow create: if isVerifiedUser() && isValidId(chatId) && isValidId(messageId) && isValidChatMessage(incoming());
+      allow update: if isVerifiedUser() && isValidId(chatId) && isValidId(messageId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status']);
+      allow delete: if isAdmin();
+    }
+  }
+}

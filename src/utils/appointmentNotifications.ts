@@ -3,6 +3,7 @@ import { triggerHaptic } from './haptics';
 export interface AppointmentAlert {
   id: string;
   appointmentId: string;
+  doctorId?: string;
   doctorName: string;
   doctorSpecialty: string;
   doctorAvatar: string;
@@ -13,6 +14,9 @@ export interface AppointmentAlert {
   startTimeTimestamp: number; // Unix timestamp in ms
   dismissed: boolean;
   snoozedUntil?: number;
+  bookingMode?: 'instant' | 'scheduled';
+  status?: 'upcoming' | 'active' | 'completed' | 'cancelled';
+  price?: number;
 }
 
 const STORAGE_KEY = 'prime_telecare_appointment_alerts';
@@ -34,6 +38,7 @@ function createDefaultAlert(): AppointmentAlert {
   return {
     id: 'alert-default-15m',
     appointmentId: 'app-1',
+    doctorId: 'doc-anya',
     doctorName: 'Dr. Anya Sharma',
     doctorSpecialty: 'General Practitioner',
     doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
@@ -41,8 +46,11 @@ function createDefaultAlert(): AppointmentAlert {
     scheduledTime: timeStr,
     scheduledDate: 'Today',
     type: 'Video',
+    bookingMode: 'scheduled',
     startTimeTimestamp: startTime,
     dismissed: false,
+    status: 'upcoming',
+    price: 10000,
   };
 }
 
@@ -55,14 +63,12 @@ export function getStoredAppointmentAlerts(): AppointmentAlert[] {
       return initial;
     }
     const parsed: AppointmentAlert[] = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      const initial = [createDefaultAlert()];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-      return initial;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
     return parsed;
   } catch (e) {
-    return [createDefaultAlert()];
+    return [];
   }
 }
 
@@ -73,6 +79,97 @@ export function saveAppointmentAlerts(alerts: AppointmentAlert[]): void {
   } catch (e) {
     console.error('Failed to save appointment alerts', e);
   }
+}
+
+/**
+ * Returns all active or booked upcoming consultations
+ */
+export function getActiveOrUpcomingConsultations(): AppointmentAlert[] {
+  const alerts = getStoredAppointmentAlerts();
+  return alerts.filter(
+    (a) => !a.dismissed && a.status !== 'cancelled' && a.status !== 'completed'
+  );
+}
+
+/**
+ * Books a new consultation into the persistent appointments store
+ */
+export function bookNewConsultation(booking: {
+  appointmentId?: string;
+  doctorId?: string;
+  doctorName: string;
+  doctorSpecialty: string;
+  doctorAvatar: string;
+  patientName?: string;
+  scheduledTime: string;
+  scheduledDate: string;
+  type: 'Video' | 'Voice' | 'Chat';
+  bookingMode?: 'instant' | 'scheduled';
+  startTimeTimestamp?: number;
+  price?: number;
+}): AppointmentAlert {
+  const alerts = getStoredAppointmentAlerts();
+  const now = Date.now();
+
+  let startTime = booking.startTimeTimestamp;
+  if (!startTime) {
+    if (booking.bookingMode === 'instant') {
+      startTime = now + 2 * 60 * 1000; // instant starts in 2 minutes
+    } else {
+      startTime = now + 14 * 60 * 1000; // upcoming slot
+    }
+  }
+
+  const newAlert: AppointmentAlert = {
+    id: `alert-${Date.now()}`,
+    appointmentId: booking.appointmentId || `cns-${Date.now()}`,
+    doctorId: booking.doctorId || 'doc-1',
+    doctorName: booking.doctorName,
+    doctorSpecialty: booking.doctorSpecialty,
+    doctorAvatar: booking.doctorAvatar,
+    patientName: booking.patientName || 'Ada Okonkwo',
+    scheduledTime: booking.scheduledTime,
+    scheduledDate: booking.scheduledDate,
+    type: booking.type,
+    bookingMode: booking.bookingMode || 'scheduled',
+    startTimeTimestamp: startTime,
+    dismissed: false,
+    status: 'upcoming',
+    price: booking.price || 10000,
+  };
+
+  const updated = [newAlert, ...alerts.filter((a) => !a.dismissed && a.status !== 'cancelled')];
+  saveAppointmentAlerts(updated);
+  return newAlert;
+}
+
+/**
+ * Cancels a consultation and notifies subscribers
+ */
+export function cancelConsultation(id: string): void {
+  const alerts = getStoredAppointmentAlerts();
+  const updated = alerts.map((a) =>
+    a.id === id ? { ...a, dismissed: true, status: 'cancelled' as const } : a
+  );
+  saveAppointmentAlerts(updated);
+}
+
+/**
+ * Marks consultation as completed
+ */
+export function completeConsultation(id: string): void {
+  const alerts = getStoredAppointmentAlerts();
+  const updated = alerts.map((a) =>
+    a.id === id ? { ...a, dismissed: true, status: 'completed' as const } : a
+  );
+  saveAppointmentAlerts(updated);
+}
+
+/**
+ * Clears all consultations (useful for testing zero-appointment state)
+ */
+export function clearAllConsultations(): void {
+  saveAppointmentAlerts([]);
 }
 
 /**

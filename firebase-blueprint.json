@@ -1,0 +1,175 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access for patient, doctor, or administrator",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["patient", "doctor", "admin"] },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "gender": { "type": "string", "maxLength": 20 },
+        "age": { "type": "number" },
+        "stateOfResidence": { "type": "string", "maxLength": 50 },
+        "lga": { "type": "string", "maxLength": 50 },
+        "walletBalance": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Doctor": {
+      "title": "Doctor",
+      "description": "Licensed medical practitioner on the telehealth platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "fullNameWithTitle": { "type": "string", "maxLength": 120 },
+        "specialty": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 100 },
+        "rating": { "type": "number" },
+        "reviewsCount": { "type": "number" },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "isOnline": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "yearsExperience": { "type": "number" },
+        "patientsCount": { "type": "number" },
+        "about": { "type": "string", "maxLength": 2000 },
+        "licenseNumber": { "type": "string", "maxLength": 50 },
+        "boardName": { "type": "string", "maxLength": 100 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "specialty", "isOnline"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Telehealth consultation appointment record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "doctorId": { "type": "string", "maxLength": 128 },
+        "doctorName": { "type": "string", "maxLength": 100 },
+        "doctorSpecialty": { "type": "string", "maxLength": 100 },
+        "doctorAvatar": { "type": "string", "maxLength": 500 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "patientName": { "type": "string", "maxLength": 100 },
+        "scheduledDate": { "type": "string", "maxLength": 50 },
+        "timeSlot": { "type": "string", "maxLength": 30 },
+        "type": { "type": "string", "enum": ["Video", "Voice", "Chat"] },
+        "status": { "type": "string", "enum": ["upcoming", "completed", "cancelled", "paid"] },
+        "price": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "googleCalendarEventId": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "doctorId", "doctorName", "patientName", "scheduledDate", "timeSlot", "type", "status"]
+    },
+    "Prescription": {
+      "title": "Prescription",
+      "description": "Cryptographically signed prescription with verified drug instructions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "referenceNo": { "type": "string", "maxLength": 50 },
+        "date": { "type": "string", "maxLength": 50 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "patientName": { "type": "string", "maxLength": 100 },
+        "doctorName": { "type": "string", "maxLength": 100 },
+        "doctorLicense": { "type": "string", "maxLength": 50 },
+        "doctorClinic": { "type": "string", "maxLength": 150 },
+        "authSealToken": { "type": "string", "maxLength": 256 },
+        "status": { "type": "string", "enum": ["active", "expired", "past"] },
+        "doctorNotes": { "type": "string", "maxLength": 2000 },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "referenceNo", "patientName", "doctorName", "doctorLicense", "isVerified"]
+    },
+    "ClinicalRecord": {
+      "title": "ClinicalRecord",
+      "description": "Structured clinical documentation and consultation medical summary",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "consultationId": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "patientName": { "type": "string", "maxLength": 100 },
+        "doctorName": { "type": "string", "maxLength": 100 },
+        "doctorLicense": { "type": "string", "maxLength": 50 },
+        "patientComplaint": { "type": "string", "maxLength": 1000 },
+        "diagnosis": { "type": "string", "maxLength": 500 },
+        "carePlan": { "type": "string", "maxLength": 2000 },
+        "warningSigns": { "type": "string", "maxLength": 500 },
+        "consultationOutcome": { "type": "string", "maxLength": 100 },
+        "dateStr": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "patientId", "patientName", "doctorName"]
+    },
+    "HealthRecordAuditLog": {
+      "title": "HealthRecordAuditLog",
+      "description": "NDPA-compliant immutable audit entry recording patient record access",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "accessedBy": { "type": "string", "maxLength": 100 },
+        "accessorRole": { "type": "string", "maxLength": 50 },
+        "recordAccessed": { "type": "string", "maxLength": 200 },
+        "accessReason": { "type": "string", "maxLength": 300 },
+        "actionType": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "timestamp", "accessedBy", "recordAccessed", "actionType"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Message sent inside an active consultation chat room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "sender": { "type": "string", "enum": ["patient", "doctor"] },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "text": { "type": "string", "maxLength": 2000 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read"] }
+      },
+      "required": ["id", "sender", "senderName", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and credentials"
+    },
+    "/doctors/{doctorId}": {
+      "schema": "Doctor",
+      "description": "Telehealth doctors roster and availability"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Consultation appointments and bookings"
+    },
+    "/prescriptions/{prescriptionId}": {
+      "schema": "Prescription",
+      "description": "Signed medical prescriptions"
+    },
+    "/clinicalRecords/{recordId}": {
+      "schema": "ClinicalRecord",
+      "description": "Structured medical consultation encounter notes"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "HealthRecordAuditLog",
+      "description": "NDPA health record access audit log"
+    },
+    "/consultationChats/{chatId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages exchanged in a consultation session"
+    }
+  }
+}
