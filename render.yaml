@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt # Low-latency routing to West Africa / Nigeria
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
