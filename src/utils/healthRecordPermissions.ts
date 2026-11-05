@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { primeApi } from '../services/apiClient';
 
 export interface HealthRecordExportPermission {
   sessionId: string;
@@ -84,6 +85,7 @@ export function requestExportPermission(params: {
     }),
   };
   saveExportPermission(updated);
+  primeApi.requestExportRelease(updated.sessionId, updated.purpose).catch(() => {});
   return updated;
 }
 
@@ -103,6 +105,7 @@ export function grantDoctorExportPermission(doctorName?: string, doctorLicense?:
     }),
   };
   saveExportPermission(updated);
+  primeApi.requestExportRelease(updated.sessionId, updated.purpose).catch(() => {});
   return updated;
 }
 
@@ -114,6 +117,7 @@ export function revokeDoctorExportPermission(): HealthRecordExportPermission {
     grantedAt: undefined,
   };
   saveExportPermission(updated);
+  primeApi.requestExportRelease(updated.sessionId, updated.purpose).catch(() => {});
   return updated;
 }
 
@@ -125,6 +129,7 @@ export function sendDoctorReminder(): HealthRecordExportPermission {
     lastReminderAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
   saveExportPermission(updated);
+  primeApi.requestExportRelease(updated.sessionId, updated.purpose).catch(() => {});
   return updated;
 }
 
@@ -144,6 +149,7 @@ export function payForSessionExport(params?: { amount?: number; method?: string 
     }),
   };
   saveExportPermission(updated);
+  primeApi.requestExportRelease(updated.sessionId, updated.purpose).catch(() => {});
   return updated;
 }
 

@@ -122,9 +122,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
   };
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] flex flex-col justify-between p-6 sm:p-10 w-full max-w-2xl mx-auto text-[#171c1f]">
+    <div className="min-h-screen bg-[#f6fafd] flex flex-col justify-between px-5 py-6 sm:px-8 sm:py-8 w-full max-w-xl mx-auto text-[#171c1f]">
       <div>
-        <StatusBar className="-mx-6 sm:-mx-10 -mt-6 sm:-mt-10 mb-2" />
+        <StatusBar className="-mx-5 sm:-mx-8 -mt-6 sm:-mt-8 mb-2" />
 
         <Header title="Prime Telecare" showBack onBack={() => onNavigate('welcome')} />
 
@@ -201,7 +201,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email Field */}
-            <div className="border border-slate-300 rounded-2xl p-3 bg-white focus-within:border-[#006c44] focus-within:ring-2 focus-within:ring-[#006c44]/20 transition-all">
+            <div className="border border-slate-200 rounded-xl p-3 bg-white focus-within:border-[#006c44] focus-within:ring-2 focus-within:ring-[#006c44]/20 transition-all">
               <label className="block text-xs font-semibold text-slate-500 mb-1">Email</label>
               <div className="flex items-center space-x-2">
                 <Mail className="w-5 h-5 text-slate-400" />
@@ -216,14 +216,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
               </div>
             </div>
 
-                        {errorMsg && (
-              <div className="flex items-center space-x-2 bg-red-50 text-red-700 p-3 rounded-2xl border border-red-200 text-xs font-semibold font-nunito transition-all animate-in fade-in slide-in-from-top-2">
+            {errorMsg && (
+              <div className="flex items-center space-x-2 bg-red-50 text-red-700 p-3 rounded-xl border border-red-200 text-xs font-semibold font-nunito transition-all animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMsg} {lockoutTimer !== null && lockoutTimer > 0 && `(${lockoutTimer}s)`}</span>
               </div>
             )}
             {/* Password Field */}
-            <div className={`border rounded-2xl p-3 bg-white transition-all ${getPasswordColorClasses(password)}`}>
+            <div className={`border rounded-xl p-3 bg-white transition-all ${getPasswordColorClasses(password)}`}>
               <label className="block text-xs font-semibold text-slate-500 mb-1">Password</label>
               <div className="flex items-center space-x-2">
                 <Lock className="w-5 h-5 text-slate-400" />
@@ -271,14 +271,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             {/* Log In Button */}
             <button
               type="submit"
-              className="w-full py-3.5 bg-[#1c3a4a] text-white font-bold font-outfit text-base rounded-xl shadow-md hover:bg-[#022434] transition-all transform active:scale-98 mt-2"
+              className="w-full min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm sm:text-base rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center space-x-2 cursor-pointer mt-2"
             >
-              Log In
+              <span>Log In</span>
             </button>
           </form>
 
           {/* Divider */}
-          <div className="relative my-6 text-center">
+          <div className="relative my-5 text-center">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200"></div>
             </div>
@@ -288,14 +288,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
           </div>
 
           {/* Social Logins */}
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <button
               type="button"
               onClick={() => {
                 triggerHaptic('selection');
                 onLoginSuccess('patient');
               }}
-              className="w-full py-3 bg-white border border-slate-300 rounded-2xl flex items-center justify-center space-x-3 text-sm font-bold font-outfit text-slate-800 shadow-xs hover:bg-slate-50 transition-all active:scale-98"
+              className="w-full min-h-[44px] py-3 bg-white border border-slate-200 rounded-xl flex items-center justify-center space-x-3 text-sm font-bold font-outfit text-slate-800 shadow-2xs hover:bg-slate-50 transition-all active:scale-98 cursor-pointer"
             >
               {/* Google G icon */}
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -325,7 +325,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                 triggerHaptic('selection');
                 onLoginSuccess('patient');
               }}
-              className="w-full py-3 bg-black text-white rounded-2xl flex items-center justify-center space-x-3 text-sm font-bold font-outfit shadow-xs hover:bg-slate-900 transition-all active:scale-98"
+              className="w-full min-h-[44px] py-3 bg-[#022434] hover:bg-[#1c3a4a] text-white rounded-xl flex items-center justify-center space-x-3 text-sm font-bold font-outfit shadow-2xs transition-all active:scale-98 cursor-pointer"
             >
               {/* Apple icon */}
               <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">

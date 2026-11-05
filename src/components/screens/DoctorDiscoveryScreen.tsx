@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
+import { primeApi } from '../../services/apiClient';
 import {
   Search,
   Filter,
@@ -45,6 +46,14 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
   role = 'patient',
 }) => {
   const [doctors, setDoctors] = useState<Doctor[]>(mockDoctors);
+
+  useEffect(() => {
+    primeApi.getDoctors().then((docs) => {
+      if (docs && docs.length > 0) {
+        setDoctors(docs);
+      }
+    }).catch(() => {});
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All Specialties');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'active' | 'inactive'>('all');
@@ -163,8 +172,8 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
   });
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] pb-28 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-[#171c1f]">
-      <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8" />
+    <div className="min-h-screen bg-[#f6fafd] pb-28 sm:pb-32 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-[#171c1f]">
+      <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8 md:hidden" />
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -195,7 +204,7 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
 
       <div className="mt-3 space-y-5">
         {/* Platform Roster Banner with Live Telemetry */}
-        <div className="bg-[#022434] text-white p-5 rounded-3xl shadow-xl border border-slate-700 relative overflow-hidden">
+        <div className="bg-[#022434] text-white p-5 rounded-2xl shadow-xl border border-slate-700 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-44 h-44 bg-[#77daa4]/10 rounded-full blur-2xl pointer-events-none" />
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
@@ -357,7 +366,7 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
         </div>
 
         {/* Clinicians Roster Cards */}
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {filteredDoctors.length === 0 ? (
             <div className="bg-white p-10 rounded-3xl border border-slate-200 text-center space-y-3">
               <ShieldCheck className="w-12 h-12 text-slate-300 mx-auto" />
@@ -390,7 +399,7 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
               return (
                 <div
                   key={doc.id}
-                  className={`bg-white rounded-3xl border shadow-xs overflow-hidden transition-all p-5 space-y-4 ${
+                  className={`bg-white rounded-2xl border shadow-xs overflow-hidden transition-all p-4.5 sm:p-5 space-y-4 ${
                     !isDocActive
                       ? 'border-amber-200/90 bg-amber-50/20'
                       : !isDocOnline

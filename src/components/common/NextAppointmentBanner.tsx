@@ -33,6 +33,7 @@ export const NextAppointmentBanner: React.FC<NextAppointmentBannerProps> = ({
   const [timeLeftStr, setTimeLeftStr] = useState<string>('');
   const [minutesLeftNum, setMinutesLeftNum] = useState<number>(0);
   const [hasNotifiedNative, setHasNotifiedNative] = useState<boolean>(false);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const updateAlert = () => {
@@ -107,7 +108,6 @@ export const NextAppointmentBanner: React.FC<NextAppointmentBannerProps> = ({
       ? `${activeAlert.type} Consultation · Chief Complaint: High Fever & Fatigue`
       : `${activeAlert.doctorSpecialty} · ${activeAlert.type} Consultation`;
 
-  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 
   return (
     <>

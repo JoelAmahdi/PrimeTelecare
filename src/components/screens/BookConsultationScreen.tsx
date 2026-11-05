@@ -197,8 +197,8 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   const licenseNo = currentDoctor.verification?.licenseNumber || 'MDCN/2018/74920';
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-32 w-full max-w-3xl mx-auto px-4 sm:px-6 text-[#0f172a] font-nunito">
-      <StatusBar className="-mx-4 sm:-mx-6" />
+    <div className="min-h-screen bg-slate-50 pb-28 sm:pb-32 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-[#0f172a] font-nunito">
+      <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8 md:hidden" />
 
       <Header
         title="Book Consultation"
@@ -218,7 +218,9 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
         onNavigate={onNavigate}
       />
 
-      <div className="mt-2 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start mt-4">
+        {/* LEFT COLUMN: Booking Choices & Details (lg:col-span-7) */}
+        <div className="lg:col-span-7 space-y-4">
         {/* COMPACT PATIENT / DEPENDENT SELECTOR */}
         <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-xs text-slate-500 font-medium">Consultation For</span>
@@ -548,58 +550,115 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
           )}
         </div>
 
-        {/* 6. TRANSPARENT PRICING BREAKDOWN */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2 text-xs">
-          <div className="flex items-center justify-between text-slate-600">
-            <span>{consultationType} Consultation Fee</span>
-            <span className="font-mono font-semibold text-slate-800">
-              ₦{baseConsultationFee.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-slate-600">
-            <span className="flex items-center space-x-1">
-              <span>Platform & Encryption Fee</span>
-              <Info className="w-3 h-3 text-slate-400" />
-            </span>
-            <span className="font-mono font-semibold text-slate-800">
-              ₦{platformServiceFee.toLocaleString()}
-            </span>
-          </div>
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-sm">
-            <span className="font-outfit font-bold text-[#022434]">Total Amount</span>
-            <span className="font-outfit font-bold text-[#006c44] font-mono text-base">
-              ₦{totalAmountPayable.toLocaleString()}
-            </span>
-          </div>
-          <div className="pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={handleConfirmAction}
-              className="w-full py-4 px-5 bg-[#006c44] hover:bg-[#005536] text-white font-outfit font-bold text-sm sm:text-base rounded-2xl shadow-md transition-all active:scale-98 flex items-center justify-center space-x-2 cursor-pointer"
-            >
-              <Zap className="w-4 h-4 text-emerald-300" />
-              <span>
-                {bookingMode === 'instant' ? 'Connect with Doctor Now' : 'Schedule Appointment'} · ₦{totalAmountPayable.toLocaleString()}
-              </span>
-            </button>
-            <p className="text-[11px] text-center text-emerald-700 font-semibold pt-2">
-              {bookingMode === 'instant'
-                ? '⚡ Live triage in ~2–5 mins · Priority Queue'
-                : `📅 Scheduled for ${availableDates[selectedDateIndex].date} at ${selectedTimeSlot}`}
-            </p>
-          </div>
+        </div>
+        {/* End of LEFT COLUMN */}
 
-          <p className="text-[11px] text-slate-400 pt-1 flex items-center justify-center space-x-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>NDPA Encrypted · 100% full refund if canceled up to 2h prior</span>
-          </p>
+        {/* RIGHT COLUMN: Sticky Booking Summary & Pricing (lg:col-span-5) */}
+        <div className="lg:col-span-5 lg:sticky lg:top-24 space-y-4">
+          <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <h3 className="font-bold font-outfit text-base text-[#022434] pb-3 border-b border-slate-100 flex items-center justify-between">
+              <span>Booking Summary</span>
+              <span className="text-xs font-semibold font-mono text-[#006c44] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                WAT (GMT+1)
+              </span>
+            </h3>
+
+            {/* Doctor Snapshot */}
+            <div className="flex items-center space-x-3.5 pb-3 border-b border-slate-100">
+              <img
+                src={currentDoctor.avatarUrl}
+                alt={fullName}
+                className="w-13 h-13 rounded-2xl object-cover border border-slate-200 shrink-0"
+              />
+              <div className="min-w-0">
+                <h4 className="font-bold font-outfit text-sm sm:text-base text-[#022434] truncate">{fullName}</h4>
+                <p className="text-xs text-slate-500 truncate">{currentDoctor.specialty}</p>
+                <span className="text-[11px] text-emerald-700 font-semibold">{currentDoctor.yearsExperience} yrs experience • MDCN Active</span>
+              </div>
+            </div>
+
+            {/* Session details */}
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Appointment Mode</span>
+                <span className="font-semibold text-slate-800">
+                  {bookingMode === 'instant' ? 'Instant Triage' : 'Scheduled Slot'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Time &amp; Date</span>
+                <span className="font-semibold text-slate-800">
+                  {bookingMode === 'instant' ? 'Immediate (2–5 mins)' : `${availableDates[selectedDateIndex].date} @ ${selectedTimeSlot}`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Medium</span>
+                <span className="font-semibold text-slate-800">
+                  {consultationType === 'Video' ? 'Encrypted HD Video' : consultationType === 'Voice' ? 'High-Def Voice' : 'E2E Encrypted Chat'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-600">
+                <span>Duration</span>
+                <span className="font-semibold text-slate-800">{consultationDuration}</span>
+              </div>
+            </div>
+
+            {/* Fee Breakdown */}
+            <div className="pt-3 border-t border-slate-100 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-slate-600">
+                <span>{consultationType} Consultation Fee</span>
+                <span className="font-mono font-semibold text-slate-800">
+                  ₦{baseConsultationFee.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-600">
+                <span className="flex items-center space-x-1">
+                  <span>Platform &amp; Encryption Fee</span>
+                  <Info className="w-3 h-3 text-slate-400" />
+                </span>
+                <span className="font-mono font-semibold text-slate-800">
+                  ₦{platformServiceFee.toLocaleString()}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-sm">
+                <span className="font-outfit font-bold text-[#022434]">Total Amount</span>
+                <span className="font-outfit font-bold text-[#006c44] font-mono text-lg">
+                  ₦{totalAmountPayable.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Primary Action Button */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleConfirmAction}
+                className="w-full min-h-[48px] py-3.5 px-5 bg-[#006c44] hover:bg-[#022434] text-white font-outfit font-bold text-sm sm:text-base rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <Zap className="w-4 h-4 text-emerald-300" />
+                <span>
+                  {bookingMode === 'instant' ? 'Connect with Doctor Now' : 'Schedule Appointment'} · ₦{totalAmountPayable.toLocaleString()}
+                </span>
+              </button>
+              <p className="text-[11px] text-center text-emerald-700 font-semibold pt-2">
+                {bookingMode === 'instant'
+                  ? '⚡ Live triage in ~2–5 mins · Priority Queue'
+                  : `📅 Scheduled for ${availableDates[selectedDateIndex].date} at ${selectedTimeSlot}`}
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-center space-x-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>NDPA Encrypted · 100% full refund if canceled up to 2h prior</span>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* DOCTOR SELECTION MODAL (Keeps main booking flow clean) */}
       {isDoctorModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-slate-100 max-h-[85vh] flex flex-col">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-slate-100 max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-outfit font-bold text-base text-[#022434]">
                 Choose Clinician

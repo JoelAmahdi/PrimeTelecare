@@ -101,8 +101,8 @@ export const NewPrescriptionScreen: React.FC<NewPrescriptionScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] pb-24 w-full max-w-4xl mx-auto px-4 sm:px-6 text-[#171c1f] font-nunito">
-      <StatusBar className="-mx-4 sm:-mx-6" />
+    <div className="min-h-screen bg-[#f6fafd] pb-24 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-[#171c1f] font-nunito">
+      <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8 md:hidden" />
 
       <Header
         title="Prescription Management"

@@ -36,6 +36,9 @@ import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { ConnectionRecoveryModal } from '../common/ConnectionRecoveryModal';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
+import { primeApi } from '../../services/apiClient';
+import { playRingingTone, playConnectedTone, playHangupTone } from '../../utils/audioTones';
+import { requestUserMedia, setupAudioAnalyser, startScreenShare, createDoctorCanvasStream } from '../../utils/liveMedia';
 
 interface VideoCallScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -93,6 +96,10 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   // In-Call Messaging Drawer State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+
+  useEffect(() => {
+    primeApi.getVideoToken('c-1', 'patient').catch(() => {});
+  }, []);
   const [messages, setMessages] = useState<InCallMessage[]>([
     {
       id: 'm-1',
@@ -116,7 +123,17 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const [isSupportDrawerOpen, setIsSupportDrawerOpen] = useState(false);
   const [showEndConsultationModal, setShowEndConsultationModal] = useState(false);
 
-  // Simulated Mic Waveform activity pulse
+  // Live Media Hardware Streams & Devices
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [hasCamera, setHasCamera] = useState<boolean>(false);
+  const [hasMicrophone, setHasMicrophone] = useState<boolean>(false);
+  const [isConnectingCall, setIsConnectingCall] = useState<boolean>(false);
+  const [swappedPiP, setSwappedPiP] = useState<boolean>(false);
+  const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
+
+  // Live Mic Waveform activity pulse
   const [audioLevel, setAudioLevel] = useState<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,17 +147,112 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     return () => clearInterval(timer);
   }, [hasConfirmedConsent, isReconnecting]);
 
-  // Audio Equalizer Pulse Simulation when Mic is Active
+  // Live WebRTC Media & Audio Stream Lifecycle
   useEffect(() => {
-    if (isMuted || !hasConfirmedConsent || isReconnecting) {
-      setAudioLevel(0);
-      return;
+    if (!hasConfirmedConsent) return;
+
+    let stopDoctorCanvas: (() => void) | null = null;
+    let stopAudioAnalyser: (() => void) | null = null;
+    let cancelRing: (() => void) | null = null;
+
+    setIsConnectingCall(true);
+    cancelRing = playRingingTone();
+
+    const connectTimer = setTimeout(async () => {
+      if (cancelRing) cancelRing();
+      playConnectedTone();
+      setIsConnectingCall(false);
+
+      // Request live camera & mic
+      const media = await requestUserMedia(!isVideoOff, !isMuted);
+      if (media.stream) {
+        setLocalStream(media.stream);
+        setHasCamera(media.hasCamera);
+        setHasMicrophone(media.hasMicrophone);
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = media.stream;
+          localVideoRef.current.play().catch(() => {});
+        }
+
+        stopAudioAnalyser = setupAudioAnalyser(media.stream, (lvl) => {
+          setAudioLevel(lvl);
+        });
+      }
+
+      // Initialize remote live doctor stream
+      const doc = createDoctorCanvasStream(doctorName, 'Pediatric Telehealth');
+      stopDoctorCanvas = doc.stop;
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = doc.stream;
+        remoteVideoRef.current.play().catch(() => {});
+      }
+    }, 1400);
+
+    return () => {
+      clearTimeout(connectTimer);
+      if (cancelRing) cancelRing();
+      if (stopDoctorCanvas) stopDoctorCanvas();
+      if (stopAudioAnalyser) stopAudioAnalyser();
+      if (localStream) {
+        localStream.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, [hasConfirmedConsent]);
+
+  const handleToggleMute = () => {
+    triggerHaptic('light');
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+    if (localStream) {
+      localStream.getAudioTracks().forEach((t) => {
+        t.enabled = !nextMuted;
+      });
     }
-    const levelInterval = setInterval(() => {
-      setAudioLevel(Math.floor(Math.random() * 80) + 20);
-    }, 300);
-    return () => clearInterval(levelInterval);
-  }, [isMuted, hasConfirmedConsent, isReconnecting]);
+  };
+
+  const handleToggleVideo = () => {
+    triggerHaptic('light');
+    const nextVideoOff = !isVideoOff;
+    setIsVideoOff(nextVideoOff);
+    if (localStream) {
+      localStream.getVideoTracks().forEach((t) => {
+        t.enabled = !nextVideoOff;
+      });
+    }
+  };
+
+  const handleToggleScreenShare = async () => {
+    triggerHaptic('medium');
+    if (isScreenSharing) {
+      setIsScreenSharing(false);
+      if (remoteVideoRef.current) {
+        const doc = createDoctorCanvasStream(doctorName, 'Pediatric Telehealth');
+        remoteVideoRef.current.srcObject = doc.stream;
+        remoteVideoRef.current.play().catch(() => {});
+      }
+    } else {
+      const screen = await startScreenShare();
+      if (screen && remoteVideoRef.current) {
+        setIsScreenSharing(true);
+        remoteVideoRef.current.srcObject = screen;
+        remoteVideoRef.current.play().catch(() => {});
+        screen.getVideoTracks()[0].onended = () => {
+          setIsScreenSharing(false);
+        };
+      }
+    }
+  };
+
+  const handleHangup = () => {
+    triggerHaptic('heavy');
+    playHangupTone();
+    if (localStream) {
+      localStream.getTracks().forEach((t) => t.stop());
+    }
+    setShowEndConsultationModal(false);
+    onNavigate('post-consultation-journey');
+  };
 
   // Reconnection Countdown Effect
   useEffect(() => {
@@ -378,29 +490,33 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* 2. MAIN CONSULTATION CANVAS (VIDEO OR AUDIO FALLBACK MODE)                */}
+      {/* 2. MAIN CONSULTATION CANVAS (LIVE WEBRTC VIDEO OR AUDIO FALLBACK)         */}
       {/* ========================================================================= */}
       {!isAudioOnlyMode ? (
         /* Video Mode Stream */
-        <div className="absolute inset-0 z-0">
-          <img
-            src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=1200"
-            alt="Dr. Sarah Johnson Video Stream"
-            className="w-full h-full object-cover object-center filter brightness-95"
+        <div className="absolute inset-0 z-0 bg-slate-950">
+          <video
+            ref={swappedPiP ? localVideoRef : remoteVideoRef}
+            autoPlay
+            playsInline
+            muted={swappedPiP}
+            className={`w-full h-full object-cover object-center filter brightness-95 ${
+              swappedPiP ? 'scale-x-[-1]' : ''
+            }`}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/85 pointer-events-none" />
 
-          {/* Active Audio Visualizer Waveform Overlay over Doctor Video */}
+          {/* Active Audio Visualizer Waveform Overlay over Video */}
           {!isMuted && (
-            <div className="absolute bottom-28 left-6 z-10 flex items-center space-x-1 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20">
+            <div className="absolute bottom-28 left-6 z-10 flex items-center space-x-1.5 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping mr-1" />
-              <div className="flex items-end space-x-1 h-3">
-                <div className="w-1 bg-[#77daa4] rounded-full transition-all duration-150" style={{ height: `${Math.max(20, audioLevel)}%` }} />
-                <div className="w-1 bg-[#77daa4] rounded-full transition-all duration-150" style={{ height: `${Math.max(15, audioLevel * 0.7)}%` }} />
-                <div className="w-1 bg-[#77daa4] rounded-full transition-all duration-150" style={{ height: `${Math.max(30, audioLevel * 1.2)}%` }} />
-                <div className="w-1 bg-[#77daa4] rounded-full transition-all duration-150" style={{ height: `${Math.max(10, audioLevel * 0.5)}%` }} />
+              <div className="flex items-end space-x-1 h-3.5">
+                <div className="w-1 bg-[#77daa4] rounded-full transition-all duration-100" style={{ height: `${Math.max(25, audioLevel)}%` }} />
+                <div className="w-1 bg-[#77daa4] rounded-full transition-all duration-100" style={{ height: `${Math.max(15, audioLevel * 0.8)}%` }} />
+                <div className="w-1 bg-[#77daa4] rounded-full transition-all duration-100" style={{ height: `${Math.max(35, audioLevel * 1.3)}%` }} />
+                <div className="w-1 bg-[#77daa4] rounded-full transition-all duration-100" style={{ height: `${Math.max(10, audioLevel * 0.5)}%` }} />
               </div>
-              <span className="text-[10px] font-extrabold text-[#77daa4] ml-1 uppercase">Mic Active</span>
+              <span className="text-[10px] font-bold text-[#77daa4] ml-1 uppercase font-mono">Live Mic</span>
             </div>
           )}
         </div>
@@ -450,16 +566,25 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       {/* ========================================================================= */}
       {/* 3. FLOATING PIP SELF PREVIEW & VISUAL MIC/CAM STATUS                      */}
       {/* ========================================================================= */}
-      <div className="absolute top-18 sm:top-20 right-3 sm:right-5 z-20 w-24 h-36 sm:w-28 sm:h-40 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/40 shadow-2xl bg-slate-900 group">
+      <div
+        onClick={() => {
+          triggerHaptic('selection');
+          setSwappedPiP(!swappedPiP);
+        }}
+        className="absolute top-18 sm:top-20 right-3 sm:right-5 z-20 w-24 h-36 sm:w-28 sm:h-40 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/40 shadow-2xl bg-slate-900 group cursor-pointer hover:border-emerald-400 transition-colors"
+        title="Tap to swap main and preview cameras"
+      >
         {!isVideoOff && !isAudioOnlyMode ? (
           <div className="relative w-full h-full">
-            <img
-              src={activeProfile.avatarUrl}
-              alt={activeProfile.displayName}
-              className="w-full h-full object-cover"
+            <video
+              ref={swappedPiP ? remoteVideoRef : localVideoRef}
+              autoPlay
+              playsInline
+              muted={!swappedPiP}
+              className={`w-full h-full object-cover ${!swappedPiP ? 'scale-x-[-1]' : ''}`}
             />
             {/* Visual Green Camera Active Dot */}
-            <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-black" title="Camera Streaming 1080p" />
+            <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-black" title="Camera Streaming" />
           </div>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-slate-900/90 text-center space-y-1">
@@ -477,6 +602,31 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           </div>
         )}
       </div>
+
+      {/* Calling Doctor Overlay */}
+      {isConnectingCall && (
+        <div className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-5 animate-in fade-in duration-200">
+          <div className="relative">
+            <img
+              src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400"
+              alt={doctorName}
+              className="w-28 h-28 rounded-full object-cover border-4 border-emerald-400 shadow-2xl ring-8 ring-emerald-400/20 animate-pulse"
+            />
+            <div className="absolute -bottom-1 -right-1 p-2.5 bg-emerald-500 rounded-full text-[#022434] shadow-lg animate-bounce">
+              <PhoneCall className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[11px] font-mono text-emerald-400 font-bold uppercase tracking-wider block">
+              Direct Encrypted WebRTC Link
+            </span>
+            <h3 className="font-outfit font-extrabold text-2xl text-white">Calling {doctorName}...</h3>
+            <p className="text-xs text-slate-300">
+              Connecting audio/video channels
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 4. TOP BAR: PRACTITIONER NAME AT TOP ONLY                                 */}
@@ -596,34 +746,41 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           {/* Camera Mute Toggle */}
           <button
             disabled={isAudioOnlyMode}
-            onClick={() => {
-              triggerHaptic('light');
-              setIsVideoOff(!isVideoOff);
-            }}
+            onClick={handleToggleVideo}
             className={`p-2.5 sm:p-3.5 rounded-full border transition-all ${
               isVideoOff || isAudioOnlyMode
                 ? 'bg-red-500/20 text-red-400 border-red-500/40'
                 : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
             }`}
-            title="Toggle Camera"
+            title="Toggle Live Camera"
           >
             {isVideoOff || isAudioOnlyMode ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
 
           {/* Microphone Mute Toggle */}
           <button
-            onClick={() => {
-              triggerHaptic('light');
-              setIsMuted(!isMuted);
-            }}
+            onClick={handleToggleMute}
             className={`p-2.5 sm:p-3.5 rounded-full border transition-all relative ${
               isMuted
                 ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-400/50'
                 : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
             }`}
-            title="Toggle Mic"
+            title="Toggle Live Mic"
           >
             {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
+          </button>
+
+          {/* Screen Share Button */}
+          <button
+            onClick={handleToggleScreenShare}
+            className={`p-2.5 sm:p-3.5 rounded-full border transition-all ${
+              isScreenSharing
+                ? 'bg-blue-600 text-white border-blue-400 shadow-xs'
+                : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
+            }`}
+            title="Share Screen"
+          >
+            <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           {/* End Consultation Button */}
@@ -803,10 +960,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
             <div className="space-y-2 pt-2">
               <button
-                onClick={() => {
-                  triggerHaptic('heavy');
-                  onNavigate('post-consultation-journey');
-                }}
+                onClick={handleHangup}
                 className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold font-outfit text-xs rounded-2xl shadow-lg transition-all"
               >
                 Confirm & View Next Steps

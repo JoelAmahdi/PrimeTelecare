@@ -42,6 +42,7 @@ import {
 import { ScreenId, UserRole, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { StatusBar } from '../common/StatusBar';
+import { primeApi } from '../../services/apiClient';
 
 interface AdminDashboardScreenProps {
   user: User;

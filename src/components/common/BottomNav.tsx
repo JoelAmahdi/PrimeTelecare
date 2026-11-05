@@ -45,7 +45,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate,
     ];
 
     return (
-      <nav aria-label="Admin Navigation" className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 max-w-lg mx-auto z-40">
+      <nav aria-label="Admin Navigation" className="md:hidden fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 max-w-lg mx-auto z-40">
         <div className="bg-[#022434]/95 backdrop-blur-xl border border-slate-700/80 shadow-2xl rounded-full p-1.5 flex items-center justify-between text-white">
           {adminTabs.map((tab) => {
             const Icon = tab.icon;
@@ -53,8 +53,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate,
               <button
                 key={tab.id}
                 onClick={() => handleNav(tab.id)}
+                aria-label={tab.label}
                 aria-current={tab.isActive ? 'page' : undefined}
-                className={`flex-1 flex items-center justify-center space-x-1.5 min-h-[44px] px-2 py-2 rounded-full text-[11px] sm:text-xs font-outfit transition-colors duration-150 outline-none ${
+                className={`flex-1 flex items-center justify-center space-x-1.5 min-h-[44px] px-2 py-2 rounded-full text-[11px] sm:text-xs font-outfit transition-colors duration-150 outline-none cursor-pointer ${
                   tab.isActive
                     ? 'bg-[#77daa4] text-[#022434] font-bold shadow-xs'
                     : 'text-slate-300 hover:text-white hover:bg-white/10 active:bg-white/20'
@@ -99,7 +100,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate,
     ];
 
     return (
-      <nav aria-label="Patient Navigation" className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 max-w-lg mx-auto z-40">
+      <nav aria-label="Patient Navigation" className="md:hidden fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 max-w-lg mx-auto z-40">
         <div className="bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-xl shadow-slate-900/10 rounded-full p-1.5 flex items-center justify-between">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -107,11 +108,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate,
               <button
                 key={tab.id}
                 onClick={() => handleNav(tab.id)}
+                aria-label={tab.label}
                 aria-current={tab.isActive ? 'page' : undefined}
-                className={`flex-1 flex items-center justify-center space-x-1.5 min-h-[44px] px-2 py-2 rounded-full text-[11px] sm:text-xs font-outfit transition-colors duration-150 outline-none ${
+                className={`flex-1 flex items-center justify-center space-x-1.5 min-h-[44px] px-2 py-2 rounded-full text-[11px] sm:text-xs font-outfit transition-all duration-150 outline-none cursor-pointer ${
                   tab.isActive
-                    ? 'bg-[#1c3a4a] text-white font-bold shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 active:bg-slate-100'
+                    ? 'bg-[#006c44] text-white font-bold shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/70 active:bg-slate-200/50'
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" />
@@ -153,7 +155,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate,
   ];
 
   return (
-    <nav aria-label="Doctor Navigation" className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 max-w-lg mx-auto z-40">
+    <nav aria-label="Doctor Navigation" className="md:hidden fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] left-3 right-3 max-w-lg mx-auto z-40">
       <div className="bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-xl shadow-slate-900/10 rounded-full p-1.5 flex items-center justify-between">
         {doctorTabs.map((tab) => {
           const Icon = tab.icon;
@@ -161,10 +163,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate,
             <button
               key={tab.id}
               onClick={() => handleNav(tab.id)}
+              aria-label={tab.label}
               aria-current={tab.isActive ? 'page' : undefined}
-              className={`flex-1 flex items-center justify-center space-x-1.5 min-h-[44px] px-2 py-2 rounded-full text-[11px] sm:text-xs font-outfit transition-colors duration-150 outline-none ${
+              className={`flex-1 flex items-center justify-center space-x-1.5 min-h-[44px] px-2 py-2 rounded-full text-[11px] sm:text-xs font-outfit transition-colors duration-150 outline-none cursor-pointer ${
                 tab.isActive
-                  ? 'bg-[#1c3a4a] text-white font-bold shadow-xs'
+                  ? 'bg-[#022434] text-white font-bold shadow-xs'
                   : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 active:bg-slate-100'
               }`}
             >

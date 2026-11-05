@@ -1,4 +1,5 @@
 import { DependentProfile, User } from '../types';
+import { primeApi } from '../services/apiClient';
 
 const DEPENDENTS_KEY = 'prime_telecare_dependents_v1';
 const ACTIVE_DEPENDENT_KEY = 'prime_telecare_active_dependent_id_v1';
@@ -87,6 +88,7 @@ export function addDependentProfile(dep: Omit<DependentProfile, 'id'>): Dependen
   };
   const updated = [...deps, newDep];
   saveDependents(updated);
+  primeApi.addDependent(newDep).catch(() => {});
   return newDep;
 }
 
@@ -100,6 +102,7 @@ export function deleteDependentProfile(id: string): void {
   const deps = getStoredDependents();
   const updated = deps.filter((d) => d.id !== id);
   saveDependents(updated);
+  primeApi.deleteDependent('pat-1', id).catch(() => {});
 
   if (getActiveDependentId() === id) {
     setActiveDependentId(null);

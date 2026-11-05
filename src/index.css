@@ -86,3 +86,101 @@ h1, h2, h3, h4, h5, h6 {
 .animate-shake {
   animation: shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
+
+/* Telecare Design System Core Utilities */
+.btn-primary {
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  background-color: #006c44;
+  color: #ffffff;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  background-color: #022434;
+}
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+.btn-secondary:active {
+  transform: scale(0.98);
+}
+
+.btn-dark {
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  background-color: #022434;
+  color: #ffffff;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.875rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+.btn-dark:hover {
+  background-color: #1c3a4a;
+}
+.btn-dark:active {
+  transform: scale(0.98);
+}
+
+.card-standard {
+  background-color: #ffffff;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.emulator-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.emulator-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.emulator-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+.emulator-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}

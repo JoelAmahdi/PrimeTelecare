@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: prime-telecare
+    runtime: node
+    plan: free
+    region: frankfurt # Low-latency routing to West Africa / Nigeria
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: APP_URL
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: HMAC_PRESCRIPTION_SECRET
+        generateValue: true
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+

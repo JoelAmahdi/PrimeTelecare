@@ -104,8 +104,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
   };
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] pb-28 w-full max-w-4xl mx-auto px-4 sm:px-6 text-[#171c1f]">
-      <StatusBar className="-mx-4 sm:-mx-6" />
+    <div className="min-h-screen bg-[#f6fafd] pb-28 sm:pb-32 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-[#171c1f]">
+      <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8 md:hidden" />
       
       <Header
         title="Profile & Settings"
@@ -115,7 +115,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
 
       <div className="px-1 sm:px-4 space-y-3.5 mt-3">
         {/* 1. Main Profile Card */}
-        <div className="bg-white p-4 sm:p-5 rounded-[26px] border border-slate-100 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="relative">
               <img
@@ -159,7 +159,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
           </div>
 
           {/* Biometric Security Card */}
-          <div className="bg-white p-5 rounded-[26px] border border-slate-200/80 shadow-xs space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-start justify-between">
               <div className="flex items-start space-x-3.5">
                 <div className="p-2.5 rounded-2xl bg-emerald-50 text-[#006c44] border border-emerald-100 shrink-0 mt-0.5">

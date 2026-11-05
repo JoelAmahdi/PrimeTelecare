@@ -15,6 +15,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { triggerHaptic } from '../../utils/haptics';
+import { primeApi } from '../../services/apiClient';
 
 interface TriageResult {
   isEmergency: boolean;
@@ -134,6 +135,15 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
 
     setEvalResult(result);
     setTriageEvaluated(true);
+
+    // Asynchronously log & evaluate with core triage backend
+    primeApi.evaluateTriage({
+      patientName: 'Ada Okonkwo',
+      patientAge: 28,
+      gender: 'Female',
+      vitals: { temp, hr, spo2, systolicBp },
+      redFlags: answers,
+    }).catch(() => {});
   };
 
   const handleProceedIfCleared = () => {

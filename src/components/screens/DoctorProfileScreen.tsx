@@ -89,8 +89,8 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] pb-28 w-full max-w-4xl mx-auto px-4 sm:px-6 text-[#171c1f]">
-      <StatusBar className="-mx-4 sm:-mx-6" />
+    <div className="min-h-screen bg-[#f6fafd] pb-32 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-[#171c1f]">
+      <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8 md:hidden" />
 
       {/* Header Overlay */}
       <Header
@@ -489,9 +489,9 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
               triggerHaptic('selection');
               onNavigate('book-consultation');
             }}
-            className="flex-1 py-3.5 bg-gradient-to-r from-[#022434] to-[#006c44] text-white font-bold font-outfit text-sm rounded-2xl shadow-lg hover:from-[#1c3a4a] hover:to-[#004d30] transition-all transform active:scale-98 flex flex-col items-center justify-center"
+            className="flex-1 min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl shadow-md transition-all active:scale-98 flex flex-col items-center justify-center cursor-pointer"
           >
-            <span className="text-sm font-extrabold font-outfit">Book Consultation Now</span>
+            <span className="text-sm font-bold font-outfit">Book Consultation Now</span>
             <span className="text-[10px] text-emerald-200 font-normal flex items-center space-x-1 mt-0.5">
               <ShieldCheck className="w-3 h-3 text-emerald-300" />
               <span>Verified MDCN Doctor • Instant Slot ({selectedSlot})</span>

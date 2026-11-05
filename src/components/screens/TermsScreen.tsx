@@ -118,8 +118,8 @@ export const TermsScreen: React.FC<TermsScreenProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] pb-36 w-full max-w-2xl mx-auto px-4 sm:px-6 text-[#171c1f]">
-      <StatusBar className="-mx-4 sm:-mx-6" />
+    <div className="min-h-screen bg-[#f6fafd] pb-36 w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-[#171c1f]">
+      <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8 md:hidden" />
 
       {/* Header */}
       <Header
@@ -130,7 +130,7 @@ export const TermsScreen: React.FC<TermsScreenProps> = ({
 
       <div className="mt-2 space-y-3.5">
         {/* Banner Card */}
-        <div className="bg-[#1c3a4a] text-white rounded-[26px] p-6 text-center flex flex-col items-center justify-center shadow-md relative overflow-hidden">
+        <div className="bg-[#022434] text-white rounded-2xl p-6 text-center flex flex-col items-center justify-center shadow-md relative overflow-hidden">
           <div className="w-12 h-12 rounded-2xl bg-[#77daa4]/20 border border-[#77daa4]/40 flex items-center justify-center mb-3">
             <ShieldCheck className="w-7 h-7 text-[#77daa4]" />
           </div>
@@ -292,7 +292,7 @@ export const TermsScreen: React.FC<TermsScreenProps> = ({
           <button
             onClick={handleAccept}
             disabled={!isChecked}
-            className="w-full py-3.5 bg-[#1c3a4a] text-white font-bold font-outfit text-base rounded-2xl shadow-lg hover:bg-[#022434] transition-all transform active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm sm:text-base rounded-xl shadow-md transition-all active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             Accept and Continue
           </button>

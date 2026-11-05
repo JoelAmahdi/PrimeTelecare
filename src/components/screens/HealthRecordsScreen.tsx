@@ -464,8 +464,8 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
   };
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] pb-28 w-full max-w-3xl mx-auto px-4 sm:px-6 text-[#171c1f] font-nunito">
-      <StatusBar className="-mx-4 sm:-mx-6" />
+    <div className="min-h-screen bg-[#f6fafd] pb-28 sm:pb-32 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-[#171c1f] font-nunito">
+      <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8 md:hidden" />
 
       <Header
         title="Health Records & Sessions"
@@ -482,7 +482,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
       />
 
       {!isUnlocked ? (
-        <div className="mt-12 bg-white rounded-[28px] p-8 border border-slate-200/80 shadow-sm text-center space-y-5 max-w-sm mx-auto animate-in fade-in">
+        <div className="mt-12 bg-white rounded-2xl p-7 border border-slate-200/80 shadow-sm text-center space-y-5 max-w-sm mx-auto animate-in fade-in">
           <div className="w-16 h-16 bg-slate-100 text-slate-800 rounded-full flex items-center justify-center mx-auto shadow-2xs">
             <Lock className="w-7 h-7 text-slate-700" />
           </div>
@@ -503,7 +503,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
                 triggerHaptic('medium');
                 setShowBiometricModal(true);
               }}
-              className="w-full py-3.5 bg-black hover:bg-neutral-800 text-white font-semibold font-outfit text-xs rounded-2xl transition-all shadow-sm flex items-center justify-center space-x-2 active:scale-[0.98] cursor-pointer"
+              className="w-full min-h-[44px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl transition-all shadow-sm flex items-center justify-center space-x-2 active:scale-[0.98] cursor-pointer"
             >
               <span>Unlock Records</span>
             </button>
@@ -527,7 +527,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
       ) : (
       <div className="space-y-6 mt-3 sm:mt-4">
         {/* Patient Profile Bar */}
-        <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-xs border border-slate-200/90 flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-xs border border-slate-200/90 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center space-x-2">
               <h2 className="text-lg font-extrabold font-outfit text-[#022434]">
@@ -550,7 +550,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
         </div>
 
         {/* 1. EXPORT LATEST SESSION (SPOTLIGHT HERO CARD) */}
-        <div className="relative bg-gradient-to-br from-[#022434] via-[#083248] to-[#004830] text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-slate-800 overflow-hidden">
+        <div className="relative bg-gradient-to-br from-[#022434] via-[#083248] to-[#004830] text-white rounded-2xl p-5 sm:p-6 shadow-xl border border-slate-800 overflow-hidden">
           {/* Subtle Glow */}
           <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#77daa4]/15 rounded-full blur-3xl pointer-events-none" />
 
@@ -692,7 +692,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
               <button
                 type="button"
                 onClick={() => handleExportSession(latestSession)}
-                className="w-full sm:flex-1 py-3 px-4 bg-[#77daa4] hover:bg-[#63cc94] text-[#022434] font-extrabold font-outfit text-xs sm:text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-98 cursor-pointer"
+                className="w-full sm:flex-1 min-h-[44px] py-3 px-4 bg-[#77daa4] hover:bg-[#63cc94] text-[#022434] font-bold font-outfit text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 active:scale-98 cursor-pointer"
               >
                 {permission.status === 'pending_doctor_approval' ? (
                   <>
@@ -849,7 +849,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
         </div>
 
         {/* 3. OLD SESSIONS LIST WITH DEDICATED E-PRESCRIPTION PRINT & EXPORT BUTTONS */}
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {filteredOldSessions.map((session) => (
             <div
               key={session.id}

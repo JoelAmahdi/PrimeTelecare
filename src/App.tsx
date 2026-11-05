@@ -37,16 +37,41 @@ import { RecoveryFollowUpModal } from './components/common/RecoveryFollowUpModal
 import { PostConsultationReminder } from './utils/postConsultationReminders';
 import { OfflineStatusBar } from './components/common/OfflineStatusBar';
 import { useOfflineStatus } from './utils/useOfflineStatus';
+import { DeviceEmulator } from './components/common/DeviceEmulator';
+import { ScreenSwitcher } from './components/common/ScreenSwitcher';
+import { DesktopNavbar } from './components/common/DesktopNavbar';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<ScreenId>('welcome');
-  const [role, setRole] = useState<UserRole>('patient');
+  const [currentScreen, setCurrentScreen] = useState<ScreenId>(() => {
+    try {
+      const saved = localStorage.getItem('prime_telecare_screen') as ScreenId;
+      if (saved) return saved;
+    } catch {}
+    return 'welcome';
+  });
+  const [role, setRole] = useState<UserRole>(() => {
+    try {
+      const saved = localStorage.getItem('prime_telecare_role') as UserRole;
+      if (saved) return saved;
+    } catch {}
+    return 'patient';
+  });
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('doc-anya');
   const [currentBookingSummary, setCurrentBookingSummary] = useState<BookingSummary | undefined>(undefined);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isNetworkIssue, setIsNetworkIssue] = useState<boolean>(false);
   const [showWireframeFallback, setShowWireframeFallback] = useState<boolean>(false);
   const [isChatSessionActive, setIsChatSessionActive] = useState<boolean>(false);
+
+  const [isEmulatorActive, setIsEmulatorActive] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('prime_telecare_emulator_active');
+      if (saved !== null) return saved === 'true';
+      return false;
+    } catch {
+      return false;
+    }
+  });
 
   const { isOffline, isSimulatedOffline } = useOfflineStatus();
   const effectiveOffline = isNetworkIssue || isOffline;
@@ -131,6 +156,10 @@ export default function App() {
     if (targetScreen !== 'active-chat') {
       setIsChatSessionActive(false);
     }
+
+    try {
+      localStorage.setItem('prime_telecare_screen', targetScreen);
+    } catch {}
 
     setCurrentScreen(targetScreen);
   };
@@ -228,7 +257,24 @@ export default function App() {
   const isAuthScreen = ['welcome', 'terms', 'login', 'signup'].includes(currentScreen);
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] font-nunito selection:bg-emerald-200 selection:text-emerald-900 relative">
+    <DeviceEmulator
+      currentScreen={currentScreen}
+      onNavigate={navigateTo}
+      role={role}
+      onRoleChange={setRole}
+      isEmulatorActive={isEmulatorActive}
+      onToggleEmulator={() => {
+        setIsEmulatorActive((prev) => {
+          const next = !prev;
+          try {
+            localStorage.setItem('prime_telecare_emulator_active', String(next));
+          } catch {}
+          return next;
+        });
+      }}
+      isOfflineMode={effectiveOffline}
+    >
+      <div className="min-h-screen bg-[#f6fafd] font-nunito selection:bg-emerald-200 selection:text-emerald-900 relative">
       {/* Full Screen Application Container */}
       <div className="w-full min-h-screen relative">
         {/* Offline Status Bar when network is disconnected or offline mode is simulated */}
@@ -248,6 +294,26 @@ export default function App() {
         ) : (
           /* Render Active Screen Directly (Cached or Live) */
           <div className={`w-full min-h-screen ${effectiveOffline ? 'pt-16 sm:pt-14' : ''}`}>
+            {!isAuthScreen && (
+              <DesktopNavbar
+                currentScreen={currentScreen}
+                onNavigate={navigateTo}
+                role={role}
+                onRoleChange={setRole}
+                user={activeUser}
+                isEmulatorActive={isEmulatorActive}
+                onToggleEmulator={() => {
+                  setIsEmulatorActive((prev) => {
+                    const next = !prev;
+                    try {
+                      localStorage.setItem('prime_telecare_emulator_active', String(next));
+                    } catch {}
+                    return next;
+                  });
+                }}
+                onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
+              />
+            )}
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentScreen}
@@ -489,7 +555,19 @@ export default function App() {
           onClose={() => setIsLogoutModalOpen(false)}
           onConfirmLogout={handleLogoutConfirm}
         />
+
+        {/* Quick Screen Switcher (accessible in full responsive view) */}
+        {!isEmulatorActive && (
+          <ScreenSwitcher
+            currentScreen={currentScreen}
+            onNavigate={navigateTo}
+            role={role}
+            onRoleChange={setRole}
+            onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
+          />
+        )}
       </div>
-    </div>
+      </div>
+    </DeviceEmulator>
   );
 }

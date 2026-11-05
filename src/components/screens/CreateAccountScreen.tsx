@@ -258,7 +258,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#f6fafd] pb-24 w-full max-w-2xl mx-auto px-4 sm:px-6 text-[#171c1f]">
+    <div className="min-h-screen bg-[#f6fafd] pb-28 sm:pb-32 w-full max-w-xl mx-auto px-4 sm:px-6 text-[#171c1f]">
       <StatusBar className="-mx-4 sm:-mx-6" />
 
       {/* Screen Header */}
@@ -294,7 +294,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
                 {/* SCREEN 1: CREATE ACCOUNT */}
         {currentStep === 1 && (
           <form onSubmit={handleStep1Submit} className="space-y-4 animate-in fade-in duration-200">
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
               <div>
                 <h2 className="text-lg font-bold font-outfit text-[#022434]">
                   Create an Account
@@ -384,17 +384,17 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
 
             <button
               type="submit"
-              className="w-full py-4 bg-[#006c44] hover:bg-[#022434] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-98"
+              className="w-full min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 active:scale-98 cursor-pointer"
             >
               <span>Continue to Role Selection</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
         )}
-{/* SCREEN 2: ACCESS ROLE SELECTION */}
+        {/* SCREEN 2: ACCESS ROLE SELECTION */}
         {currentStep === 2 && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
               <div>
                 <h2 className="text-lg font-bold font-outfit text-[#022434]">
                   Select Account Access Role
@@ -433,7 +433,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
                       key={item.id}
                       type="button"
                       onClick={() => handleRoleSelect(item.id as UserRole)}
-                      className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-3 ${
+                      className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between space-y-3 cursor-pointer ${
                         isSelected
                           ? 'bg-[#022434] text-white border-[#022434] shadow-md ring-2 ring-[#006c44]/30'
                           : 'bg-slate-50/80 text-slate-800 border-slate-200 hover:border-slate-300'
@@ -469,7 +469,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
 
             <button
               onClick={goToNextStep}
-              className="w-full py-4 bg-[#006c44] hover:bg-[#022434] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-98"
+              className="w-full min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 active:scale-98 cursor-pointer"
             >
               <span>Continue to Account Details</span>
               <ArrowRight className="w-4 h-4" />
@@ -480,7 +480,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
         {/* SCREEN 3: IDENTITY & DEMOGRAPHICS */}
         {currentStep === 3 && (
           <form onSubmit={handleStep3Submit} className="space-y-4 animate-in fade-in duration-200">
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
               <div>
                 <h2 className="text-lg font-bold font-outfit text-[#022434]">
                   Identity & Demographics
@@ -609,7 +609,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
 
             {/* MINOR GUARDIAN PROTECTION WORKFLOW (If calculated age < 18) */}
             {isMinor && role === 'patient' && (
-              <div className="bg-amber-50/90 border-2 border-amber-300 p-5 rounded-3xl space-y-3 shadow-sm">
+              <div className="bg-amber-50/90 border-2 border-amber-300 p-5 rounded-2xl space-y-3 shadow-sm">
                 <div className="flex items-center space-x-2 text-amber-900 font-bold font-outfit text-sm">
                   <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
                   <span>Minor Protection & Parent/Guardian Authorization</span>
@@ -685,7 +685,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
 
             <button
               type="submit"
-              className="w-full py-4 bg-[#006c44] hover:bg-[#022434] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-98"
+              className="w-full min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 active:scale-98 cursor-pointer"
             >
               <span>Continue to Legal Consents</span>
               <ArrowRight className="w-4 h-4" />
@@ -696,7 +696,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
         {/* SCREEN 4: ACTIVE STATUTORY CONSENTS & POLICIES */}
         {currentStep === 4 && (
           <form onSubmit={handleStep4Submit} className="space-y-4 animate-in fade-in duration-200">
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
               <div>
                 <h2 className="text-base font-bold font-outfit text-[#022434] flex items-center space-x-2">
                   <ShieldCheck className="w-5 h-5 text-[#006c44]" />
@@ -764,7 +764,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
 
             <button
               type="submit"
-              className="w-full py-4 bg-[#006c44] hover:bg-[#022434] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-98"
+              className="w-full min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 active:scale-98 cursor-pointer"
             >
               <span>Submit & Send Phone OTP Code</span>
               <ArrowRight className="w-4 h-4" />
@@ -775,7 +775,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
         {/* SCREEN 5: PHONE OTP CODE VERIFICATION */}
         {currentStep === 5 && (
           <form onSubmit={handleOtpSubmit} className="space-y-4 animate-in fade-in duration-200">
-            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-md text-center space-y-5">
+            <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/90 shadow-md text-center space-y-5">
               <div className="w-14 h-14 bg-emerald-100 text-[#006c44] rounded-2xl flex items-center justify-center mx-auto shadow-sm">
                 <Phone className="w-7 h-7" />
               </div>
@@ -827,7 +827,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
               <button
                 type="submit"
                 disabled={isVerifyingOtp}
-                className="w-full py-4 bg-[#006c44] hover:bg-[#022434] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50"
+                className="w-full min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 cursor-pointer"
               >
                 {isVerifyingOtp ? (
                   <>

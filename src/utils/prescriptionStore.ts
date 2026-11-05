@@ -1,5 +1,6 @@
 import { Prescription, Medication } from '../types';
 import { mockPrescriptions } from '../data/mockData';
+import { primeApi } from '../services/apiClient';
 
 const STORAGE_KEY = 'prime_telecare_prescriptions_store_v1';
 
@@ -141,6 +142,7 @@ export function addPrescription(
   };
   const updated = [created, ...current];
   savePrescriptions(updated);
+  primeApi.createPrescription(created).catch(() => {});
   return created;
 }
 
