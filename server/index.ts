@@ -31,8 +31,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// JSON and URL-encoded body parsing
-app.use(express.json({ limit: '10mb' }));
+// JSON and URL-encoded body parsing with rawBody capture for webhook signature verification
+app.use(express.json({
+  limit: '10mb',
+  verify: (req: any, _res: Response, buf: Buffer) => {
+    req.rawBody = buf;
+  },
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging in development

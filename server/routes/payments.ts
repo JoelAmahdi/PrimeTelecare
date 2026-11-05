@@ -122,3 +122,68 @@ paymentsRouter.post('/withdraw', (req: Request, res: Response) => {
   });
 });
 
+// POST /api/payments/webhook (Paystack Real-time Webhook Receiver)
+paymentsRouter.post('/webhook', (req: Request, res: Response) => {
+  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+  const signature = req.headers['x-paystack-signature'] as string;
+
+  // Verify HMAC-SHA512 signature if secret key is configured and signature header is present
+  if (paystackSecret && signature) {
+    const rawPayload = (req as any).rawBody ? (req as any).rawBody.toString('utf8') : JSON.stringify(req.body);
+    const hash = crypto.createHmac('sha512', paystackSecret).update(rawPayload).digest('hex');
+
+    if (hash !== signature) {
+      console.warn('[Paystack Webhook] Invalid HMAC-SHA512 signature rejected');
+      return res.status(401).json({ success: false, error: 'Invalid HMAC signature' });
+    }
+  }
+
+  const event = req.body;
+  const eventType = event?.event;
+
+  console.log(`[Paystack Webhook] Event received: ${eventType || 'ping'}`);
+
+  if (eventType === 'charge.success') {
+    const data = event.data || {};
+    const reference = data.reference;
+    // Paystack amounts are transmitted in kobo (1 NGN = 100 kobo)
+    const amount = typeof data.amount === 'number' ? data.amount / 100 : 0;
+    const metadata = data.metadata || {};
+
+    const payments = store.getPayments();
+    let payment = payments.find((p) => p.reference === reference);
+
+    if (payment) {
+      payment.status = 'successful';
+    } else if (reference) {
+      payment = store.createPayment({
+        reference,
+        userId: metadata.userId || 'pat-1',
+        patientName: metadata.patientName || data.customer?.first_name || 'Patient',
+        amount,
+        purpose: metadata.purpose || 'consultation',
+        method: 'card',
+        status: 'successful',
+        consultationId: metadata.consultationId,
+      });
+    }
+
+    // Auto-credit patient wallet if topup event
+    if (metadata.purpose === 'wallet_topup' && metadata.userId) {
+      const user = store.getUserById(metadata.userId);
+      if (user) {
+        user.walletBalance = (user.walletBalance || 0) + amount;
+        store.saveUser(user);
+      }
+    }
+
+    // If records export paid
+    if (metadata.purpose === 'records_export') {
+      store.saveExportAuthorization('app-1', { isPaid: true });
+    }
+  }
+
+  // Paystack requires HTTP 200 OK acknowledgment within 5 seconds
+  return res.status(200).json({ success: true, message: 'Webhook event processed successfully' });
+});
+
