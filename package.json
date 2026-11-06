@@ -14,9 +14,16 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "mobile:sync": "cap sync",
+    "mobile:android": "cap open android",
+    "mobile:ios": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
     "@google/genai": "^2.4.0",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.1.14",
