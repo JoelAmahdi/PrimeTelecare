@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   HeartPulse,
   Bell,
-  Smartphone,
   ChevronDown,
   LogOut,
   Stethoscope,
@@ -25,8 +24,8 @@ interface DesktopNavbarProps {
   role: UserRole;
   onRoleChange: (role: UserRole) => void;
   user: UserType;
-  isEmulatorActive: boolean;
-  onToggleEmulator: () => void;
+  isEmulatorActive?: boolean;
+  onToggleEmulator?: () => void;
   onOpenLogoutModal?: () => void;
 }
 
@@ -36,8 +35,6 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
   role,
   onRoleChange,
   user,
-  isEmulatorActive,
-  onToggleEmulator,
   onOpenLogoutModal,
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -176,25 +173,6 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
                 Admin
               </button>
             </div>
-
-            {/* Device Emulator Frame Toggle Button */}
-            <button
-              onClick={() => {
-                triggerHaptic('medium');
-                onToggleEmulator();
-              }}
-              className={`p-2 rounded-xl border text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer ${
-                isEmulatorActive
-                  ? 'bg-slate-900 text-white border-slate-800'
-                  : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 border-slate-200'
-              }`}
-              title="Toggle Mobile Emulator Frame View"
-            >
-              <Smartphone className="w-4 h-4 text-emerald-600" />
-              <span className="hidden lg:inline text-xs font-bold">
-                {isEmulatorActive ? 'Exit Phone Frame' : 'Phone Frame'}
-              </span>
-            </button>
 
             {/* Profile Menu Dropdown */}
             <div className="relative">

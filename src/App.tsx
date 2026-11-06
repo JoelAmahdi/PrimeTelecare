@@ -37,8 +37,6 @@ import { RecoveryFollowUpModal } from './components/common/RecoveryFollowUpModal
 import { PostConsultationReminder } from './utils/postConsultationReminders';
 import { OfflineStatusBar } from './components/common/OfflineStatusBar';
 import { useOfflineStatus } from './utils/useOfflineStatus';
-import { DeviceEmulator } from './components/common/DeviceEmulator';
-import { ScreenSwitcher } from './components/common/ScreenSwitcher';
 import { DesktopNavbar } from './components/common/DesktopNavbar';
 
 export default function App() {
@@ -62,16 +60,6 @@ export default function App() {
   const [isNetworkIssue, setIsNetworkIssue] = useState<boolean>(false);
   const [showWireframeFallback, setShowWireframeFallback] = useState<boolean>(false);
   const [isChatSessionActive, setIsChatSessionActive] = useState<boolean>(false);
-
-  const [isEmulatorActive, setIsEmulatorActive] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('prime_telecare_emulator_active');
-      if (saved !== null) return saved === 'true';
-      return false;
-    } catch {
-      return false;
-    }
-  });
 
   const { isOffline, isSimulatedOffline } = useOfflineStatus();
   const effectiveOffline = isNetworkIssue || isOffline;
@@ -257,24 +245,7 @@ export default function App() {
   const isAuthScreen = ['welcome', 'terms', 'login', 'signup'].includes(currentScreen);
 
   return (
-    <DeviceEmulator
-      currentScreen={currentScreen}
-      onNavigate={navigateTo}
-      role={role}
-      onRoleChange={setRole}
-      isEmulatorActive={isEmulatorActive}
-      onToggleEmulator={() => {
-        setIsEmulatorActive((prev) => {
-          const next = !prev;
-          try {
-            localStorage.setItem('prime_telecare_emulator_active', String(next));
-          } catch {}
-          return next;
-        });
-      }}
-      isOfflineMode={effectiveOffline}
-    >
-      <div className="min-h-screen bg-[#f6fafd] font-nunito selection:bg-emerald-200 selection:text-emerald-900 relative">
+    <div className="min-h-screen bg-[#f6fafd] font-nunito selection:bg-emerald-200 selection:text-emerald-900 relative">
       {/* Full Screen Application Container */}
       <div className="w-full min-h-screen relative">
         {/* Offline Status Bar when network is disconnected or offline mode is simulated */}
@@ -301,16 +272,6 @@ export default function App() {
                 role={role}
                 onRoleChange={setRole}
                 user={activeUser}
-                isEmulatorActive={isEmulatorActive}
-                onToggleEmulator={() => {
-                  setIsEmulatorActive((prev) => {
-                    const next = !prev;
-                    try {
-                      localStorage.setItem('prime_telecare_emulator_active', String(next));
-                    } catch {}
-                    return next;
-                  });
-                }}
                 onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
               />
             )}
@@ -556,18 +517,7 @@ export default function App() {
           onConfirmLogout={handleLogoutConfirm}
         />
 
-        {/* Quick Screen Switcher (accessible in full responsive view) */}
-        {!isEmulatorActive && (
-          <ScreenSwitcher
-            currentScreen={currentScreen}
-            onNavigate={navigateTo}
-            role={role}
-            onRoleChange={setRole}
-            onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
-          />
-        )}
       </div>
-      </div>
-    </DeviceEmulator>
+    </div>
   );
 }

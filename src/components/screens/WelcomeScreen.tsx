@@ -3,7 +3,7 @@ import { Logo } from '../common/Logo';
 import { StatusBar } from '../common/StatusBar';
 import { ScreenId } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
-import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 interface WelcomeScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -21,17 +21,10 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onNavigate }) => {
         </div>
 
         {/* Copy Text */}
-        <div className="mt-8 text-center px-4 space-y-3">
-          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-100/80 text-[#006c44] text-xs font-bold font-outfit">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>MDCN Licensed Telehealth</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold font-outfit text-[#022434] leading-tight">
-            The future of family medicine in your pocket
+        <div className="mt-8 text-center px-4 space-y-2">
+          <h1 className="text-3xl sm:text-4xl font-extrabold font-outfit text-[#022434] tracking-tight">
+            Prime Telecare
           </h1>
-          <p className="text-slate-600 font-nunito text-sm sm:text-base leading-relaxed max-w-md mx-auto">
-            Connect with certified doctors for instant virtual consultations, digital prescriptions, lab tests, and encrypted records.
-          </p>
         </div>
       </div>
 

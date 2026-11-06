@@ -243,13 +243,10 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <div className="flex items-center space-x-1.5">
+              <div className="flex items-center space-x-1.5 justify-center py-1">
                 <Zap className="w-4 h-4 fill-emerald-500 text-emerald-600 shrink-0" />
-                <span className="font-outfit font-bold text-sm">Instant Consultation</span>
+                <span className="font-outfit font-bold text-sm">Instant</span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5 pl-5">
-                Connect live in 2–5 mins
-              </p>
             </button>
 
             {/* Path B: Scheduled Appointment */}
@@ -265,13 +262,10 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <div className="flex items-center space-x-1.5">
+              <div className="flex items-center space-x-1.5 justify-center py-1">
                 <Calendar className="w-4 h-4 text-[#022434] shrink-0" />
-                <span className="font-outfit font-bold text-sm">Scheduled Appointment</span>
+                <span className="font-outfit font-bold text-sm">Scheduled</span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5 pl-5">
-                Pick a future date & time
-              </p>
             </button>
           </div>
         </div>

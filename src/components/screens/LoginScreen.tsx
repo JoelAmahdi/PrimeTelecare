@@ -131,16 +131,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
         <div className="mt-4">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-2xl font-bold font-outfit text-[#022434]">Welcome back</h1>
-            <span className="inline-flex items-center space-x-1 bg-emerald-100/80 text-[#006c44] text-[11px] font-bold px-2.5 py-1 rounded-full border border-emerald-200">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Biometric Protected</span>
-            </span>
           </div>
 
-          {/* Quick Demo Role Selectors */}
+          {/* Role Selectors */}
           <div className="bg-slate-100 p-1.5 rounded-2xl mb-4 flex items-center justify-between border border-slate-200">
-            <span className="text-[11px] font-bold text-slate-500 font-outfit px-2 hidden sm:inline">Demo Role:</span>
-            <div className="grid grid-cols-3 gap-1 w-full sm:w-auto">
+            <div className="grid grid-cols-3 gap-1 w-full">
               <button
                 type="button"
                 onClick={() => {
@@ -186,8 +181,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                 <ScanFace className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs font-bold text-slate-900 font-outfit">Sign in with Face ID</p>
-                <p className="text-[11px] text-slate-500 font-nunito">Or use Touch ID or Passcode</p>
+                <p className="text-sm font-bold text-slate-900 font-outfit">Sign in with Face ID</p>
               </div>
             </div>
             <button
@@ -243,15 +237,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              
-              {/* Password Strength Feedback */}
-              {password.length > 0 && (
-                <div className="pt-2 border-t border-slate-100 mt-2">
-                  <p className={`text-[10px] font-nunito ${getPasswordStrength(password) === 5 ? 'text-emerald-600 font-bold' : 'text-slate-500'}`}>
-                    {getPasswordFeedback(password)}
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Forgot Password Link */}

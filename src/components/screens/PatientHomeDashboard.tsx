@@ -152,9 +152,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                   Health ID: PRM-9482
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-500 font-nunito mt-1">
-                Your medical records, vitals, and telehealth consultations are synchronized.
-              </p>
             </div>
           </div>
 
@@ -215,9 +212,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             <span className="font-bold font-outfit text-sm sm:text-base text-[#022434] block">
               Instant Doctor
             </span>
-            <span className="text-xs text-slate-500 font-nunito mt-0.5 block">
-              Connect in &lt; 2 mins
-            </span>
           </button>
 
           <button
@@ -232,9 +226,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             </div>
             <span className="font-bold font-outfit text-sm sm:text-base text-[#022434] block">
               Specialist Clinic
-            </span>
-            <span className="text-xs text-slate-500 font-nunito mt-0.5 block">
-              Pediatrics, OB/GYN & more
             </span>
           </button>
 
@@ -251,9 +242,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             <span className="font-bold font-outfit text-sm sm:text-base text-[#022434] block">
               Family Dependents
             </span>
-            <span className="text-xs text-slate-500 font-nunito mt-0.5 block">
-              Manage children & wards
-            </span>
           </button>
 
           <button
@@ -269,9 +257,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             <span className="font-bold font-outfit text-sm sm:text-base text-[#022434] block">
               Medical Records
             </span>
-            <span className="text-xs text-slate-500 font-nunito mt-0.5 block">
-              E-Prescriptions & tests
-            </span>
           </button>
         </div>
 
@@ -284,14 +269,9 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             {/* Upcoming / Active Bookings Section */}
             <div className="space-y-3.5">
               <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-extrabold font-outfit text-[#022434] text-lg sm:text-xl">
-                    Active & Upcoming Consultations
-                  </h3>
-                  <p className="text-xs text-slate-500 font-nunito">
-                    Secured virtual video, voice and text consultations
-                  </p>
-                </div>
+                <h3 className="font-extrabold font-outfit text-[#022434] text-lg sm:text-xl">
+                  Active & Upcoming Consultations
+                </h3>
                 {consultations.length > 0 && (
                   <span className="px-2.5 py-1 bg-emerald-100 text-[#006c44] font-bold text-xs rounded-xl font-mono">
                     {consultations.length} Scheduled
@@ -463,10 +443,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
               className="bg-white rounded-3xl p-6 shadow-xs border border-slate-200/90 hover:border-slate-300 transition-all space-y-4"
             >
               <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold font-outfit text-[#022434] text-base">Health Summary</h3>
-                  <p className="text-xs text-slate-400 font-nunito">Real-time biometrics & historical trends</p>
-                </div>
+                <h3 className="font-bold font-outfit text-[#022434] text-base">Health Summary</h3>
                 <div className="flex bg-slate-100 p-0.5 rounded-xl shrink-0">
                   <button 
                     onClick={() => { triggerHaptic('selection'); setChartView('weekly'); }}
@@ -562,9 +539,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                   <h4 className="font-bold font-outfit text-sm text-[#022434]">
                     24/7 Clinical Emergency Hotline
                   </h4>
-                  <p className="text-xs text-slate-500 font-nunito">
-                    Toll-free emergency triage & ambulance dispatch
-                  </p>
                 </div>
               </div>
 

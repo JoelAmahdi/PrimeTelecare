@@ -267,9 +267,6 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
             <h2 className="text-xl font-bold font-outfit text-slate-900 tracking-tight">
               Health Records Protected
             </h2>
-            <p className="text-xs text-slate-500 font-nunito leading-relaxed">
-              Authenticate with Face ID, Touch ID, or your passcode to access your medical records and prescriptions.
-            </p>
           </div>
 
           <div className="pt-2 space-y-2.5">
@@ -309,9 +306,6 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
               <h2 className="text-lg font-extrabold font-outfit text-[#022434]">
                 Medical Health Wallet
               </h2>
-              <span className="bg-emerald-50 text-emerald-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-200">
-                NDPA Verified
-              </span>
             </div>
             <p className="text-xs text-slate-500 font-nunito mt-0.5">
               Patient: <strong className="text-slate-800">{user.name || 'Ada Okonkwo'}</strong> • ID: <span className="font-mono">{user.id || 'PAT-88219401'}</span>

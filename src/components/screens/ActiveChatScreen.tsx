@@ -137,7 +137,6 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, activeSession]);
-  }, [messages, activeSession]);
 
   const handleStartConsultationCall = (item: ConsultationItem) => {
     triggerHaptic('selection');

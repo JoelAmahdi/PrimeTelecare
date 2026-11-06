@@ -272,34 +272,30 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
               <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-xs border border-slate-200/90 hover:border-slate-300 transition-all flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-4">
-                    <span className="text-xs font-extrabold font-outfit uppercase tracking-wider text-[#022434]">
-                      Practice Metrics & Standing
-                    </span>
+                    <h3 className="font-extrabold font-outfit text-base text-[#022434]">
+                      Practice Metrics
+                    </h3>
                     <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-[#006c44] border border-emerald-200">
                       MDCN Verified
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="grid grid-cols-2 gap-3 mb-2">
                     <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
                       <span className="text-xs text-slate-500 font-nunito block truncate">Patient Rating</span>
                       <div className="flex items-baseline space-x-1.5 mt-1">
                         <span className="text-2xl font-extrabold font-outfit text-[#022434]">4.9</span>
-                        <span className="text-xs text-amber-500 font-bold">★ (128 reviews)</span>
+                        <span className="text-xs text-amber-500 font-bold">★ (128)</span>
                       </div>
                     </div>
                     <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
                       <span className="text-xs text-slate-500 font-nunito block truncate">Response Rate</span>
                       <div className="flex items-baseline space-x-1.5 mt-1">
                         <span className="text-2xl font-extrabold font-outfit text-[#006c44]">98%</span>
-                        <span className="text-xs text-slate-500 font-medium font-nunito">&lt; 2 mins</span>
+                        <span className="text-xs text-slate-500 font-medium font-nunito">&lt; 2m</span>
                       </div>
                     </div>
                   </div>
-
-                  <p className="text-xs sm:text-sm text-slate-500 font-nunito leading-relaxed">
-                    Your virtual consultation room is armed for encrypted HD video, real-time procedural audio, and digital prescription sign-offs.
-                  </p>
                 </div>
 
                 <button
@@ -319,17 +315,9 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             {/* Clinical Workspace & Tools Grid */}
             <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-xs border border-slate-200/90">
               <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="font-extrabold font-outfit text-lg sm:text-xl text-[#022434]">
-                    Clinical Workspace & Tools
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-500 font-nunito mt-1">
-                    Integrated telehealth rooms, digital prescription pad, EHR diagnostic dossier, and fee disbursements.
-                  </p>
-                </div>
-                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-50 text-[#006c44] border border-emerald-200 shrink-0 hidden sm:inline-block">
-                  Active Clinical Suite
-                </span>
+                <h3 className="font-extrabold font-outfit text-lg sm:text-xl text-[#022434]">
+                  Clinical Workspace
+                </h3>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -348,9 +336,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                     <h4 className="font-bold font-outfit text-base text-[#022434] group-hover:text-[#006c44] transition-colors">
                       Consultation Rooms
                     </h4>
-                    <p className="text-xs text-slate-500 font-nunito mt-1.5 leading-relaxed">
-                      HD WebRTC video, live chat queue, and audio telemetry.
-                    </p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold text-[#006c44]">
                     <span>Enter Rooms</span>
@@ -373,9 +358,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                     <h4 className="font-bold font-outfit text-base text-[#022434] group-hover:text-amber-800 transition-colors">
                       Electronic Rx Pad
                     </h4>
-                    <p className="text-xs text-slate-500 font-nunito mt-1.5 leading-relaxed">
-                      Issue verified digital prescriptions with QR & seal.
-                    </p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold text-amber-800">
                     <span>Issue Rx</span>
@@ -398,9 +380,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                     <h4 className="font-bold font-outfit text-base text-[#022434] group-hover:text-blue-800 transition-colors">
                       Health Records & EHR
                     </h4>
-                    <p className="text-xs text-slate-500 font-nunito mt-1.5 leading-relaxed">
-                      Review verified diagnostic history and release sign-offs.
-                    </p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold text-blue-800">
                     <span>View Dossier</span>
@@ -423,9 +402,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                     <h4 className="font-bold font-outfit text-base text-[#022434] group-hover:text-[#022434] transition-colors">
                       Earnings & Payouts
                     </h4>
-                    <p className="text-xs text-slate-500 font-nunito mt-1.5 leading-relaxed">
-                      Consultation fees, balances, and bank settlements.
-                    </p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs font-bold text-slate-700">
                     <span>Manage Payouts</span>
@@ -438,16 +414,11 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             {/* Today's Patient Queue Section */}
             <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-xs border border-slate-200/90">
               <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="font-extrabold font-outfit text-lg sm:text-xl text-[#022434]">
-                    Today&apos;s Patient Queue & Triage
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-500 font-nunito mt-1">
-                    Scheduled patient appointments and instant queue triage for today.
-                  </p>
-                </div>
+                <h3 className="font-extrabold font-outfit text-lg sm:text-xl text-[#022434]">
+                  Today&apos;s Patient Queue
+                </h3>
                 <span className="text-xs font-bold text-slate-500 font-mono">
-                  {todaysPatients.length} Patients Waiting
+                  {todaysPatients.length} Patients
                 </span>
               </div>
 

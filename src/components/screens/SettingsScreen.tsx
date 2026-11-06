@@ -153,9 +153,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
               <ShieldCheck className="w-4 h-4 text-[#006c44]" />
               <span>Security</span>
             </span>
-            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-outfit">
-              Biometrics & Protection
-            </span>
           </div>
 
           {/* Biometric Security Card */}
@@ -184,9 +181,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
                       {biometricEnabled ? 'ACTIVE' : 'DISABLED'}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 font-nunito mt-1 leading-relaxed">
-                    Require biometric verification when logging in and accessing encrypted health records.
-                  </p>
                 </div>
               </div>
 
