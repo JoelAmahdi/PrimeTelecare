@@ -12,7 +12,11 @@ export interface LiveMediaState {
   error: string | null;
 }
 
-export async function requestUserMedia(video: boolean = true, audio: boolean = true): Promise<LiveMediaState> {
+export async function requestUserMedia(
+  video: boolean = true,
+  audio: boolean = true,
+  facingMode: 'user' | 'environment' = 'user'
+): Promise<LiveMediaState> {
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
     return {
       stream: null,
@@ -26,7 +30,7 @@ export async function requestUserMedia(video: boolean = true, audio: boolean = t
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: video ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
+      video: video ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode } : false,
       audio: audio ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
     });
 

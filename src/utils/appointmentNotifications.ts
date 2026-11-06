@@ -21,46 +21,11 @@ export interface AppointmentAlert {
 
 const STORAGE_KEY = 'prime_telecare_appointment_alerts';
 
-/**
- * Creates a default upcoming appointment alert set to 12 minutes from current time
- * so the 15-minute notification banner triggers automatically on load.
- */
-function createDefaultAlert(): AppointmentAlert {
-  const now = Date.now();
-  // Set default appointment to start in 12 minutes
-  const startTime = now + 12 * 60 * 1000;
-  
-  const timeStr = new Date(startTime).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  return {
-    id: 'alert-default-15m',
-    appointmentId: 'app-1',
-    doctorId: 'doc-anya',
-    doctorName: 'Dr. Anya Sharma',
-    doctorSpecialty: 'General Practitioner',
-    doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-    patientName: 'Ada Okonkwo',
-    scheduledTime: timeStr,
-    scheduledDate: 'Today',
-    type: 'Video',
-    bookingMode: 'scheduled',
-    startTimeTimestamp: startTime,
-    dismissed: false,
-    status: 'upcoming',
-    price: 10000,
-  };
-}
-
 export function getStoredAppointmentAlerts(): AppointmentAlert[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const initial = [createDefaultAlert()];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-      return initial;
+      return [];
     }
     const parsed: AppointmentAlert[] = JSON.parse(raw);
     if (!Array.isArray(parsed)) {

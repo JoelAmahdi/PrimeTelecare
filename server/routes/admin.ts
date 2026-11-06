@@ -71,3 +71,23 @@ adminRouter.get('/audit-logs', (_req: Request, res: Response) => {
   return res.json({ success: true, count: logs.length, auditLogs: logs });
 });
 
+// GET /api/admin/database
+adminRouter.get('/database', (_req: Request, res: Response) => {
+  const { getDatabaseConfig } = require('../db');
+  const dbInfo = getDatabaseConfig();
+  return res.json({
+    success: true,
+    database: {
+      type: dbInfo.type,
+      storageEngine: dbInfo.type === 'postgresql' ? 'Cloud PostgreSQL (Neon / Render)' : 'Local File Persistence (store.json)',
+      tableCount: 7,
+      liveCollections: {
+        appointments: store.getAppointments().length,
+        prescriptions: store.getPrescriptions().length,
+        payments: store.getPayments().length,
+        doctors: store.getDoctors().length,
+      },
+    },
+  });
+});
+

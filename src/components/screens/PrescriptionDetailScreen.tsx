@@ -19,7 +19,7 @@ import {
   Info,
 } from 'lucide-react';
 import { ScreenId, Prescription, UserRole, Medication, MedicationReminder } from '../../types';
-import { mockPrescriptions } from '../../data/mockData';
+import { getStoredPrescriptions } from '../../utils/prescriptionStore';
 import { Logo } from '../common/Logo';
 import { SetReminderModal } from '../common/SetReminderModal';
 import { getStoredReminders, saveStoredReminders } from '../../utils/reminders';
@@ -38,7 +38,7 @@ export const PrescriptionDetailScreen: React.FC<PrescriptionDetailScreenProps> =
   onNavigate,
   role = 'patient',
 }) => {
-  const currentRx = prescription || mockPrescriptions[0];
+  const currentRx = prescription || getStoredPrescriptions()[0] || null;
 
   const [reminders, setReminders] = useState<MedicationReminder[]>([]);
   const [selectedMedForReminder, setSelectedMedForReminder] = useState<Medication | null>(null);
@@ -73,6 +73,7 @@ export const PrescriptionDetailScreen: React.FC<PrescriptionDetailScreenProps> =
   };
 
   const handleShare = () => {
+    if (!currentRx) return;
     triggerHaptic('light');
     if (navigator.share) {
       navigator.share({
@@ -84,6 +85,34 @@ export const PrescriptionDetailScreen: React.FC<PrescriptionDetailScreenProps> =
       showToast('Prescription link copied to clipboard!', 'success');
     }
   };
+
+  if (!currentRx) {
+    return (
+      <div className="min-h-screen bg-[#f6fafd] pb-24 w-full max-w-4xl mx-auto px-3 sm:px-6 text-[#171c1f] font-nunito">
+        <StatusBar className="-mx-3 sm:-mx-6" />
+        <Header
+          title="Digital E-Prescription"
+          showBack
+          onBack={() => onNavigate(role === 'doctor' ? 'doctor-home' : 'health-records')}
+        />
+        <div className="mt-8 bg-white rounded-3xl p-8 border border-slate-200 text-center shadow-sm">
+          <div className="w-16 h-16 bg-[#0070a0]/10 text-[#0070a0] rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Pill className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-bold font-outfit text-slate-900 mb-1">No Active Prescription Selected</h3>
+          <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
+            There are no active e-prescriptions on file yet. Once a doctor issues a digital prescription during your consultation, it will appear here with verification codes.
+          </p>
+          <button
+            onClick={() => onNavigate(role === 'doctor' ? 'doctor-home' : 'health-records')}
+            className="px-5 py-2.5 rounded-xl bg-[#0070a0] text-white font-bold text-sm shadow hover:bg-[#005a82] transition-colors"
+          >
+            Return to Health Records
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Check interactions for current Rx medications
   const interactionAlerts = checkDrugInteractions(currentRx.medications);

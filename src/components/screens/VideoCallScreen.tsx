@@ -27,6 +27,8 @@ import {
   UserCheck,
   ShieldAlert,
   Pill,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { ScreenId, User as UserType } from '../../types';
 import { StatusBar } from '../common/StatusBar';
@@ -130,8 +132,15 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const [hasCamera, setHasCamera] = useState<boolean>(false);
   const [hasMicrophone, setHasMicrophone] = useState<boolean>(false);
   const [isConnectingCall, setIsConnectingCall] = useState<boolean>(false);
+  const [isPeerConnected, setIsPeerConnected] = useState<boolean>(false);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [swappedPiP, setSwappedPiP] = useState<boolean>(false);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const sessionId = 'consultation-live-room';
+  const myRole = user?.role === 'doctor' ? 'doctor' : 'patient';
 
   // Live Mic Waveform activity pulse
   const [audioLevel, setAudioLevel] = useState<number>(0);
@@ -147,24 +156,24 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     return () => clearInterval(timer);
   }, [hasConfirmedConsent, isReconnecting]);
 
-  // Live WebRTC Media & Audio Stream Lifecycle
+  // Live WebRTC PeerConnection & Media Device Lifecycle
   useEffect(() => {
     if (!hasConfirmedConsent) return;
 
-    let stopDoctorCanvas: (() => void) | null = null;
     let stopAudioAnalyser: (() => void) | null = null;
     let cancelRing: (() => void) | null = null;
+    let signalPollTimer: any = null;
 
     setIsConnectingCall(true);
     cancelRing = playRingingTone();
 
-    const connectTimer = setTimeout(async () => {
+    const initCall = async () => {
       if (cancelRing) cancelRing();
       playConnectedTone();
       setIsConnectingCall(false);
 
-      // Request live camera & mic
-      const media = await requestUserMedia(!isVideoOff, !isMuted);
+      // 1. Request real device camera & microphone
+      const media = await requestUserMedia(!isVideoOff, !isMuted, facingMode);
       if (media.stream) {
         setLocalStream(media.stream);
         setHasCamera(media.hasCamera);
@@ -178,27 +187,138 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         stopAudioAnalyser = setupAudioAnalyser(media.stream, (lvl) => {
           setAudioLevel(lvl);
         });
-      }
 
-      // Initialize remote live doctor stream
-      const doc = createDoctorCanvasStream(doctorName, 'Pediatric Telehealth');
-      stopDoctorCanvas = doc.stop;
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = doc.stream;
-        remoteVideoRef.current.play().catch(() => {});
+        // 2. Initialize RTCPeerConnection for real 2-way WebRTC video/audio
+        try {
+          const pc = new RTCPeerConnection({
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+            ],
+          });
+          peerConnectionRef.current = pc;
+
+          // Add local tracks to peer connection
+          media.stream.getTracks().forEach((track) => pc.addTrack(track, media.stream!));
+
+          // Listen for remote peer audio and video tracks
+          pc.ontrack = (event) => {
+            console.log('[WebRTC] Received remote peer stream:', event.streams);
+            if (remoteVideoRef.current && event.streams[0]) {
+              remoteVideoRef.current.srcObject = event.streams[0];
+              remoteVideoRef.current.play().catch(() => {});
+              setIsPeerConnected(true);
+              showToast('Peer connected via live WebRTC!');
+            }
+          };
+
+          // Send ICE candidates to signaling hub
+          pc.onicecandidate = (event) => {
+            if (event.candidate) {
+              primeApi.sendVideoSignal(sessionId, {
+                sender: myRole,
+                type: 'candidate',
+                data: event.candidate,
+              });
+            }
+          };
+
+          // If caller, generate offer
+          if (myRole === 'patient') {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await primeApi.sendVideoSignal(sessionId, {
+              sender: myRole,
+              type: 'offer',
+              data: offer,
+            });
+          }
+
+          // 3. Poll signaling messages to exchange offer, answer, and ICE candidates
+          let lastCheck = Date.now() - 5000;
+          signalPollTimer = setInterval(async () => {
+            try {
+              const signals = await primeApi.getVideoSignals(sessionId, lastCheck, myRole);
+              for (const sig of signals) {
+                lastCheck = Math.max(lastCheck, sig.timestamp);
+                if (sig.type === 'offer' && pc.signalingState !== 'closed') {
+                  await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
+                  const answer = await pc.createAnswer();
+                  await pc.setLocalDescription(answer);
+                  await primeApi.sendVideoSignal(sessionId, {
+                    sender: myRole,
+                    type: 'answer',
+                    data: answer,
+                  });
+                } else if (sig.type === 'answer' && pc.signalingState === 'have-local-offer') {
+                  await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
+                  setIsPeerConnected(true);
+                } else if (sig.type === 'candidate' && pc.remoteDescription) {
+                  await pc.addIceCandidate(new RTCIceCandidate(sig.data)).catch(() => {});
+                }
+              }
+            } catch (err) {
+              // Non-blocking poll error
+            }
+          }, 1500);
+
+        } catch (webrtcErr) {
+          console.warn('[WebRTC] PeerConnection notice:', webrtcErr);
+        }
       }
-    }, 1400);
+    };
+
+    const timer = setTimeout(initCall, 1200);
 
     return () => {
-      clearTimeout(connectTimer);
+      clearTimeout(timer);
       if (cancelRing) cancelRing();
-      if (stopDoctorCanvas) stopDoctorCanvas();
+      if (signalPollTimer) clearInterval(signalPollTimer);
       if (stopAudioAnalyser) stopAudioAnalyser();
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+      }
       if (localStream) {
         localStream.getTracks().forEach((t) => t.stop());
       }
     };
-  }, [hasConfirmedConsent]);
+  }, [hasConfirmedConsent, facingMode]);
+
+  const handleSwitchCamera = async () => {
+    triggerHaptic('medium');
+    const nextFacing = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(nextFacing);
+
+    if (localStream) {
+      localStream.getTracks().forEach((t) => t.stop());
+    }
+
+    const media = await requestUserMedia(!isVideoOff, !isMuted, nextFacing);
+    if (media.stream) {
+      setLocalStream(media.stream);
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = media.stream;
+        localVideoRef.current.play().catch(() => {});
+      }
+      if (peerConnectionRef.current) {
+        const videoTrack = media.stream.getVideoTracks()[0];
+        const senders = peerConnectionRef.current.getSenders();
+        const videoSender = senders.find((s) => s.track?.kind === 'video');
+        if (videoSender && videoTrack) {
+          videoSender.replaceTrack(videoTrack);
+        }
+      }
+      showToast(`Switched to ${nextFacing === 'user' ? 'Front' : 'Back'} Camera`);
+    }
+  };
+
+  const handleCopyCallLink = () => {
+    triggerHaptic('light');
+    navigator.clipboard?.writeText(window.location.href);
+    setCopiedLink(true);
+    showToast('Room link copied! Open on another device or tab to join.');
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
 
   const handleToggleMute = () => {
     triggerHaptic('light');
@@ -506,6 +626,29 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/85 pointer-events-none" />
 
+          {/* Waiting for Peer / Multi-device join banner */}
+          {!isPeerConnected && (
+            <div className="absolute top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-20 max-w-md bg-black/75 backdrop-blur-md p-4 rounded-2xl border border-emerald-500/30 text-white shadow-2xl text-center space-y-2">
+              <div className="flex items-center justify-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                <span className="text-xs font-bold font-outfit text-emerald-300 uppercase tracking-wider">
+                  Live Consultation Room Active
+                </span>
+              </div>
+              <p className="text-xs text-slate-200 font-nunito">
+                Your device camera & microphone are active. Waiting for {doctorName} to connect...
+              </p>
+              <button
+                type="button"
+                onClick={handleCopyCallLink}
+                className="mt-1 px-4 py-2 bg-[#006c44] hover:bg-[#007a4d] text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+              >
+                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedLink ? 'Link Copied to Clipboard!' : 'Copy Room Link to Test on 2nd Device'}</span>
+              </button>
+            </div>
+          )}
+
           {/* Active Audio Visualizer Waveform Overlay over Video */}
           {!isMuted && (
             <div className="absolute bottom-28 left-6 z-10 flex items-center space-x-1.5 bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20">
@@ -755,6 +898,16 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             title="Toggle Live Camera"
           >
             {isVideoOff || isAudioOnlyMode ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
+          </button>
+
+          {/* Switch Front / Back Camera (Mobile Devices) */}
+          <button
+            disabled={isAudioOnlyMode || isVideoOff}
+            onClick={handleSwitchCamera}
+            className="p-2.5 sm:p-3.5 rounded-full border bg-white text-[#022434] border-slate-300 hover:bg-slate-100 transition-all shrink-0 cursor-pointer"
+            title="Switch Front / Rear Camera"
+          >
+            <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           {/* Microphone Mute Toggle */}

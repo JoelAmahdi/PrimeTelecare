@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
 import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck } from 'lucide-react';
@@ -9,6 +9,8 @@ import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { NextAppointmentBanner } from '../common/NextAppointmentBanner';
 import { ClinicalDocumentationModal } from '../common/ClinicalDocumentationModal';
 import { useOfflineStatus } from '../../utils/useOfflineStatus';
+import { getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
+import { primeApi } from '../../services/apiClient';
 
 interface DoctorHomeDashboardProps {
   user: User;
@@ -24,42 +26,75 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
   // Health record export authorization management
   const { permission, grantPermission, revokePermission } = useHealthRecordPermission('app-1');
 
-  // Today's clinical queue
-  const todaysPatients = [
-    {
-      id: 'p-1',
-      name: 'Ada Okonkwo',
-      time: '10:30 AM',
-      type: 'Video',
-      symptom: 'Pediatric fever & cough review',
-      status: 'Ready in Room',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
-      tag: 'Urgent Triage',
-      tagColor: 'bg-rose-100 text-rose-700 border-rose-200'
-    },
-    {
-      id: 'p-2',
-      name: 'Tunde Bakare',
-      time: '11:15 AM',
-      type: 'Voice',
-      symptom: 'Hypertension prescription refill',
-      status: 'Scheduled',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
-      tag: 'Follow-up',
-      tagColor: 'bg-blue-100 text-blue-700 border-blue-200'
-    },
-    {
-      id: 'p-3',
-      name: 'Mama Bose',
-      time: '01:00 PM',
-      type: 'Chat',
-      symptom: 'Blood glucose reading follow-up',
-      status: 'Pending',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150',
-      tag: 'Routine',
-      tagColor: 'bg-slate-100 text-slate-700 border-slate-200'
-    }
-  ];
+  // Today's clinical queue - dynamic live appointments
+  interface PatientQueueItem {
+    id: string;
+    name: string;
+    time: string;
+    type: string;
+    symptom: string;
+    status: string;
+    avatar: string;
+    tag: string;
+    tagColor: string;
+  }
+
+  const [todaysPatients, setTodaysPatients] = useState<PatientQueueItem[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadQueue = async () => {
+      const local = getActiveOrUpcomingConsultations().map((c) => ({
+        id: c.id,
+        name: c.patientName || 'Patient',
+        time: c.scheduledTime || 'Scheduled',
+        type: c.type || 'Video',
+        symptom: 'Telehealth Consultation',
+        status: 'Booked',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
+        tag: c.bookingMode === 'instant' ? 'Instant Care' : 'Scheduled',
+        tagColor: 'bg-emerald-100 text-[#006c44] border-emerald-200',
+      }));
+
+      try {
+        const res = await primeApi.getAppointments();
+        if (isMounted && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const apiItems = res.data.map((a: any) => ({
+            id: a.id,
+            name: a.patientName || 'Patient',
+            time: a.timeSlot || 'Scheduled',
+            type: a.type || 'Video',
+            symptom: a.notes || 'Telehealth Consultation',
+            status: a.status || 'Booked',
+            avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
+            tag: 'Live Booking',
+            tagColor: 'bg-emerald-100 text-[#006c44] border-emerald-200',
+          }));
+          const ids = new Set(local.map((l) => l.id));
+          const merged = [...local];
+          for (const item of apiItems) {
+            if (!ids.has(item.id)) {
+              merged.push(item);
+            }
+          }
+          setTodaysPatients(merged);
+          return;
+        }
+      } catch (e) {
+        // Fall back to local
+      }
+      if (isMounted) {
+        setTodaysPatients(local);
+      }
+    };
+
+    loadQueue();
+    window.addEventListener('appointment-alerts-updated', loadQueue);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('appointment-alerts-updated', loadQueue);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#f6fafd] pb-28 sm:pb-32 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 text-[#171c1f]">
@@ -416,53 +451,67 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                 </span>
               </div>
 
-              <div className="divide-y divide-slate-100">
-                {todaysPatients.map((patient) => (
-                  <div key={patient.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 -mx-3 px-3 rounded-2xl transition-colors">
-                    <div className="flex items-center space-x-3.5">
-                      <img
-                        src={patient.avatar}
-                        alt={patient.name}
-                        className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shrink-0"
-                      />
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h4 className="font-bold font-outfit text-sm sm:text-base text-[#022434]">
-                            {patient.name}
-                          </h4>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${patient.tagColor}`}>
-                            {patient.tag}
-                          </span>
+              {todaysPatients.length === 0 ? (
+                <div className="py-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                  <div className="w-12 h-12 bg-emerald-50 text-[#006c44] rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-bold font-outfit text-sm sm:text-base text-[#022434] mb-1">
+                    No Patients Currently in Queue
+                  </h4>
+                  <p className="text-xs text-slate-500 font-nunito max-w-sm mx-auto px-4">
+                    Your clinical queue is clear. When patients book video, voice, or chat consultations, they will appear here live in real-time.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {todaysPatients.map((patient) => (
+                    <div key={patient.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 -mx-3 px-3 rounded-2xl transition-colors">
+                      <div className="flex items-center space-x-3.5">
+                        <img
+                          src={patient.avatar}
+                          alt={patient.name}
+                          className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shrink-0"
+                        />
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <h4 className="font-bold font-outfit text-sm sm:text-base text-[#022434]">
+                              {patient.name}
+                            </h4>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${patient.tagColor}`}>
+                              {patient.tag}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-nunito mt-0.5">
+                            {patient.symptom} • <span className="font-medium text-slate-700">{patient.time}</span> ({patient.type})
+                          </p>
                         </div>
-                        <p className="text-xs text-slate-500 font-nunito mt-0.5">
-                          {patient.symptom} • <span className="font-medium text-slate-700">{patient.time}</span> ({patient.type})
-                        </p>
+                      </div>
+
+                      <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPatientForDoc(patient.name)}
+                          className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold font-outfit text-xs rounded-xl transition-all cursor-pointer"
+                        >
+                          Clinical Notes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerHaptic('selection');
+                            onNavigate(patient.type === 'Chat' ? 'active-chat' : 'video-call');
+                          }}
+                          className="px-4 py-1.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
+                        >
+                          <Video className="w-3.5 h-3.5 text-emerald-300" />
+                          <span>Start Session</span>
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPatientForDoc(patient.name)}
-                        className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold font-outfit text-xs rounded-xl transition-all cursor-pointer"
-                      >
-                        Clinical Notes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          onNavigate('video-call');
-                        }}
-                        className="px-4 py-1.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
-                      >
-                        <Video className="w-3.5 h-3.5 text-emerald-300" />
-                        <span>Start Session</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

@@ -75,3 +75,60 @@ videoRouter.post('/:sessionId/reconnect', (req: Request, res: Response) => {
   });
 });
 
+// In-memory WebRTC signaling hub for multi-device peer discovery
+interface WebRTCSignal {
+  id: string;
+  sender: string;
+  type: 'offer' | 'answer' | 'candidate' | 'joined' | 'leave';
+  data: any;
+  timestamp: number;
+}
+
+const activeSignals: Record<string, WebRTCSignal[]> = {};
+
+// POST /api/video/:sessionId/signal
+videoRouter.post('/:sessionId/signal', (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const { sender, type, data } = req.body;
+
+  if (!sender || !type) {
+    return res.status(400).json({ success: false, error: 'Sender and signal type required' });
+  }
+
+  if (!activeSignals[sessionId]) {
+    activeSignals[sessionId] = [];
+  }
+
+  const signal: WebRTCSignal = {
+    id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    sender,
+    type,
+    data,
+    timestamp: Date.now(),
+  };
+
+  activeSignals[sessionId].push(signal);
+
+  // Keep latest 100 signals per consultation room
+  if (activeSignals[sessionId].length > 100) {
+    activeSignals[sessionId].shift();
+  }
+
+  return res.json({ success: true, signalId: signal.id });
+});
+
+// GET /api/video/:sessionId/signal?since=<timestamp>&excludeSender=<roleOrId>
+videoRouter.get('/:sessionId/signal', (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const since = parseInt(req.query.since as string, 10) || 0;
+  const excludeSender = req.query.excludeSender as string;
+
+  const signals = (activeSignals[sessionId] || []).filter((s) => {
+    const isNew = s.timestamp > since;
+    const notSelf = !excludeSender || s.sender !== excludeSender;
+    return isNew && notSelf;
+  });
+
+  return res.json({ success: true, signals });
+});
+

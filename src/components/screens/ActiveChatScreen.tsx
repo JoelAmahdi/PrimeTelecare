@@ -7,7 +7,7 @@ import {
   Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill
 } from 'lucide-react';
 import { ScreenId, ChatMessage, Doctor, UserRole, BookingSummary } from '../../types';
-import { mockDoctors, mockChatMessages, currentUserPatient, currentUserDoctor } from '../../data/mockData';
+import { mockDoctors, currentUserPatient, currentUserDoctor } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
@@ -36,56 +36,6 @@ interface ConsultationItem {
   price: number;
 }
 
-const mockConsultationsList: ConsultationItem[] = [
-  {
-    id: 'c-1',
-    patientName: 'Sarah Jenkins',
-    patientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
-    doctorName: 'Dr. Chike Obi',
-    doctorAvatar: 'https://images.unsplash.com/photo-1612349317150-e410f624c427?auto=format&fit=crop&w=150&q=80',
-    specialty: 'General Practice',
-    type: 'Video',
-    dateTimeStr: 'Today, 09:00 AM',
-    rawDate: new Date().toISOString(),
-    sortTimestamp: Date.now() + 10000,
-    status: 'live',
-    chiefComplaint: 'High Fever (39.2°C), Lethargy & Mild Cough',
-    price: 15000
-  },
-  {
-    id: 'c-2',
-    patientName: 'Michael Okeke',
-    patientAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
-    doctorName: 'Dr. Amina Yusuf',
-    doctorAvatar: 'https://images.unsplash.com/photo-1594824436951-7f126f51ce53?auto=format&fit=crop&w=150&q=80',
-    specialty: 'Cardiology',
-    type: 'Chat',
-    dateTimeStr: 'Today, 02:30 PM',
-    rawDate: new Date(Date.now() + 86400000).toISOString(),
-    sortTimestamp: Date.now() - 5000,
-    status: 'upcoming',
-    chiefComplaint: 'Routine Blood Pressure Check-in',
-    price: 10000
-  },
-  {
-    id: 'c-3',
-    patientName: 'Sarah Jenkins',
-    patientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
-    doctorName: 'Dr. Chike Obi',
-    doctorAvatar: 'https://images.unsplash.com/photo-1612349317150-e410f624c427?auto=format&fit=crop&w=150&q=80',
-    specialty: 'General Practice',
-    type: 'Video',
-    dateTimeStr: '12 Sep 2026, 10:00 AM',
-    rawDate: new Date(Date.now() - 86400000 * 4).toISOString(),
-    sortTimestamp: Date.now() - 86400000 * 4,
-    status: 'completed',
-    chiefComplaint: 'Mild headaches and fatigue',
-    notes: 'Prescribed Paracetamol and advised rest.',
-    hasPrescription: true,
-    price: 15000
-  }
-];
-
 export interface ActiveChatScreenProps {
   onNavigate: (screen: ScreenId) => void;
   role?: UserRole;
@@ -100,6 +50,41 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   onActiveSessionChange,
 }) => {
   const [activeSession, setActiveSession] = useState<ConsultationItem | null>(null);
+  const [consultationsList, setConsultationsList] = useState<ConsultationItem[]>([]);
+  const [isLoadingConsultations, setIsLoadingConsultations] = useState(true);
+
+  // Load live appointments from backend
+  const loadConsultations = async () => {
+    try {
+      const apts = await primeApi.getAppointments();
+      const mapped: ConsultationItem[] = (apts || []).map((a) => ({
+        id: a.id,
+        patientName: a.patientName || 'Ada Okonkwo',
+        patientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+        doctorName: a.doctorName,
+        doctorAvatar: a.doctorAvatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=150&q=80',
+        specialty: a.doctorSpecialty || 'General Practice',
+        type: (a.type as any) || 'Chat',
+        dateTimeStr: `${a.scheduledDate}, ${a.timeSlot}`,
+        rawDate: new Date().toISOString(),
+        sortTimestamp: Date.now(),
+        status: (a.status as any) || 'upcoming',
+        chiefComplaint: a.notes || 'General Telehealth Consult',
+        price: a.price || 10000,
+      }));
+      setConsultationsList(mapped);
+    } catch {
+      setConsultationsList([]);
+    } finally {
+      setIsLoadingConsultations(false);
+    }
+  };
+
+  useEffect(() => {
+    loadConsultations();
+    window.addEventListener('appointment-alerts-updated', loadConsultations);
+    return () => window.removeEventListener('appointment-alerts-updated', loadConsultations);
+  }, []);
 
   useEffect(() => {
     onActiveSessionChange?.(Boolean(activeSession));
@@ -119,25 +104,39 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [selectedPatientForRx, setSelectedPatientForRx] = useState('');
 
-  // Chat interface states
+  // Real-time Chat state
   const [chatMessage, setChatMessage] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Real device microphone recording state
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Live polling for two-way chat messages
   useEffect(() => {
-    if (activeSession) {
+    if (!activeSession) return;
+
+    const fetchMessages = () => {
       primeApi.getChatMessages(activeSession.id).then((fetched) => {
-        if (fetched && fetched.length > 0) {
+        if (Array.isArray(fetched)) {
           setMessages(fetched);
         }
       }).catch(() => {});
-    }
+    };
+
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 2500);
+    return () => clearInterval(interval);
   }, [activeSession]);
 
   useEffect(() => {
     if (activeSession) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+  }, [messages, activeSession]);
   }, [messages, activeSession]);
 
   const handleStartConsultationCall = (item: ConsultationItem) => {
@@ -165,49 +164,118 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
     }
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatMessage.trim() || !activeSession) return;
     
     triggerHaptic('light');
+    const textToSend = chatMessage.trim();
     const newMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `msg-${Date.now()}`,
       sender: role === 'doctor' ? 'doctor' : 'patient',
       senderName: role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
-      text: chatMessage,
+      text: textToSend,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       status: 'sent'
     };
     
-    setMessages([...messages, newMessage]);
+    setMessages(prev => [...prev, newMessage]);
     setChatMessage('');
-    primeApi.sendChatMessage(activeSession.id, {
-      sender: newMessage.sender,
-      senderName: newMessage.senderName,
-      text: newMessage.text,
-    }).catch(() => {});
-    
-    // Simulate reply
-    setTimeout(() => {
-      const replyMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: role === 'doctor' ? 'patient' : 'doctor',
-        senderName: role === 'doctor' ? currentUserPatient.name : currentUserDoctor.name,
-        text: role === 'doctor' ? 'Thank you, doctor.' : 'I see. Can you tell me more about your symptoms?',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'delivered'
-      };
-      setMessages(prev => [...prev, replyMessage]);
-      primeApi.sendChatMessage(activeSession.id, {
-        sender: replyMessage.sender,
-        senderName: replyMessage.senderName,
-        text: replyMessage.text,
-      }).catch(() => {});
-      triggerHaptic('medium');
-    }, 1500);
+
+    try {
+      await primeApi.sendChatMessage(activeSession.id, {
+        sender: newMessage.sender,
+        senderName: newMessage.senderName,
+        text: newMessage.text,
+      });
+    } catch (err) {
+      console.warn('Failed to send live message to server', err);
+    }
   };
 
-  const filteredConsultations = mockConsultationsList
+  // Real device microphone recording for voice notes
+  const handleToggleVoiceRecording = async () => {
+    if (isRecordingAudio) {
+      // Stop recording
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        setIsRecordingAudio(false);
+        triggerHaptic('success');
+      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach((t) => t.stop());
+        if (audioBlob.size > 0 && activeSession) {
+          const voiceMsg: ChatMessage = {
+            id: `msg-${Date.now()}`,
+            sender: role === 'doctor' ? 'doctor' : 'patient',
+            senderName: role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
+            text: `🎤 Voice Note (${Math.round(audioBlob.size / 1024) || 1} KB)`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            status: 'sent',
+          };
+          setMessages((prev) => [...prev, voiceMsg]);
+          await primeApi.sendChatMessage(activeSession.id, {
+            sender: voiceMsg.sender,
+            senderName: voiceMsg.senderName,
+            text: voiceMsg.text,
+          }).catch(() => {});
+          showToast('Voice note sent to consultation');
+        }
+      };
+
+      recorder.start();
+      setIsRecordingAudio(true);
+      triggerHaptic('medium');
+      showToast('Recording voice note... Tap microphone again to send');
+    } catch {
+      showToast('Microphone access denied or unavailable on this device');
+    }
+  };
+
+  // Real device photo / file attachment
+  const handleFileAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeSession) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      const imgMsg: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        sender: role === 'doctor' ? 'doctor' : 'patient',
+        senderName: role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
+        text: `📷 Shared photo: ${file.name}`,
+        imageUrl: base64,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sent',
+      };
+      setMessages((prev) => [...prev, imgMsg]);
+      await primeApi.sendChatMessage(activeSession.id, {
+        sender: imgMsg.sender,
+        senderName: imgMsg.senderName,
+        text: imgMsg.text,
+        imageUrl: imgMsg.imageUrl,
+      }).catch(() => {});
+      showToast('Attachment uploaded to consultation');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const filteredConsultations = consultationsList
     .filter(c => {
       if (activeTab === 'new') return c.status === 'live' || c.status === 'upcoming';
       if (activeTab === 'previous') return c.status === 'completed' || c.status === 'cancelled';
@@ -353,6 +421,13 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                         }`}
                       >
                         {msg.text}
+                        {msg.imageUrl && (
+                          <img
+                            src={msg.imageUrl}
+                            alt="Attached file"
+                            className="mt-2 rounded-xl max-w-[240px] max-h-[200px] object-cover border border-white/20 shadow-xs"
+                          />
+                        )}
                       </div>
                       <div className="flex items-center space-x-1 mt-1 px-1">
                         <span className="text-[10px] text-slate-400">{msg.timestamp}</span>
@@ -374,13 +449,38 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Hidden File Input for Device Photos & Medical Documents */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileAttachment}
+            accept="image/*,application/pdf"
+            className="hidden"
+          />
+
           {/* Input Area */}
           <div className="bg-white px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-200 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
             <form onSubmit={handleSendMessage} className="flex items-center space-x-2 sm:space-x-3">
-              <button type="button" className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 cursor-pointer">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  fileInputRef.current?.click();
+                }}
+                className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 cursor-pointer"
+                title="Attach Document or Image from Device"
+              >
                 <Paperclip className="w-5 h-5" />
               </button>
-              <button type="button" className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 hidden sm:block cursor-pointer">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  fileInputRef.current?.click();
+                }}
+                className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 hidden sm:block cursor-pointer"
+                title="Capture Photo with Device Camera"
+              >
                 <Camera className="w-5 h-5" />
               </button>
               {role === 'doctor' && (
@@ -402,7 +502,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                   type="text"
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder="Type your message..."
+                  placeholder={isRecordingAudio ? "Recording live microphone audio..." : "Type your message..."}
                   className="flex-1 bg-transparent border-none focus:outline-none text-sm sm:text-base text-[#022434] py-2 placeholder-slate-400 font-nunito"
                 />
               </div>
@@ -414,7 +514,16 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                   <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5" />
                 </button>
               ) : (
-                <button type="button" className="p-3 sm:p-3.5 bg-slate-100 text-slate-500 hover:bg-slate-200 rounded-full transition-all shrink-0 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={handleToggleVoiceRecording}
+                  className={`p-3 sm:p-3.5 rounded-full transition-all shrink-0 cursor-pointer ${
+                    isRecordingAudio
+                      ? 'bg-red-500 text-white animate-pulse shadow-md ring-4 ring-red-200'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                  title={isRecordingAudio ? "Tap to Stop & Send Voice Note" : "Record Voice Note with Microphone"}
+                >
                   <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               )}
@@ -742,24 +851,41 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
 
             {/* EMPTY STATE */}
             {filteredConsultations.length === 0 && (
-              <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center space-y-4">
-                <div className="w-14 h-14 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center mx-auto text-slate-400">
-                  <Search className="w-6 h-6" />
+              <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 text-center space-y-4">
+                <div className="w-16 h-16 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-center mx-auto text-[#006c44]">
+                  <MessageSquare className="w-8 h-8" />
                 </div>
-                <h4 className="font-bold font-outfit text-[#022434] text-base">No consultations found</h4>
-                <p className="text-xs sm:text-sm text-slate-500 max-w-xs mx-auto font-nunito">
-                  No consultations match your current search or filter criteria. Try resetting your active filters.
+                <h4 className="font-bold font-outfit text-[#022434] text-lg">
+                  {consultationsList.length === 0 ? 'No consultations booked yet' : 'No consultations match your search'}
+                </h4>
+                <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto font-nunito leading-relaxed">
+                  {consultationsList.length === 0
+                    ? 'Connect with verified Nigerian doctors for real-time video, voice, and encrypted chat consultations.'
+                    : 'No consultations match your current search or filter criteria. Try resetting your active filters.'}
                 </p>
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setActiveTab('all');
-                    setTypeFilter('all');
-                  }}
-                  className="px-5 py-2.5 bg-[#1c3a4a] hover:bg-[#022434] text-white text-xs font-bold font-outfit rounded-xl transition-all"
-                >
-                  Reset Filters
-                </button>
+                {consultationsList.length === 0 ? (
+                  <button
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      onNavigate('doctor-discovery');
+                    }}
+                    className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Find & Book a Doctor</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setActiveTab('all');
+                      setTypeFilter('all');
+                    }}
+                    className="px-5 py-2.5 bg-[#1c3a4a] hover:bg-[#022434] text-white text-xs font-bold font-outfit rounded-xl transition-all"
+                  >
+                    Reset Filters
+                  </button>
+                )}
               </div>
             )}
           </div>

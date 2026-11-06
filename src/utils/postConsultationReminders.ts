@@ -83,19 +83,15 @@ export function getStoredPostConsultationReminders(): PostConsultationReminder[]
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const initial = [createDefaultRecoveryReminder()];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-      return initial;
+      return [];
     }
     const parsed: PostConsultationReminder[] = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      const initial = [createDefaultRecoveryReminder()];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-      return initial;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
     return parsed;
   } catch (e) {
-    return [createDefaultRecoveryReminder()];
+    return [];
   }
 }
 

@@ -164,42 +164,16 @@ class MemoryStore {
     return {
       users: [currentUserPatient, currentUserDoctor, currentUserAdmin],
       doctors: mockDoctors,
-      appointments: seedAppointments,
-      prescriptions: mockPrescriptions,
-      auditLogs: mockHealthRecordAuditLogs,
+      appointments: [],
+      prescriptions: [],
+      auditLogs: [],
       triageCases: [],
-      payments: [
-        {
-          id: 'pay-seed-1',
-          reference: 'PRIME-TXN-2026-901',
-          userId: 'pat-1',
-          patientName: 'Ada Okonkwo',
-          amount: 10000,
-          purpose: 'consultation',
-          method: 'paystack',
-          status: 'successful',
-          consultationId: 'apt-seed-1',
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ],
-      chatMessages: {
-        'default': mockChatMessages,
-        'c-1': mockChatMessages,
-      },
+      payments: [],
+      chatMessages: {},
       dependents: {
-        'pat-1': seedDependents,
+        'pat-1': [],
       },
-      exportAuthorizations: {
-        'app-1': {
-          status: 'pending_doctor_approval',
-          purpose: 'Second Medical Opinion & Personal Health Archive',
-          doctorName: 'Dr. Sarah Johnson',
-          doctorLicense: 'MDCN/2019/88492',
-          requestedAt: 'October 24, 2026 at 10:30 AM',
-          isPaid: false,
-          paymentAmount: 3000,
-        },
-      },
+      exportAuthorizations: {},
     };
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
 import { ScreenId, User, Prescription, StructuredClinicalRecord } from '../../types';
@@ -27,12 +27,13 @@ import {
   ScanFace,
   Fingerprint,
   KeyRound,
+  Plus,
 } from 'lucide-react';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
 import { PrescriptionPrintModal } from '../common/PrescriptionPrintModal';
-import { mockPrescriptions } from '../../data/mockData';
+import { primeApi } from '../../services/apiClient';
 import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
 import { BiometricAuthModal } from '../common/BiometricAuthModal';
@@ -68,275 +69,7 @@ export interface ClinicalSession {
 }
 
 // Master Sessions Record
-const initialSessions: ClinicalSession[] = [
-  {
-    id: 'sess-1',
-    consultationId: 'CNS-2026-8821',
-    date: 'October 24, 2026',
-    time: '10:00 AM',
-    doctorName: 'Dr. Sarah Lee, MD',
-    doctorSpecialty: 'Consultant Family Physician',
-    doctorLicense: 'MDCN/2019/98765',
-    doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-    consultationType: 'Video',
-    diagnosis: 'Acute Febrile Syndrome & Upper Respiratory Tract Infection',
-    chiefComplaint: 'High fever (38.8°C), body aches, chills, and productive cough for 2 days',
-    clinicalNotes: 'Patient present via video with acute febrile presentation. Pharynx slightly injected. Chest clear bilaterally. Uncomplicated seasonal presentation.',
-    vitals: {
-      bp: '118/76 mmHg',
-      temp: '38.4°C',
-      hr: '84 bpm',
-      spo2: '98%',
-    },
-    carePlan: [
-      'Complete 3-day course of Artemether / Lumefantrine as prescribed',
-      'Maintain 2.5L daily hydration and physical rest',
-      'Follow up in 72 hours if temperature remains elevated above 38.5°C',
-    ],
-    prescription: mockPrescriptions[0],
-    testsRequested: ['Malaria RDT Screen', 'Full Blood Count (FBC)'],
-    isLatest: true,
-  },
-  {
-    id: 'sess-2',
-    consultationId: 'CNS-2026-7734',
-    date: 'September 12, 2026',
-    time: '02:30 PM',
-    doctorName: 'Dr. Kenji Tanaka',
-    doctorSpecialty: 'Consultant Cardiologist',
-    doctorLicense: 'MDCN/2016/51209',
-    doctorAvatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
-    consultationType: 'Video',
-    diagnosis: 'Essential Stage 1 Hypertension (Controlled)',
-    chiefComplaint: 'Quarterly cardiovascular review and blood pressure medication refill',
-    clinicalNotes: 'Resting ambulatory BP well-regulated on current dual therapy. No orthostatic symptoms or peripheral edema. Heart sounds normal.',
-    vitals: {
-      bp: '124/80 mmHg',
-      temp: '36.8°C',
-      hr: '72 bpm',
-      spo2: '99%',
-    },
-    carePlan: [
-      'Continue Amlodipine 5mg and HCTZ 12.5mg daily in morning',
-      'Maintain dietary sodium intake under 2,000 mg/day',
-      'Record morning BP log twice weekly',
-    ],
-    prescription: mockPrescriptions[1],
-    testsRequested: ['Serum Electrolytes, Urea & Creatinine (E/U/Cr)', 'Lipid Profile'],
-    isLatest: false,
-  },
-  {
-    id: 'sess-3',
-    consultationId: 'CNS-2026-6619',
-    date: 'August 28, 2026',
-    time: '11:15 AM',
-    doctorName: 'Dr. Anya Okafor',
-    doctorSpecialty: 'Pediatrician & Family Health Specialist',
-    doctorLicense: 'MDCN/2019/88492',
-    doctorAvatar: 'https://images.unsplash.com/photo-1594824813590-482ffcf1d904?auto=format&fit=crop&q=80&w=300',
-    consultationType: 'Voice',
-    diagnosis: 'Seasonal Allergic Rhinosinusitis',
-    chiefComplaint: 'Nasal congestion, frequent sneezing, and nocturnal cough for 4 days',
-    clinicalNotes: 'Mild mucosal edema. Clear nasal discharge. No signs of bacterial superinfection. Afebrile.',
-    vitals: {
-      bp: '116/74 mmHg',
-      temp: '36.6°C',
-      hr: '76 bpm',
-      spo2: '99%',
-    },
-    carePlan: [
-      'Non-sedating oral antihistamine therapy for 10 days',
-      'Normal saline nasal rinse twice daily',
-      'Avoid identified pollen triggers and dust exposure',
-    ],
-    prescription: {
-      id: 'rx-3',
-      referenceNo: 'RX-661902',
-      date: 'August 28, 2026',
-      patientName: 'Ada Okonkwo',
-      patientDob: 'May 10, 1996',
-      patientId: 'PAT-88219401',
-      patientAgeGender: '28 Yrs • Female',
-      patientAllergies: ['Penicillin'],
-      doctorName: 'Dr. Anya Okafor',
-      doctorLicense: 'MDCN/2019/88492',
-      doctorSpecialty: 'Pediatrician & Family Health Specialist',
-      doctorClinic: 'Prime Telecare Family Practice',
-      doctorSignature: 'Dr. Anya Okafor',
-      authSealToken: 'MDCN-SEAL-VERIFIED-88492-20260828-AUTH-1102',
-      authVerificationDate: 'Aug 28, 2026 11:35 AM',
-      status: 'expired',
-      isVerified: true,
-      chiefComplaint: 'Seasonal Allergic Rhinosinusitis',
-      consultationId: 'CNS-2026-6619',
-      consultationType: 'Voice',
-      consultationDate: 'August 28, 2026',
-      diagnosis: 'Seasonal Allergic Rhinosinusitis',
-      medications: [
-        {
-          id: 'm-301',
-          drugName: 'Cetirizine Hydrochloride',
-          strength: '10 mg',
-          dosage: '1 tablet',
-          frequency: 'Once daily at bedtime',
-          duration: '10 days',
-          instructions: 'Take with water at night. May cause mild drowsiness.',
-        },
-        {
-          id: 'm-302',
-          drugName: 'Fluticasone Furoate Nasal Spray',
-          strength: '27.5 mcg/spray',
-          dosage: '2 sprays per nostril',
-          frequency: 'Once daily (Morning)',
-          duration: '14 days',
-          instructions: 'Shake bottle gently before each administration.',
-        },
-      ],
-      doctorNotes: 'Maintain home humidifier. Return if sinus pain or purulent discharge emerges.',
-    },
-    isLatest: false,
-  },
-  {
-    id: 'sess-4',
-    consultationId: 'CNS-2026-5542',
-    date: 'August 04, 2026',
-    time: '04:00 PM',
-    doctorName: 'Dr. Zainab Aliyu',
-    doctorSpecialty: 'Consultant Dermatologist',
-    doctorLicense: 'MDCN/2018/74920',
-    doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-    consultationType: 'Chat',
-    diagnosis: 'Acute Contact Dermatitis & Eczematous Flare',
-    chiefComplaint: 'Erythematous pruritic rash on forearms after contact with chemical cleanser',
-    clinicalNotes: 'Photographic evaluation reveals well-demarcated eczematous patches on bilateral volar forearms. No open ulcerations.',
-    vitals: {
-      bp: '115/75 mmHg',
-      temp: '36.7°C',
-      hr: '70 bpm',
-    },
-    carePlan: [
-      'Topical corticosteroid application twice daily to affected zones for 7 days',
-      'Ceramide barrier repair cream application post-cleansing',
-      'Strictly avoid direct contact with household chemical detergents',
-    ],
-    prescription: {
-      id: 'rx-4',
-      referenceNo: 'RX-554201',
-      date: 'August 04, 2026',
-      patientName: 'Ada Okonkwo',
-      patientDob: 'May 10, 1996',
-      patientId: 'PAT-88219401',
-      patientAgeGender: '28 Yrs • Female',
-      patientAllergies: ['Penicillin'],
-      doctorName: 'Dr. Zainab Aliyu',
-      doctorLicense: 'MDCN/2018/74920',
-      doctorSpecialty: 'Consultant Dermatologist',
-      doctorClinic: 'Prime Telecare Dermatology Clinic',
-      doctorSignature: 'Dr. Zainab Aliyu',
-      authSealToken: 'MDCN-SEAL-VERIFIED-74920-20260804-AUTH-9090',
-      authVerificationDate: 'Aug 04, 2026 04:25 PM',
-      status: 'expired',
-      isVerified: true,
-      chiefComplaint: 'Acute Contact Dermatitis',
-      consultationId: 'CNS-2026-5542',
-      consultationType: 'Chat',
-      consultationDate: 'August 04, 2026',
-      diagnosis: 'Acute Contact Dermatitis & Eczematous Flare',
-      medications: [
-        {
-          id: 'm-401',
-          drugName: 'Hydrocortisone 1% Topical Cream',
-          strength: '15g tube',
-          dosage: 'Thin film application',
-          frequency: 'Twice daily',
-          duration: '7 days',
-          instructions: 'Apply sparingly to affected skin. Do not apply to broken skin.',
-        },
-        {
-          id: 'm-402',
-          drugName: 'Desloratadine',
-          strength: '5 mg',
-          dosage: '1 tablet',
-          frequency: 'Once daily (Morning)',
-          duration: '7 days',
-          instructions: 'For itching control throughout daytime.',
-        },
-      ],
-      doctorNotes: 'Keep skin moisturized. Use hypoallergenic mild soap only.',
-    },
-    isLatest: false,
-  },
-  {
-    id: 'sess-5',
-    consultationId: 'CNS-2026-4410',
-    date: 'July 18, 2026',
-    time: '09:30 AM',
-    doctorName: 'Dr. Chukwuemeka Eze',
-    doctorSpecialty: 'Consultant Gastroenterologist',
-    doctorLicense: 'MDCN/2017/63211',
-    doctorAvatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=300',
-    consultationType: 'Video',
-    diagnosis: 'Acute Acid Dyspepsia & Mild Gastritis',
-    chiefComplaint: 'Retrosternal epigastric burning and post-prandial fullness after spicy foods',
-    clinicalNotes: 'No vomiting, melena, or dysphagia. Epigastric tenderness without rebound. Likely dietary-induced acid peptic disorder.',
-    vitals: {
-      bp: '120/78 mmHg',
-      temp: '36.5°C',
-      hr: '75 bpm',
-    },
-    carePlan: [
-      'Proton-pump inhibitor therapy for 14 days 30 minutes before breakfast',
-      'Refrain from late-night eating, caffeine, and highly spiced meals',
-      'Liquid antacid suspension as needed for breakthrough reflux',
-    ],
-    prescription: {
-      id: 'rx-5',
-      referenceNo: 'RX-441019',
-      date: 'July 18, 2026',
-      patientName: 'Ada Okonkwo',
-      patientDob: 'May 10, 1996',
-      patientId: 'PAT-88219401',
-      patientAgeGender: '28 Yrs • Female',
-      patientAllergies: ['Penicillin'],
-      doctorName: 'Dr. Chukwuemeka Eze',
-      doctorLicense: 'MDCN/2017/63211',
-      doctorSpecialty: 'Consultant Gastroenterologist',
-      doctorClinic: 'Prime Telecare Digestive Health',
-      doctorSignature: 'Dr. Chukwuemeka Eze',
-      authSealToken: 'MDCN-SEAL-VERIFIED-63211-20260718-AUTH-4122',
-      authVerificationDate: 'Jul 18, 2026 09:55 AM',
-      status: 'expired',
-      isVerified: true,
-      chiefComplaint: 'Acid Dyspepsia & Mild Gastritis',
-      consultationId: 'CNS-2026-4410',
-      consultationType: 'Video',
-      consultationDate: 'July 18, 2026',
-      diagnosis: 'Acute Acid Dyspepsia & Mild Gastritis',
-      medications: [
-        {
-          id: 'm-501',
-          drugName: 'Omeprazole Delayed-Release Capsules',
-          strength: '20 mg',
-          dosage: '1 capsule',
-          frequency: 'Once daily (Before breakfast)',
-          duration: '14 days',
-          instructions: 'Swallow whole with water 30 minutes before first morning meal.',
-        },
-        {
-          id: 'm-502',
-          drugName: 'Gaviscon Advance Oral Suspension',
-          strength: '200ml bottle',
-          dosage: '10 ml',
-          frequency: 'After meals and at bedtime',
-          duration: '10 days',
-          instructions: 'Take for breakthrough heartburn as needed.',
-        },
-      ],
-      doctorNotes: 'Avoid lying flat within 2 hours after meals. Elevate head of bed.',
-    },
-    isLatest: false,
-  },
-];
+const initialSessions: ClinicalSession[] = [];
 
 export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, onNavigate }) => {
   // Search & Filter State for Past Sessions
@@ -374,11 +107,54 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
     }
   });
 
+  const [sessions, setSessions] = useState<ClinicalSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load live prescriptions and consultation records
+  useEffect(() => {
+    const fetchRecords = async () => {
+      try {
+        const rxs = await primeApi.getPrescriptions();
+        const mapped: ClinicalSession[] = (rxs || []).map((rx, idx) => ({
+          id: rx.id,
+          consultationId: rx.consultationId || `CNS-${rx.referenceNo}`,
+          date: rx.date || 'Recent Encounter',
+          time: rx.consultationTime || '10:00 AM',
+          doctorName: rx.doctorName,
+          doctorSpecialty: rx.doctorSpecialty || 'General Practice',
+          doctorLicense: rx.doctorLicense,
+          doctorClinic: rx.doctorClinic || 'Prime Telecare Digital Practice',
+          doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
+          consultationType: (rx.consultationType as any) || 'Video',
+          diagnosis: rx.diagnosis || 'Clinical Consultation',
+          chiefComplaint: rx.chiefComplaint || 'Consultation Encounter',
+          clinicalNotes: rx.doctorNotes || 'Patient evaluated and e-prescription issued.',
+          vitals: {
+            bp: '120/80 mmHg',
+            temp: '36.8°C',
+            hr: '76 bpm',
+            spo2: '99%',
+          },
+          carePlan: rx.medications?.map((m) => `${m.drugName} ${m.strength || ''} - ${m.frequency}`) || [],
+          prescription: rx,
+          testsRequested: [],
+          isLatest: idx === 0,
+        }));
+        setSessions(mapped);
+      } catch {
+        setSessions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchRecords();
+  }, []);
+
   const biometricSettings = getBiometricSettings();
 
   // Identify latest session
-  const latestSession = initialSessions.find((s) => s.isLatest) || initialSessions[0];
-  const oldSessions = initialSessions.filter((s) => !s.isLatest);
+  const latestSession = sessions.find((s) => s.isLatest) || sessions[0];
+  const oldSessions = sessions.filter((s) => !s.isLatest);
 
   // Filtered Old Sessions
   const filteredOldSessions = useMemo(() => {
@@ -544,13 +320,35 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
 
           <div className="flex items-center space-x-2">
             <span className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl font-semibold">
-              {initialSessions.length} Total Sessions Recorded
+              {sessions.length} Total Sessions Recorded
             </span>
           </div>
         </div>
 
-        {/* 1. EXPORT LATEST SESSION (SPOTLIGHT HERO CARD) */}
-        <div className="relative bg-gradient-to-br from-[#022434] via-[#083248] to-[#004830] text-white rounded-2xl p-5 sm:p-6 shadow-xl border border-slate-800 overflow-hidden">
+        {sessions.length === 0 ? (
+          <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 text-center space-y-4 shadow-sm my-6">
+            <div className="w-16 h-16 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-center mx-auto text-[#006c44]">
+              <FileText className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-bold font-outfit text-[#022434]">No Health Records on File Yet</h3>
+            <p className="text-sm text-slate-500 font-nunito max-w-md mx-auto leading-relaxed">
+              When you complete consultations with our certified physicians, your e-prescriptions, clinical diagnoses, and tamper-evident EHR encounter summaries will be archived here.
+            </p>
+            <button
+              onClick={() => {
+                triggerHaptic('selection');
+                onNavigate('doctor-discovery');
+              }}
+              className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Book Your First Consultation</span>
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* 1. EXPORT LATEST SESSION (SPOTLIGHT HERO CARD) */}
+            <div className="relative bg-gradient-to-br from-[#022434] via-[#083248] to-[#004830] text-white rounded-2xl p-5 sm:p-6 shadow-xl border border-slate-800 overflow-hidden">
           {/* Subtle Glow */}
           <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#77daa4]/15 rounded-full blur-3xl pointer-events-none" />
 
@@ -988,6 +786,8 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
       )}
 

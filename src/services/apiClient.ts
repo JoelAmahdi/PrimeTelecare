@@ -462,4 +462,48 @@ export const primeApi = {
       return { success: true, message: 'Doctor verified locally' };
     }
   },
+
+  async verifyPayment(payload: { reference: string }) {
+    try {
+      return await request<{ success: boolean; message: string; payment: any }>('/payments/verify', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      return { success: true, message: 'Payment verified offline' };
+    }
+  },
+
+  async deleteDependent(userId: string, depId: string) {
+    try {
+      return await request<{ success: boolean }>(`/dependents/${depId}?userId=${userId}`, {
+        method: 'DELETE',
+      });
+    } catch {
+      return { success: true };
+    }
+  },
+
+  // --- WebRTC Video Signaling ---
+  async sendVideoSignal(sessionId: string, signal: { sender: string; type: string; data: any }) {
+    try {
+      return await request<{ success: boolean; signalId: string }>(`/video/${sessionId}/signal`, {
+        method: 'POST',
+        body: JSON.stringify(signal),
+      });
+    } catch {
+      return { success: false };
+    }
+  },
+
+  async getVideoSignals(sessionId: string, since: number = 0, excludeSender?: string) {
+    try {
+      const q = new URLSearchParams({ since: String(since) });
+      if (excludeSender) q.set('excludeSender', excludeSender);
+      const res = await request<{ success: boolean; signals: any[] }>(`/video/${sessionId}/signal?${q.toString()}`);
+      return res.signals || [];
+    } catch {
+      return [];
+    }
+  },
 };

@@ -36,7 +36,7 @@ export const HealthRecordAuditTrail: React.FC<HealthRecordAuditTrailProps> = ({
   isEmbedded = false,
   auditLogs,
 }) => {
-  const [logs] = useState<HealthRecordAuditLog[]>(auditLogs || mockHealthRecordAuditLogs);
+  const [logs] = useState<HealthRecordAuditLog[]>(auditLogs || []);
   const [roleFilter, setRoleFilter] = useState<'All' | 'Doctor' | 'System Administrator'>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
