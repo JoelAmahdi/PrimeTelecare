@@ -53,7 +53,8 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
     } else if (error.code === 'auth/cancelled-popup-request') {
       message = 'Sign-in was cancelled.';
     } else if (error.code === 'auth/unauthorized-domain') {
-      message = 'This domain is not authorized in Firebase Console (Authentication > Settings > Authorized domains).';
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'your domain';
+      message = `Domain "${currentHost}" is not authorized. Please add "${currentHost}" in Firebase Console > Authentication > Settings > Authorized domains.`;
     } else if (error.code === 'auth/operation-not-allowed') {
       message = 'Google sign-in is not enabled in Firebase Console (Authentication > Sign-in method > Google).';
     } else if (error.code === 'auth/popup-blocked') {
