@@ -142,6 +142,9 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
       if (res.success && res.user) {
         showToast(`Account created! Welcome, ${res.user.name}`, 'success');
         onSignupSuccess(res.user.role || role, res.user);
+      } else if (res.success && !res.user) {
+        showToast('Redirecting to Google...', 'info');
+        return;
       } else if (res.error) {
         showToast(res.error, 'error');
       }

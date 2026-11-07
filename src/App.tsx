@@ -38,6 +38,8 @@ import { PostConsultationReminder } from './utils/postConsultationReminders';
 import { OfflineStatusBar } from './components/common/OfflineStatusBar';
 import { useOfflineStatus } from './utils/useOfflineStatus';
 import { DesktopNavbar } from './components/common/DesktopNavbar';
+import { checkGoogleRedirectResult } from './services/googleAuth';
+import { showToast } from './utils/toast';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(() => {
@@ -117,6 +119,23 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  // Listen for Google OAuth redirect result on mobile browsers
+  useEffect(() => {
+    checkGoogleRedirectResult().then((res) => {
+      if (res && res.success && res.user) {
+        setCurrentUser(res.user);
+        const resolvedRole = res.user.role || 'patient';
+        setRole(resolvedRole);
+        localStorage.setItem('prime_telecare_user', JSON.stringify(res.user));
+        localStorage.setItem('prime_telecare_role', resolvedRole);
+        const homeScreen: ScreenId = resolvedRole === 'doctor' ? 'doctor-home' : resolvedRole === 'admin' ? 'admin-dashboard' : 'patient-home';
+        localStorage.setItem('prime_telecare_screen', homeScreen);
+        setCurrentScreen(homeScreen);
+        showToast(`Welcome back, ${res.user.name}!`, 'success');
+      }
+    });
   }, []);
 
   const navigateTo = (nextScreen: ScreenId) => {

@@ -93,6 +93,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
       if (res.success && res.user) {
         showToast(`Welcome, ${res.user.name}!`, 'success');
         onLoginSuccess(res.user.role || 'patient', res.user);
+      } else if (res.success && !res.user) {
+        showToast('Redirecting to Google...', 'info');
+        return;
       } else if (res.error) {
         showToast(res.error, 'error');
       }
