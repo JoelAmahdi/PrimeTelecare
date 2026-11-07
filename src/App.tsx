@@ -383,8 +383,9 @@ export default function App() {
                 onNavigate={navigateTo}
                 doctorId={currentBookingSummary?.doctorId || selectedDoctorId}
                 doctorName={
+                  currentBookingSummary?.doctorName ||
                   mockDoctors.find((d) => d.id === (currentBookingSummary?.doctorId || selectedDoctorId))?.name ||
-                  'Dr. Sarah Johnson'
+                  'Attending Physician'
                 }
                 patientName={activeUser.name}
               />
@@ -430,8 +431,9 @@ export default function App() {
                 onNavigate={navigateTo}
                 user={activeUser}
                 doctorName={
+                  currentBookingSummary?.doctorName ||
                   mockDoctors.find((d) => d.id === (currentBookingSummary?.doctorId || selectedDoctorId))?.name ||
-                  'Dr. Sarah Johnson'
+                  'Attending Physician'
                 }
               />
             )}

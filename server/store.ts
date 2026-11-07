@@ -163,7 +163,7 @@ class MemoryStore {
   private getDefaultState(): ServerState {
     return {
       users: [currentUserPatient, currentUserDoctor, currentUserAdmin],
-      doctors: mockDoctors,
+      doctors: [],
       appointments: [],
       prescriptions: [],
       auditLogs: [],
@@ -242,6 +242,16 @@ class MemoryStore {
     }
     this.saveToDisk();
     return doc;
+  }
+
+  deleteDoctor(id: string): boolean {
+    const initialLen = this.state.doctors.length;
+    this.state.doctors = this.state.doctors.filter((d) => d.id !== id);
+    if (this.state.doctors.length < initialLen) {
+      this.saveToDisk();
+      return true;
+    }
+    return false;
   }
 
   // --- Appointments ---

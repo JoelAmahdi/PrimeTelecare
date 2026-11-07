@@ -9,7 +9,7 @@ import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
 import { BiometricAuthModal } from '../common/BiometricAuthModal';
 import { GoogleAuthModal } from '../common/GoogleAuthModal';
 import { primeApi } from '../../services/apiClient';
-import { signInWithGoogle, launchGoogleOAuth } from '../../services/googleAuth';
+import { signInWithGoogle } from '../../services/googleAuth';
 
 interface LoginScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -27,6 +27,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleErrorMsg, setGoogleErrorMsg] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -87,11 +88,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
     }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     triggerHaptic('selection');
     setIsGoogleLoading(true);
-    showToast('Opening Google...', 'info');
-    launchGoogleOAuth();
+    setGoogleErrorMsg(undefined);
+
+    try {
+      const res = await signInWithGoogle();
+      if (res.success && res.user) {
+        showToast(`Welcome, ${res.user.name}!`, 'success');
+        onLoginSuccess(res.user.role || 'patient', res.user);
+        return;
+      }
+      if (res.error) {
+        setGoogleErrorMsg(res.error);
+        setShowGoogleModal(true);
+      }
+    } catch (err: any) {
+      setGoogleErrorMsg(err?.message || 'Google authentication encountered an issue');
+      setShowGoogleModal(true);
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const getPasswordStrength = (pass: string) => {
@@ -369,7 +387,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
       {/* Google Authentication Modal Fallback */}
       <GoogleAuthModal
         isOpen={showGoogleModal}
-        onClose={() => setShowGoogleModal(false)}
+        onClose={() => {
+          setShowGoogleModal(false);
+          setGoogleErrorMsg(undefined);
+        }}
+        errorMessage={googleErrorMsg}
         initialEmail={email.includes('@gmail') ? email : ''}
         onSuccess={(userRole, user) => onLoginSuccess(userRole, user)}
       />

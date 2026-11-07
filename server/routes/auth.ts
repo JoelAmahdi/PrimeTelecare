@@ -153,7 +153,7 @@ authRouter.post('/google', (req: Request, res: Response) => {
 
 // POST /api/auth/register
 authRouter.post('/register', (req: Request, res: Response) => {
-  const { name, email, role, phone, stateOfResidence, lga, allergies, bloodGroup, emergencyContact, dob, gender, address } = req.body;
+  const { name, email, role, phone, stateOfResidence, lga, allergies, bloodGroup, emergencyContact, dob, gender, address, doctorLicenseNo, doctorSpecialty } = req.body;
 
   if (!name || !email) {
     return res.status(400).json({ success: false, error: 'Name and email are required' });
@@ -214,6 +214,52 @@ authRouter.post('/register', (req: Request, res: Response) => {
   };
 
   store.saveUser(newUser);
+
+  if (role === 'doctor') {
+    const cleanName = newUser.name.trim().startsWith('Dr.') ? newUser.name.trim() : `Dr. ${newUser.name.trim()}`;
+    const newDoc = {
+      id: `doc-${newUser.id}`,
+      name: cleanName,
+      fullNameWithTitle: `${cleanName}, MD`,
+      specialty: doctorSpecialty || 'General Practice / Family Medicine',
+      title: `Consultant in ${doctorSpecialty || 'General Practice'}`,
+      rating: 5.0,
+      reviewsCount: 0,
+      avatarUrl: newUser.avatarUrl,
+      isOnline: true,
+      yearsExperience: 5,
+      patientsCount: 0,
+      about: `${cleanName} is a licensed medical practitioner on Prime Telecare specializing in ${
+        doctorSpecialty || 'General Practice'
+      }.`,
+      qualifications: [doctorLicenseNo || 'MDCN Licensed Medical Practitioner'],
+      languagesSpoken: ['English'],
+      consultationFee: { chat: 5000, voice: 7000, video: 10000, base: 10000 },
+      availabilityStatus: {
+        isOnline: true,
+        statusText: 'Online & Available',
+        nextAvailableSlot: 'Today',
+        workingDays: 'Mon - Fri (8:00 AM - 6:00 PM)',
+      },
+      verification: {
+        isVerified: true,
+        licenseNumber: doctorLicenseNo || 'MDCN/2026/001',
+        boardName: 'Medical and Dental Council of Nigeria (MDCN)',
+        verifiedBadgeText: 'Verified MDCN License',
+        verificationDate: 'Verified',
+      },
+      reviewPolicy: {
+        policyText: 'Authentic patient tele-consultation feedback.',
+        verifiedOnly: true,
+        auditEnforced: true,
+      },
+      reviewsList: [],
+      availableDates: ['Today', 'Tomorrow'],
+      availableTimeSlots: ['9:00 AM', '11:00 AM', '2:00 PM', '4:00 PM'],
+      prices: { chat: 5000, voice: 7000, video: 10000 },
+    };
+    store.saveDoctor(newDoc);
+  }
 
   // Record NDPA audit log for account creation
   store.createAuditLog({

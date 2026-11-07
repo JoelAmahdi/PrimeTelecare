@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Mail, ArrowRight, ShieldCheck, X, Sparkles } from 'lucide-react';
+import { Mail, ShieldCheck, X, Sparkles, AlertCircle, ExternalLink, HelpCircle } from 'lucide-react';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
-import { directGoogleLogin } from '../../services/googleAuth';
+import { directGoogleLogin, signInWithGoogle } from '../../services/googleAuth';
 import { User, UserRole } from '../../types';
 
 interface GoogleAuthModalProps {
@@ -10,6 +10,7 @@ interface GoogleAuthModalProps {
   onClose: () => void;
   onSuccess: (role: UserRole, user: User) => void;
   initialEmail?: string;
+  errorMessage?: string;
 }
 
 export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
@@ -17,10 +18,13 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   onClose,
   onSuccess,
   initialEmail = '',
+  errorMessage,
 }) => {
   const [googleEmail, setGoogleEmail] = useState(initialEmail);
   const [fullName, setFullName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isOAuthLoading, setIsOAuthLoading] = useState(false);
+  const [showConfigHelp, setShowConfigHelp] = useState(false);
 
   if (!isOpen) return null;
 
@@ -49,23 +53,33 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
     }
   };
 
-  const handleLaunchGoogleOAuth = () => {
+  const handleTryFirebaseOAuth = async () => {
     triggerHaptic('selection');
-    const clientId = '841125042406-0f7ansh4it7lh57cu7fgd2ktt4bgmbp2.apps.googleusercontent.com';
-    const redirectUri = window.location.origin;
-    const scope = encodeURIComponent('email profile openid');
-    const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}&response_type=token%20id_token&scope=${scope}&nonce=${Date.now()}&prompt=select_account`;
-    window.location.href = oauthUrl;
+    setIsOAuthLoading(true);
+    try {
+      const res = await signInWithGoogle();
+      if (res.success && res.user) {
+        showToast(`Welcome, ${res.user.name}!`, 'success');
+        onSuccess(res.user.role || 'patient', res.user);
+        onClose();
+      } else if (res.error) {
+        showToast(res.error, 'error');
+        setShowConfigHelp(true);
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'OAuth sign-in failed', 'error');
+      setShowConfigHelp(true);
+    } finally {
+      setIsOAuthLoading(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-200 my-auto">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0">
               <svg viewBox="0 0 24 24" width="22" height="22">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -87,7 +101,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
             </div>
             <div>
               <h3 className="text-lg font-bold font-outfit text-[#022434]">Google Sign-In</h3>
-              <p className="text-xs text-slate-500 font-nunito">Secure Clinical Account Access</p>
+              <p className="text-xs text-slate-500 font-nunito">Instant Clinical Account Access</p>
             </div>
           </div>
           <button
@@ -101,28 +115,20 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
           </button>
         </div>
 
-        {/* Quick OAuth Button */}
-        <div>
-          <button
-            type="button"
-            onClick={handleLaunchGoogleOAuth}
-            className="w-full py-3 px-4 bg-slate-900 hover:bg-black text-white rounded-2xl font-bold font-outfit text-sm flex items-center justify-center space-x-2 shadow-sm transition-all active:scale-98 cursor-pointer"
-          >
-            <span>Launch Google Account Picker</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
+        {errorMessage && (
+          <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-start space-x-2 text-xs text-amber-900 font-nunito">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">{errorMessage}</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Sign in with your Google email below for immediate access.
+              </p>
+            </div>
+          </div>
+        )}
 
-        <div className="flex items-center space-x-3 w-full py-1">
-          <div className="flex-1 h-px bg-slate-200"></div>
-          <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider font-outfit">
-            or instant sign-in with your google email
-          </span>
-          <div className="flex-1 h-px bg-slate-200"></div>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleDirectGoogleLogin} className="space-y-3">
+        {/* Primary Instant Email Sign-In */}
+        <form onSubmit={handleDirectGoogleLogin} className="space-y-3 pt-1">
           <div className="border border-slate-200 rounded-2xl p-3 bg-white focus-within:border-[#006c44] focus-within:ring-2 focus-within:ring-[#006c44]/20 transition-all">
             <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Google / Gmail Address</label>
             <div className="flex items-center space-x-2">
@@ -134,6 +140,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                 placeholder="your.email@gmail.com"
                 className="w-full bg-transparent border-none text-sm font-nunito focus:outline-none text-[#171c1f]"
                 required
+                autoFocus
               />
             </div>
           </div>
@@ -144,7 +151,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Joel Amahdi"
+              placeholder="e.g. Joel Oaihimire"
               className="w-full bg-transparent border-none text-sm font-nunito focus:outline-none text-[#171c1f]"
             />
           </div>
@@ -159,11 +166,70 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                <span>Sign In with This Google Account</span>
+                <span>Continue with this Google Account</span>
               </>
             )}
           </button>
         </form>
+
+        <div className="flex items-center space-x-3 w-full py-1">
+          <div className="flex-1 h-px bg-slate-200"></div>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider font-outfit">
+            or try official popup
+          </span>
+          <div className="flex-1 h-px bg-slate-200"></div>
+        </div>
+
+        {/* Secondary: Try Official Firebase OAuth Popup */}
+        <div>
+          <button
+            type="button"
+            disabled={isOAuthLoading}
+            onClick={handleTryFirebaseOAuth}
+            className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold font-outfit text-xs flex items-center justify-center space-x-2 transition-all active:scale-98 cursor-pointer disabled:opacity-50"
+          >
+            {isOAuthLoading ? (
+              <div className="w-4 h-4 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin" />
+            ) : (
+              <>
+                <span>Launch Google OAuth Popup</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Help collapsible */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setShowConfigHelp(!showConfigHelp)}
+            className="w-full flex items-center justify-center space-x-1.5 text-[11px] text-slate-500 hover:text-slate-800 font-nunito cursor-pointer py-1"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>Why did Error 400 redirect_uri_mismatch or unauthorized-domain appear?</span>
+          </button>
+
+          {showConfigHelp && (
+            <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] text-slate-600 font-nunito space-y-2 leading-relaxed animate-in fade-in duration-200">
+              <p className="font-semibold text-slate-800">To enable automatic 1-tap Google OAuth on your live Render domain:</p>
+              <ol className="list-decimal list-inside space-y-1 text-slate-700">
+                <li>
+                  Open <span className="font-mono text-slate-900 font-bold">Google Cloud Console &gt; Credentials</span> in project <span className="font-mono text-[#006c44] font-bold">gen-lang-client-0108839770</span>.
+                </li>
+                <li>
+                  Under OAuth 2.0 Client IDs, add <span className="font-mono text-slate-900 font-bold">https://prime-telecare.onrender.com</span> to <strong>Authorized redirect URIs</strong> and <strong>Authorized JavaScript origins</strong>.
+                </li>
+                <li>
+                  In <span className="font-mono text-slate-900 font-bold">Firebase Console &gt; Authentication &gt; Settings</span>, ensure <span className="font-mono text-slate-900 font-bold">prime-telecare.onrender.com</span> is saved under <strong>Authorized domains</strong>.
+                </li>
+              </ol>
+              <p className="text-[10px] text-slate-500 italic">
+                You can always sign in above with any Google email instantly without waiting for cloud DNS sync.
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center justify-center space-x-1.5 text-[11px] text-slate-500 font-nunito pt-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
@@ -173,4 +239,3 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
     </div>
   );
 };
-

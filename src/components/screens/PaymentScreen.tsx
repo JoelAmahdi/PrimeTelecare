@@ -68,14 +68,14 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
   const [isLiveGatewayOpen, setIsLiveGatewayOpen] = useState(false);
 
   // Fallbacks if user lands on PaymentScreen directly
-  const doctor = mockDoctors.find((d) => d.id === bookingSummary?.doctorId) || mockDoctors[0];
+  const doctor = mockDoctors.find((d) => d.id === bookingSummary?.doctorId) || mockDoctors[0] || null;
   const consultationType = bookingSummary?.consultationType || 'Video';
   const date = bookingSummary?.date || 'Today, Oct 24, 2026';
   const timeSlot = bookingSummary?.timeSlot || '10:30 AM';
   const duration = bookingSummary?.duration || '30 Minutes';
 
   // Itemized Pricing Calculation (Consultation Fee, Platform Charge, Taxes)
-  const consultationFee = bookingSummary?.baseFee || doctor.prices.video;
+  const consultationFee = bookingSummary?.baseFee || doctor?.prices?.video || 10000;
   const platformCharge = bookingSummary?.serviceFee || 500;
   const vatTaxFee = Math.round(consultationFee * 0.075); // 7.5% Statutory VAT
   const totalAmount = consultationFee + platformCharge + vatTaxFee;

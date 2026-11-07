@@ -20,6 +20,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { ScreenId, Doctor, UserRole, BookingSummary } from '../../types';
+import { primeApi } from '../../services/apiClient';
 import { mockDoctors, currentUserPatient } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';
 import { DependentSwitcher } from '../common/DependentSwitcher';
@@ -46,11 +47,22 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   const [bookingMode, setBookingMode] = useState<'instant' | 'scheduled'>('instant');
 
   // Physician selection
-  const [chosenDoctorId, setChosenDoctorId] = useState<string>(
-    selectedDoctorId || mockDoctors[0].id
-  );
+  const [doctorsList, setDoctorsList] = useState<Doctor[]>([]);
+  const [chosenDoctorId, setChosenDoctorId] = useState<string>(selectedDoctorId || '');
   const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
   const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
+
+  useEffect(() => {
+    primeApi.getDoctors().then((docs) => {
+      const list = docs || [];
+      setDoctorsList(list);
+      if (!chosenDoctorId && list.length > 0) {
+        setChosenDoctorId(list[0].id);
+      }
+    }).catch(() => {
+      setDoctorsList([]);
+    });
+  }, []);
 
   useEffect(() => {
     if (selectedDoctorId) {
@@ -58,8 +70,29 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
     }
   }, [selectedDoctorId]);
 
+  const fallbackEmptyDoctor: Doctor = {
+    id: 'doc-pending',
+    name: 'Attending Telehealth Physician',
+    fullNameWithTitle: 'Attending Telehealth Physician, MD',
+    specialty: 'General Practice',
+    title: 'Consultant Telehealth Practitioner',
+    rating: 5.0,
+    reviewsCount: 0,
+    avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
+    isOnline: true,
+    yearsExperience: 5,
+    patientsCount: 0,
+    about: 'Board-licensed clinical telehealth practitioner on Prime Telecare.',
+    qualifications: ['MDCN Licensed Practitioner'],
+    languagesSpoken: ['English'],
+    consultationFee: { chat: 5000, voice: 7000, video: 10000, base: 10000 },
+    availabilityStatus: { isOnline: true, statusText: 'Online & Available', nextAvailableSlot: 'Today', workingDays: 'Mon - Fri' },
+    verification: { isVerified: true, licenseNumber: 'MDCN/2026/001', boardName: 'Medical and Dental Council of Nigeria', verifiedBadgeText: 'Verified MDCN License', verificationDate: 'Verified' },
+    prices: { chat: 5000, voice: 7000, video: 10000 },
+  };
+
   const currentDoctor: Doctor =
-    mockDoctors.find((d) => d.id === chosenDoctorId) || mockDoctors[0];
+    doctorsList.find((d) => d.id === chosenDoctorId) || doctorsList[0] || fallbackEmptyDoctor;
 
   // Consultation Format: Video / Voice / Chat
   const [consultationType, setConsultationType] = useState<'Video' | 'Voice' | 'Chat'>('Video');
@@ -186,7 +219,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
     proceedToCheckout();
   };
 
-  const filteredDoctors = mockDoctors.filter((doc) => {
+  const filteredDoctors = doctorsList.filter((doc) => {
     const q = doctorSearchQuery.toLowerCase().trim();
     return (
       !q ||

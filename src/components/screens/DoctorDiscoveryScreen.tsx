@@ -28,11 +28,14 @@ import {
   Sliders,
   Power,
   ShieldAlert,
+  Plus,
+  Stethoscope,
 } from 'lucide-react';
 import { ScreenId, Doctor, UserRole } from '../../types';
 import { mockDoctors } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';
 import { NotificationsDrawer } from '../common/NotificationsDrawer';
+import { AddDoctorModal } from '../common/AddDoctorModal';
 
 interface DoctorDiscoveryScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -45,14 +48,19 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
   onSelectDoctor,
   role = 'patient',
 }) => {
-  const [doctors, setDoctors] = useState<Doctor[]>(mockDoctors);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [isAddDoctorModalOpen, setIsAddDoctorModalOpen] = useState(false);
+
+  const loadDoctors = () => {
+    primeApi.getDoctors().then((docs) => {
+      setDoctors(docs || []);
+    }).catch(() => {
+      setDoctors([]);
+    });
+  };
 
   useEffect(() => {
-    primeApi.getDoctors().then((docs) => {
-      if (docs && docs.length > 0) {
-        setDoctors(docs);
-      }
-    }).catch(() => {});
+    loadDoctors();
   }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All Specialties');
@@ -223,16 +231,30 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
               </p>
             </div>
 
-            {role === 'admin' && (
+            <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
               <button
                 type="button"
-                onClick={() => onNavigate('admin-dashboard')}
-                className="px-3.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-[#77daa4] border border-emerald-400/40 rounded-xl text-xs font-bold font-outfit transition-colors shrink-0 flex items-center space-x-1.5 cursor-pointer self-start sm:self-center"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setIsAddDoctorModalOpen(true);
+                }}
+                className="px-3.5 py-2 bg-[#77daa4] hover:bg-emerald-300 text-[#022434] rounded-xl text-xs font-bold font-outfit transition-colors shrink-0 flex items-center space-x-1.5 cursor-pointer shadow-sm"
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Command Center</span>
+                <Plus className="w-4 h-4" />
+                <span>+ Add Doctor</span>
               </button>
-            )}
+
+              {role === 'admin' && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('admin-dashboard')}
+                  className="px-3.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-[#77daa4] border border-emerald-400/40 rounded-xl text-xs font-bold font-outfit transition-colors shrink-0 flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Command Center</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Quick Metrics Strip */}
@@ -367,8 +389,32 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
 
         {/* Clinicians Roster Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {filteredDoctors.length === 0 ? (
-            <div className="bg-white p-10 rounded-3xl border border-slate-200 text-center space-y-3">
+          {doctors.length === 0 ? (
+            <div className="col-span-full bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-4 shadow-xs">
+              <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-3xl flex items-center justify-center mx-auto shadow-2xs">
+                <Stethoscope className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-bold font-outfit text-base text-[#022434]">
+                  No Licensed Clinicians Registered Yet
+                </h3>
+                <p className="text-xs text-slate-500 font-nunito max-w-sm mx-auto leading-relaxed">
+                  The clinical roster is currently fresh. Add a licensed physician to make them immediately available for patient tele-consultations.
+                </p>
+              </div>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsAddDoctorModalOpen(true)}
+                  className="px-5 py-2.5 bg-[#006c44] hover:bg-[#022434] text-white text-xs font-bold rounded-xl font-outfit cursor-pointer shadow-sm transition-all inline-flex items-center space-x-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Create Doctor Profile</span>
+                </button>
+              </div>
+            </div>
+          ) : filteredDoctors.length === 0 ? (
+            <div className="col-span-full bg-white p-10 rounded-3xl border border-slate-200 text-center space-y-3">
               <ShieldCheck className="w-12 h-12 text-slate-300 mx-auto" />
               <h3 className="font-bold font-outfit text-base text-[#022434]">
                 No Clinicians Match Filter
@@ -735,6 +781,14 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
           </div>
         </div>
       )}
+      {/* Add Doctor Modal */}
+      <AddDoctorModal
+        isOpen={isAddDoctorModalOpen}
+        onClose={() => setIsAddDoctorModalOpen(false)}
+        onDoctorAdded={(newDoc) => {
+          setDoctors((prev) => [newDoc, ...prev]);
+        }}
+      />
     </div>
   );
 };

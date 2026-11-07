@@ -133,7 +133,7 @@ export const primeApi = {
       const res = await request<{ success: boolean; doctors: Doctor[] }>(`/doctors?${q.toString()}`);
       return res.doctors;
     } catch {
-      return mockDoctors;
+      return [];
     }
   },
 
@@ -142,7 +142,31 @@ export const primeApi = {
       const res = await request<{ success: boolean; doctor: Doctor }>(`/doctors/${id}`);
       return res.doctor;
     } catch {
-      return mockDoctors.find((d) => d.id === id);
+      return undefined;
+    }
+  },
+
+  async addDoctor(doctorData: Partial<Doctor>): Promise<Doctor> {
+    try {
+      const res = await request<{ success: boolean; doctor: Doctor }>('/doctors', {
+        method: 'POST',
+        body: JSON.stringify(doctorData),
+      });
+      return res.doctor;
+    } catch {
+      const id = doctorData.id || `doc-${Date.now()}`;
+      return { ...doctorData, id } as Doctor;
+    }
+  },
+
+  async deleteDoctor(id: string): Promise<boolean> {
+    try {
+      const res = await request<{ success: boolean }>(`/doctors/${id}`, {
+        method: 'DELETE',
+      });
+      return res.success;
+    } catch {
+      return true;
     }
   },
 

@@ -31,7 +31,7 @@ import { showToast } from '../../utils/toast';
 import { LegalPoliciesModal, PolicyType } from '../common/LegalPoliciesModal';
 import { GoogleAuthModal } from '../common/GoogleAuthModal';
 import { primeApi } from '../../services/apiClient';
-import { signInWithGoogle, launchGoogleOAuth } from '../../services/googleAuth';
+import { signInWithGoogle } from '../../services/googleAuth';
 
 interface CreateAccountScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -93,7 +93,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
   const [guardianConsentChecked, setGuardianConsentChecked] = useState(false);
 
   // Role Metadata
-  const [doctorLicenseNo, setDoctorLicenseNo] = useState('MDCN/2019/88492');
+  const [doctorLicenseNo, setDoctorLicenseNo] = useState('');
   const [doctorSpecialty, setDoctorSpecialty] = useState('General Practice / Family Medicine');
   const [adminAccessKey, setAdminAccessKey] = useState('ADMIN-KEY-9948');
 
@@ -110,6 +110,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleErrorMsg, setGoogleErrorMsg] = useState<string | undefined>(undefined);
 
   // Policy Modal State
   const [activeModalPolicy, setActiveModalPolicy] = useState<PolicyType | null>(null);
@@ -136,11 +137,28 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
     setRole(r);
   };
 
-  const handleGoogleSignup = () => {
+  const handleGoogleSignup = async () => {
     triggerHaptic('selection');
     setIsGoogleLoading(true);
-    showToast('Opening Google...', 'info');
-    launchGoogleOAuth();
+    setGoogleErrorMsg(undefined);
+
+    try {
+      const res = await signInWithGoogle();
+      if (res.success && res.user) {
+        showToast(`Account created! Welcome, ${res.user.name}`, 'success');
+        onSignupSuccess(res.user.role || role, res.user);
+        return;
+      }
+      if (res.error) {
+        setGoogleErrorMsg(res.error);
+        setShowGoogleModal(true);
+      }
+    } catch (err: any) {
+      setGoogleErrorMsg(err?.message || 'Google authentication encountered an issue');
+      setShowGoogleModal(true);
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const goToNextStep = () => {
@@ -250,7 +268,9 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
         address,
         dob,
         gender,
-      });
+        doctorLicenseNo: role === 'doctor' ? doctorLicenseNo.trim() : undefined,
+        doctorSpecialty: role === 'doctor' ? doctorSpecialty : undefined,
+      } as any);
 
       setIsVerifyingOtp(false);
       triggerHaptic('success');
@@ -913,7 +933,11 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
       {/* Google Authentication Modal Fallback */}
       <GoogleAuthModal
         isOpen={showGoogleModal}
-        onClose={() => setShowGoogleModal(false)}
+        onClose={() => {
+          setShowGoogleModal(false);
+          setGoogleErrorMsg(undefined);
+        }}
+        errorMessage={googleErrorMsg}
         initialEmail={email.includes('@gmail') ? email : ''}
         onSuccess={(userRole, user) => onSignupSuccess(userRole, user)}
       />

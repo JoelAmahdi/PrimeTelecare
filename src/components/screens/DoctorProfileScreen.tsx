@@ -35,6 +35,22 @@ interface DoctorProfileScreenProps {
   onSaveBookingSummary?: (summary: BookingSummary) => void;
 }
 
+const defaultDoctorPlaceholder: Doctor = {
+  id: 'doc-fallback',
+  name: 'Attending Physician',
+  title: 'Consultant Medical Specialist',
+  fullNameWithTitle: 'Consultant Physician',
+  specialty: 'General Tele-Medicine',
+  rating: 4.9,
+  reviewsCount: 12,
+  experience: '8+ yrs',
+  prices: { video: 10000, chat: 5000 },
+  avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=300&q=80',
+  isOnline: true,
+  about: 'Licensed tele-consultant providing comprehensive clinical care on Prime Telecare.',
+  nextSlot: 'Today, 10:30 AM',
+};
+
 export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
   doctorId,
   onNavigate,
@@ -42,7 +58,7 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
   onSaveBookingSummary,
 }) => {
   const currentDoctor: Doctor =
-    mockDoctors.find((d) => d.id === doctorId) || mockDoctors[0]; // Default to Dr. Anya Sharma
+    mockDoctors.find((d) => d.id === doctorId) || mockDoctors[0] || defaultDoctorPlaceholder;
 
   const [isLiked, setIsLiked] = useState(false);
   const [selectedDate, setSelectedDate] = useState('Today, Oct 24');
