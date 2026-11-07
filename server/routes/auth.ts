@@ -71,6 +71,86 @@ authRouter.post('/login', (req: Request, res: Response) => {
   });
 });
 
+// POST /api/auth/google
+authRouter.post('/google', (req: Request, res: Response) => {
+  const { email, name, avatarUrl, googleUid, role } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ success: false, error: 'Email is required for Google login' });
+  }
+
+  // Check if user already exists
+  const existing = store.getUserByEmail(email);
+  if (existing) {
+    const updated: User = {
+      ...existing,
+      name: existing.name || name || email.split('@')[0],
+      avatarUrl: avatarUrl || existing.avatarUrl,
+    };
+    store.saveUser(updated);
+    return res.json({
+      success: true,
+      token: `jwt-${existing.id}-${Date.now()}`,
+      user: updated,
+    });
+  }
+
+  // Auto-provision new account with Google profile info
+  const id = `user-${Date.now()}`;
+  const displayName = name || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+  const newUser: User = {
+    id,
+    name: displayName,
+    email: email.toLowerCase().trim(),
+    role: (role as UserRole) || 'patient',
+    avatarUrl: avatarUrl || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
+    phone: '+234 800 000 0000',
+    walletBalance: 10000,
+    stateOfResidence: 'Lagos State',
+    lga: 'Ikeja',
+    address: '',
+    dob: '',
+    gender: 'Other',
+    allergies: [],
+    bloodGroup: 'O+',
+    emergencyContact: {
+      name: 'Next of Kin',
+      relationship: 'Family',
+      phone: '+234 800 111 2222',
+    },
+    ndpaConsent: {
+      acceptedAt: new Date().toISOString(),
+      telehealthConsentGiven: true,
+      ipAddress: req.ip,
+    },
+    communicationPreferences: {
+      smsAlerts: true,
+      emailSummaries: true,
+      whatsappPrescriptions: true,
+      promotionalHealthTips: false,
+    },
+  };
+
+  store.saveUser(newUser);
+
+  store.createAuditLog({
+    accessedBy: newUser.name,
+    accessorRole: 'System Administrator',
+    recordAccessed: `User Profile (#${newUser.id})`,
+    accessReason: 'Google OAuth registration and patient provisioning',
+    actionType: 'Created',
+    ipAddress: req.ip,
+    accessLocation: 'Google OAuth Portal',
+  });
+
+  return res.status(201).json({
+    success: true,
+    message: 'Google login successful',
+    token: `jwt-${newUser.id}-${Date.now()}`,
+    user: newUser,
+  });
+});
+
 // POST /api/auth/register
 authRouter.post('/register', (req: Request, res: Response) => {
   const { name, email, role, phone, stateOfResidence, lga, allergies, bloodGroup, emergencyContact, dob, gender, address } = req.body;

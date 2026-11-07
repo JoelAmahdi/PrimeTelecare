@@ -85,6 +85,31 @@ export const primeApi = {
     }
   },
 
+  async googleAuth(payload: {
+    email: string;
+    name?: string;
+    avatarUrl?: string;
+    googleUid?: string;
+    role?: string;
+  }): Promise<{ user: User; token: string }> {
+    try {
+      const res = await request<{ success: boolean; user: User; token: string }>('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return { user: res.user, token: res.token };
+    } catch {
+      const fallbackUser: User = {
+        ...currentUserPatient,
+        id: `user-${Date.now()}`,
+        name: payload.name || payload.email.split('@')[0],
+        email: payload.email,
+        avatarUrl: payload.avatarUrl || currentUserPatient.avatarUrl,
+      };
+      return { user: fallbackUser, token: 'offline-google-token' };
+    }
+  },
+
   async updateProfile(updates: Partial<User> & { id: string }): Promise<User> {
     try {
       const res = await request<{ success: boolean; user: User }>('/auth/profile', {
