@@ -36,9 +36,10 @@ dependentsRouter.post('/', (req: Request, res: Response) => {
     avatarUrl: `https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=150`,
   });
 
+  const userObj = store.getUserById(userId);
   store.createAuditLog({
-    accessedBy: 'Ada Okonkwo',
-    accessorRole: 'System Administrator',
+    accessedBy: userObj?.name || 'Primary Account Holder',
+    accessorRole: 'Patient / Guardian',
     recordAccessed: `Family Dependent Profile (${created.name} - ${created.relationship})`,
     accessReason: 'New family member enrolled under primary patient account with guardian consent',
     actionType: 'Updated',

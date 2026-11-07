@@ -34,13 +34,13 @@ interface DependentSwitcherProps {
 
 export const DependentSwitcher: React.FC<DependentSwitcherProps> = ({ user, compact = false }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [dependents, setDependents] = useState<DependentProfile[]>(() => getStoredDependents());
+  const [dependents, setDependents] = useState<DependentProfile[]>(() => getStoredDependents(user?.id));
   const [activeProfile, setActiveProfile] = useState<ActiveProfileInfo>(() => getActiveProfileInfo(user));
   const [editingDependent, setEditingDependent] = useState<DependentProfile | null | 'new'>(null);
 
   useEffect(() => {
     const handleUpdate = () => {
-      setDependents(getStoredDependents());
+      setDependents(getStoredDependents(user?.id));
       setActiveProfile(getActiveProfileInfo(user));
     };
 
@@ -55,7 +55,7 @@ export const DependentSwitcher: React.FC<DependentSwitcherProps> = ({ user, comp
 
   const handleSelectProfile = (id: string | null) => {
     triggerHaptic('selection');
-    setActiveDependentId(id);
+    setActiveDependentId(id, user?.id);
     setIsOpen(false);
   };
 
@@ -63,7 +63,7 @@ export const DependentSwitcher: React.FC<DependentSwitcherProps> = ({ user, comp
     e.stopPropagation();
     if (window.confirm('Are you sure you want to remove this family member dependent profile?')) {
       triggerHaptic('medium');
-      deleteDependentProfile(depId);
+      deleteDependentProfile(depId, user?.id);
     }
   };
 

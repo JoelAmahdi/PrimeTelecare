@@ -437,23 +437,19 @@ export const primeApi = {
       const res = await request<{ success: boolean; dependents: DependentProfile[] }>(`/dependents?userId=${userId}`);
       return res.dependents;
     } catch {
-      return getStoredDependents();
+      return getStoredDependents(userId);
     }
   },
 
-  async addDependent(dep: Partial<DependentProfile>): Promise<DependentProfile> {
+  async addDependent(dep: Partial<DependentProfile>, userId?: string): Promise<DependentProfile> {
     try {
       const res = await request<{ success: boolean; dependent: DependentProfile }>('/dependents', {
         method: 'POST',
-        body: JSON.stringify(dep),
+        body: JSON.stringify({ ...dep, userId: userId || 'pat-1' }),
       });
-      const current = getStoredDependents();
-      saveStoredDependents([...current, res.dependent]);
       return res.dependent;
     } catch {
       const newDep = { ...dep, id: `dep-${Date.now()}` } as DependentProfile;
-      const current = getStoredDependents();
-      saveStoredDependents([...current, newDep]);
       return newDep;
     }
   },

@@ -392,12 +392,14 @@ export default function App() {
 
             {currentScreen === 'family-account' && (
               <FamilyAccountScreen
+                user={activeUser}
                 onNavigate={navigateTo}
               />
             )}
 
             {currentScreen === 'book-consultation' && (
               <BookConsultationScreen
+                user={activeUser}
                 selectedDoctorId={selectedDoctorId}
                 onNavigate={navigateTo}
                 onSelectDoctor={setSelectedDoctorId}

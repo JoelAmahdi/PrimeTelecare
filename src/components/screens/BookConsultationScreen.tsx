@@ -31,6 +31,7 @@ interface BookConsultationScreenProps {
   onSelectDoctor: (doctorId: string) => void;
   onSaveBookingSummary?: (summary: BookingSummary) => void;
   role?: UserRole;
+  user?: User;
 }
 
 export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
@@ -39,6 +40,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   onSelectDoctor,
   onSaveBookingSummary,
   role = 'patient',
+  user,
 }) => {
   // Two distinct paths: 'instant' vs 'scheduled'
   const [bookingMode, setBookingMode] = useState<'instant' | 'scheduled'>('instant');
@@ -224,7 +226,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
         {/* COMPACT PATIENT / DEPENDENT SELECTOR */}
         <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-xs text-slate-500 font-medium">Consultation For</span>
-          <DependentSwitcher user={currentUserPatient} compact />
+          <DependentSwitcher user={user || currentUserPatient} compact />
         </div>
 
         {/* 1. TWO DISTINCT PATHS SEGMENTED CONTROL */}
