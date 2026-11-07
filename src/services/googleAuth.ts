@@ -28,6 +28,20 @@ export function isMobileDevice(): boolean {
 }
 
 /**
+ * Directly launches Google's official OAuth Account Picker.
+ * Works for any Google user worldwide across mobile Safari, Chrome, and desktop.
+ */
+export function launchGoogleOAuth(): void {
+  const clientId = '841125042406-0f7ansh4it7lh57cu7fgd2ktt4bgmbp2.apps.googleusercontent.com';
+  const redirectUri = window.location.origin;
+  const scope = encodeURIComponent('email profile openid');
+  const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+    redirectUri
+  )}&response_type=token%20id_token&scope=${scope}&nonce=${Date.now()}&prompt=select_account`;
+  window.location.href = oauthUrl;
+}
+
+/**
  * Checks for a pending redirect result (used after signInWithRedirect on mobile)
  */
 export async function checkGoogleRedirectResult(): Promise<GoogleAuthResult | null> {

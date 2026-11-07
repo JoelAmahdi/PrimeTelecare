@@ -9,7 +9,7 @@ import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
 import { BiometricAuthModal } from '../common/BiometricAuthModal';
 import { GoogleAuthModal } from '../common/GoogleAuthModal';
 import { primeApi } from '../../services/apiClient';
-import { signInWithGoogle } from '../../services/googleAuth';
+import { signInWithGoogle, launchGoogleOAuth } from '../../services/googleAuth';
 
 interface LoginScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -87,35 +87,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
     triggerHaptic('selection');
     setIsGoogleLoading(true);
-
-    // Timeout safety fallback: if popup/redirect hangs for >2.5s on mobile, open Google Modal immediately
-    const safetyTimer = setTimeout(() => {
-      setIsGoogleLoading(false);
-      setShowGoogleModal(true);
-    }, 2500);
-
-    try {
-      const res = await signInWithGoogle();
-      clearTimeout(safetyTimer);
-      if (res.success && res.user) {
-        showToast(`Welcome, ${res.user.name}!`, 'success');
-        onLoginSuccess(res.user.role || 'patient', res.user);
-      } else if (res.success && !res.user) {
-        showToast('Opening Google...', 'info');
-      } else if (res.error) {
-        setIsGoogleLoading(false);
-        setShowGoogleModal(true);
-      }
-    } catch (err: any) {
-      clearTimeout(safetyTimer);
-      setIsGoogleLoading(false);
-      setShowGoogleModal(true);
-    } finally {
-      setIsGoogleLoading(false);
-    }
+    showToast('Opening Google...', 'info');
+    launchGoogleOAuth();
   };
 
   const getPasswordStrength = (pass: string) => {
