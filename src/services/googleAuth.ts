@@ -31,6 +31,59 @@ export function isMobileDevice(): boolean {
  * Checks for a pending redirect result (used after signInWithRedirect on mobile)
  */
 export async function checkGoogleRedirectResult(): Promise<GoogleAuthResult | null> {
+  // First check URL hash for direct OAuth tokens
+  if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+    try {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const accessToken = params.get('access_token');
+      const idToken = params.get('id_token');
+
+      let email = '';
+      let name = '';
+      let picture = '';
+
+      if (idToken) {
+        try {
+          const payloadBase64 = idToken.split('.')[1];
+          const decoded = JSON.parse(atob(payloadBase64));
+          email = decoded.email || '';
+          name = decoded.name || '';
+          picture = decoded.picture || '';
+        } catch {}
+      }
+
+      if (!email && accessToken) {
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (res.ok) {
+          const info = await res.json();
+          email = info.email || '';
+          name = info.name || '';
+          picture = info.picture || '';
+        }
+      }
+
+      if (email) {
+        window.history.replaceState(null, '', window.location.pathname);
+        const apiRes = await primeApi.googleAuth({
+          email,
+          name: name || email.split('@')[0],
+          avatarUrl: picture || undefined,
+          role: 'patient',
+        });
+        return {
+          success: true,
+          user: apiRes.user,
+          token: apiRes.token,
+        };
+      }
+    } catch (err) {
+      console.warn('Direct OAuth hash parsing error:', err);
+    }
+  }
+
   try {
     const result = await getRedirectResult(firebaseAuth);
     if (!result || !result.user || !result.user.email) {

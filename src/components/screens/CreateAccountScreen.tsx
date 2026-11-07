@@ -29,6 +29,7 @@ import { ScreenId, UserRole, User as UserType } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { LegalPoliciesModal, PolicyType } from '../common/LegalPoliciesModal';
+import { GoogleAuthModal } from '../common/GoogleAuthModal';
 import { primeApi } from '../../services/apiClient';
 import { signInWithGoogle } from '../../services/googleAuth';
 
@@ -108,6 +109,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
   const [otpError, setOtpError] = useState<string | null>(null);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
   // Policy Modal State
   const [activeModalPolicy, setActiveModalPolicy] = useState<PolicyType | null>(null);
@@ -135,21 +137,30 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
   };
 
   const handleGoogleSignup = async () => {
+    triggerHaptic('selection');
+    setIsGoogleLoading(true);
+
+    const safetyTimer = setTimeout(() => {
+      setIsGoogleLoading(false);
+      setShowGoogleModal(true);
+    }, 2500);
+
     try {
-      triggerHaptic('selection');
-      setIsGoogleLoading(true);
       const res = await signInWithGoogle();
+      clearTimeout(safetyTimer);
       if (res.success && res.user) {
         showToast(`Account created! Welcome, ${res.user.name}`, 'success');
         onSignupSuccess(res.user.role || role, res.user);
       } else if (res.success && !res.user) {
-        showToast('Redirecting to Google...', 'info');
-        return;
+        showToast('Opening Google...', 'info');
       } else if (res.error) {
-        showToast(res.error, 'error');
+        setIsGoogleLoading(false);
+        setShowGoogleModal(true);
       }
     } catch (err: any) {
-      showToast(err?.message || 'Google sign-up error', 'error');
+      clearTimeout(safetyTimer);
+      setIsGoogleLoading(false);
+      setShowGoogleModal(true);
     } finally {
       setIsGoogleLoading(false);
     }
@@ -921,6 +932,14 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
           onClose={() => setActiveModalPolicy(null)}
         />
       )}
+
+      {/* Google Authentication Modal Fallback */}
+      <GoogleAuthModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        initialEmail={email.includes('@gmail') ? email : ''}
+        onSuccess={(userRole, user) => onSignupSuccess(userRole, user)}
+      />
     </div>
   );
 };

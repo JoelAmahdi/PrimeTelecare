@@ -7,6 +7,7 @@ import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
 import { BiometricAuthModal } from '../common/BiometricAuthModal';
+import { GoogleAuthModal } from '../common/GoogleAuthModal';
 import { primeApi } from '../../services/apiClient';
 import { signInWithGoogle } from '../../services/googleAuth';
 
@@ -25,6 +26,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
   const [lockoutTimer, setLockoutTimer] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -86,21 +88,31 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
   };
 
   const handleGoogleLogin = async () => {
+    triggerHaptic('selection');
+    setIsGoogleLoading(true);
+
+    // Timeout safety fallback: if popup/redirect hangs for >2.5s on mobile, open Google Modal immediately
+    const safetyTimer = setTimeout(() => {
+      setIsGoogleLoading(false);
+      setShowGoogleModal(true);
+    }, 2500);
+
     try {
-      triggerHaptic('selection');
-      setIsGoogleLoading(true);
       const res = await signInWithGoogle();
+      clearTimeout(safetyTimer);
       if (res.success && res.user) {
         showToast(`Welcome, ${res.user.name}!`, 'success');
         onLoginSuccess(res.user.role || 'patient', res.user);
       } else if (res.success && !res.user) {
-        showToast('Redirecting to Google...', 'info');
-        return;
+        showToast('Opening Google...', 'info');
       } else if (res.error) {
-        showToast(res.error, 'error');
+        setIsGoogleLoading(false);
+        setShowGoogleModal(true);
       }
     } catch (err: any) {
-      showToast(err?.message || 'Google sign-in error', 'error');
+      clearTimeout(safetyTimer);
+      setIsGoogleLoading(false);
+      setShowGoogleModal(true);
     } finally {
       setIsGoogleLoading(false);
     }
@@ -376,6 +388,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             onLoginSuccess(detectedRole);
           }
         }}
+      />
+
+      {/* Google Authentication Modal Fallback */}
+      <GoogleAuthModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        initialEmail={email.includes('@gmail') ? email : ''}
+        onSuccess={(userRole, user) => onLoginSuccess(userRole, user)}
       />
     </div>
   );
