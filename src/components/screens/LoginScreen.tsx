@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
 import { Mail, Lock, Eye, EyeOff, Fingerprint, ScanFace, ShieldCheck, CheckCircle2, RefreshCw, X, AlertCircle } from 'lucide-react';
-import { ScreenId, UserRole } from '../../types';
+import { ScreenId, UserRole, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
 import { BiometricAuthModal } from '../common/BiometricAuthModal';
+import { primeApi } from '../../services/apiClient';
 
 interface LoginScreenProps {
   onNavigate: (screen: ScreenId) => void;
-  onLoginSuccess: (role: UserRole) => void;
+  onLoginSuccess: (role: UserRole, user?: User) => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuccess }) => {
@@ -51,7 +52,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
     }
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     triggerHaptic('medium');
 
@@ -60,28 +61,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
       return;
     }
 
-    if (password !== 'Password@123') {
-      const newAttempts = failedAttempts + 1;
-      setFailedAttempts(newAttempts);
-      if (newAttempts >= 3) {
-        setLockoutTimer(30);
-        setErrorMsg('Too many failed attempts. Try again in 30 seconds.');
-      } else {
-        setErrorMsg(`Incorrect password. ${3 - newAttempts} attempts remaining.`);
-      }
+    if (!password || password.length < 4) {
+      setErrorMsg('Please enter your password.');
       triggerHaptic('error');
       return;
     }
 
     setErrorMsg(null);
-    let role: UserRole = 'patient';
+    let detectedRole: UserRole = 'patient';
     if (email.includes('admin')) {
-      role = 'admin';
+      detectedRole = 'admin';
     } else if (email.includes('doctor') || email.includes('dr')) {
-      role = 'doctor';
+      detectedRole = 'doctor';
     }
-    
-    onLoginSuccess(role);
+
+    try {
+      const res = await primeApi.login({ email, role: detectedRole });
+      onLoginSuccess(res.user.role || detectedRole, res.user);
+    } catch {
+      onLoginSuccess(detectedRole);
+    }
   };
 
   const getPasswordStrength = (pass: string) => {
@@ -337,17 +336,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
         isOpen={showBiometricModal}
         biometricType={biometricType}
         title="Sign In with Face ID"
-        subtitle="Confirm your identity to sign into your account"
         onClose={() => setShowBiometricModal(false)}
-        onSuccess={() => {
+        onSuccess={async () => {
           setShowBiometricModal(false);
-          let role: UserRole = 'patient';
+          let detectedRole: UserRole = 'patient';
           if (email.includes('admin')) {
-            role = 'admin';
+            detectedRole = 'admin';
           } else if (email.includes('doctor') || email.includes('dr')) {
-            role = 'doctor';
+            detectedRole = 'doctor';
           }
-          onLoginSuccess(role);
+          try {
+            const res = await primeApi.login({ biometricToken: 'valid-biometric-token' });
+            onLoginSuccess(res.user.role || detectedRole, res.user);
+          } catch {
+            onLoginSuccess(detectedRole);
+          }
         }}
       />
     </div>

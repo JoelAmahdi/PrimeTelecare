@@ -149,7 +149,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                 </h2>
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-[#006c44] border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse mr-1.5" />
-                  Health ID: PRM-9482
+                  Health ID: {user.id ? (user.id.startsWith('user-') ? 'PRM-' + user.id.slice(-4) : user.id.toUpperCase()) : 'PRM-0001'}
                 </span>
               </div>
             </div>

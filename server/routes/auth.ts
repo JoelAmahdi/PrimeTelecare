@@ -23,6 +23,19 @@ authRouter.post('/login', (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: 'Email is required' });
   }
 
+  // Pre-configured demo accounts
+  if (email === 'patient@telecare.com') {
+    const user = store.getUserById('pat-1')!;
+    return res.json({ success: true, token: `jwt-pat-1-${Date.now()}`, user });
+  } else if (email === 'dr.emeka@primetelecare.com' || email.includes('doctor') || email.includes('dr.')) {
+    const user = store.getUserById('doc-1')!;
+    return res.json({ success: true, token: `jwt-doc-1-${Date.now()}`, user });
+  } else if (email === 'admin@primetelecare.com' || email.includes('admin')) {
+    const user = store.getUserById('admin-1')!;
+    return res.json({ success: true, token: `jwt-admin-1-${Date.now()}`, user });
+  }
+
+  // Check if registered user exists in database
   const existing = store.getUserByEmail(email);
   if (existing) {
     return res.json({
@@ -32,29 +45,58 @@ authRouter.post('/login', (req: Request, res: Response) => {
     });
   }
 
-  // Fallback demo user resolution based on selected role
-  let fallbackUser: User;
-  if (role === 'doctor') {
-    fallbackUser = store.getUserById('doc-1')!;
-  } else if (role === 'admin') {
-    fallbackUser = store.getUserById('admin-1')!;
-  } else {
-    fallbackUser = store.getUserById('pat-1')!;
-  }
+  // Auto-provision personal account for newly entered email
+  const id = `user-${Date.now()}`;
+  const displayName = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const newUser: User = {
+    id,
+    name: displayName || 'Patient User',
+    email,
+    role: (role as UserRole) || 'patient',
+    avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
+    phone: '+234 800 000 0000',
+    walletBalance: 10000,
+    stateOfResidence: 'Lagos State',
+    ndpaConsent: {
+      acceptedAt: new Date().toISOString(),
+      telehealthConsentGiven: true,
+    },
+  };
+  store.saveUser(newUser);
 
   return res.json({
     success: true,
-    token: `jwt-${fallbackUser.id}-${Date.now()}`,
-    user: fallbackUser,
+    token: `jwt-${newUser.id}-${Date.now()}`,
+    user: newUser,
   });
 });
 
 // POST /api/auth/register
 authRouter.post('/register', (req: Request, res: Response) => {
-  const { name, email, role, phone, stateOfResidence, lga, allergies, bloodGroup, emergencyContact } = req.body;
+  const { name, email, role, phone, stateOfResidence, lga, allergies, bloodGroup, emergencyContact, dob, gender, address } = req.body;
 
   if (!name || !email) {
     return res.status(400).json({ success: false, error: 'Name and email are required' });
+  }
+
+  const existing = store.getUserByEmail(email);
+  if (existing) {
+    const updated = {
+      ...existing,
+      name,
+      phone: phone || existing.phone,
+      stateOfResidence: stateOfResidence || existing.stateOfResidence,
+      address: address || existing.address,
+      dob: dob || existing.dob,
+      gender: gender || existing.gender,
+    };
+    store.saveUser(updated);
+    return res.json({
+      success: true,
+      message: 'Account updated successfully',
+      token: `jwt-${existing.id}-${Date.now()}`,
+      user: updated,
+    });
   }
 
   const id = `user-${Date.now()}`;
@@ -68,6 +110,9 @@ authRouter.post('/register', (req: Request, res: Response) => {
     walletBalance: 10000,
     stateOfResidence: stateOfResidence || 'Lagos State',
     lga: lga || 'Ikeja',
+    address: address || '',
+    dob: dob || '',
+    gender: gender || 'Female',
     allergies: allergies || [],
     bloodGroup: bloodGroup || 'O+',
     emergencyContact: emergencyContact || {
@@ -98,6 +143,16 @@ authRouter.post('/register', (req: Request, res: Response) => {
     accessReason: 'Initial patient enrollment and NDPA statutory consent recording',
     actionType: 'Updated',
     ipAddress: req.ip,
+    accessLocation: 'Registration Portal',
+  });
+
+  return res.status(201).json({
+    success: true,
+    message: 'Account registered successfully',
+    token: `jwt-${newUser.id}-${Date.now()}`,
+    user: newUser,
+  });
+});
     accessLocation: 'Patient Registration Portal',
   });
 

@@ -54,6 +54,13 @@ export default function App() {
     } catch {}
     return 'patient';
   });
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem('prime_telecare_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('doc-anya');
   const [currentBookingSummary, setCurrentBookingSummary] = useState<BookingSummary | undefined>(undefined);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -153,13 +160,13 @@ export default function App() {
   };
 
   const activeUser: User =
-    role === 'admin'
+    (currentUser && currentUser.role === role ? currentUser : null) ||
+    currentUser ||
+    (role === 'admin'
       ? currentUserAdmin
-      : role === 'doctor'
+      : role === 'doctor' || currentScreen === 'doctor-home' || currentScreen === 'new-prescription'
       ? currentUserDoctor
-      : currentScreen === 'doctor-home' || currentScreen === 'new-prescription'
-      ? currentUserDoctor
-      : currentUserPatient;
+      : currentUserPatient);
 
   // Guard against role/screen mismatch for home dashboards
   useEffect(() => {
@@ -168,8 +175,19 @@ export default function App() {
     }
   }, [role, currentScreen]);
 
-  const handleLoginSuccess = (newRole: UserRole) => {
+  const handleLoginSuccess = (newRole: UserRole, user?: User) => {
     setRole(newRole);
+    try {
+      localStorage.setItem('prime_telecare_role', newRole);
+    } catch {}
+
+    if (user) {
+      setCurrentUser(user);
+      try {
+        localStorage.setItem('prime_telecare_user', JSON.stringify(user));
+      } catch {}
+    }
+
     if (hasAcceptedTerms) {
       if (newRole === 'admin') {
         navigateTo('admin-dashboard');
@@ -201,6 +219,12 @@ export default function App() {
 
   const handleLogoutConfirm = () => {
     setIsLogoutModalOpen(false);
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('prime_telecare_user');
+      localStorage.removeItem('prime_telecare_role');
+      localStorage.removeItem('prime_telecare_terms_accepted');
+    } catch {}
     navigateTo('welcome');
   };
 

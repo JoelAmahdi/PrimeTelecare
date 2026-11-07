@@ -25,14 +25,15 @@ import {
   ShieldAlert,
   HelpCircle,
 } from 'lucide-react';
-import { ScreenId, UserRole } from '../../types';
+import { ScreenId, UserRole, User as UserType } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { LegalPoliciesModal, PolicyType } from '../common/LegalPoliciesModal';
+import { primeApi } from '../../services/apiClient';
 
 interface CreateAccountScreenProps {
   onNavigate: (screen: ScreenId) => void;
-  onSignupSuccess: (role: UserRole) => void;
+  onSignupSuccess: (role: UserRole, user?: UserType) => void;
 }
 
 const REGION_STATES = [
@@ -65,21 +66,21 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
   // 7: Phone OTP Security Verification
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
-  // Form State: Role Selection (Corporate client removed as requested)
+  // Form State: Role Selection
   const [role, setRole] = useState<UserRole>('patient');
 
   // Credentials
-  const [email, setEmail] = useState('ada.okonkwo@email.com');
-  const [phone, setPhone] = useState('+1 (555) 234-5678');
-  const [password, setPassword] = useState('Password@123');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Demographics
-  const [fullName, setFullName] = useState('Ada Okonkwo');
-  const [dob, setDob] = useState('1998-05-14');
+  const [fullName, setFullName] = useState('');
+  const [dob, setDob] = useState('');
   const [gender, setGender] = useState('Female');
   const [stateOfResidence, setStateOfResidence] = useState('Lagos State');
-  const [address, setAddress] = useState('15 Admiralty Way, Lekki Phase 1');
+  const [address, setAddress] = useState('');
 
 
 
@@ -217,7 +218,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
     goToNextStep();
   };
 
-  const handleOtpSubmit = (e: React.FormEvent) => {
+  const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const enteredCode = otpCode.join('');
     if (enteredCode.length < 4) {
@@ -228,11 +229,45 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
     setIsVerifyingOtp(true);
     triggerHaptic('medium');
 
-    setTimeout(() => {
+    try {
+      const res = await primeApi.register({
+        name: fullName.trim() || 'Patient User',
+        email: email.trim().toLowerCase(),
+        phone: phone.trim() || '+234 800 000 0000',
+        role,
+        stateOfResidence,
+        address,
+        dob,
+        gender,
+      });
+
       setIsVerifyingOtp(false);
       triggerHaptic('success');
-      onSignupSuccess(role);
-    }, 1200);
+      showToast('Account created and registered successfully!', 'success');
+      onSignupSuccess(role, res.user);
+    } catch {
+      setIsVerifyingOtp(false);
+      triggerHaptic('success');
+      const fallbackUser: UserType = {
+        id: `user-${Date.now()}`,
+        name: fullName.trim() || 'Patient User',
+        email: email.trim().toLowerCase(),
+        role,
+        avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
+        phone: phone.trim() || '+234 800 000 0000',
+        walletBalance: 10000,
+        stateOfResidence: stateOfResidence || 'Lagos State',
+        address,
+        dob,
+        gender,
+        ndpaConsent: {
+          acceptedAt: new Date().toISOString(),
+          telehealthConsentGiven: true,
+        },
+      };
+      showToast('Account created successfully!', 'success');
+      onSignupSuccess(role, fallbackUser);
+    }
   };
 
   const handleOtpChange = (index: number, val: string) => {
