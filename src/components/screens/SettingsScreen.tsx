@@ -452,20 +452,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
           </button>
 
           <button
-            onClick={() => onNavigate('account-details')}
-            className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-slate-50/70 transition-colors text-left"
-          >
-            <div className="flex items-center space-x-3.5">
-              <ShieldCheck className="w-4 h-4 text-[#006c44]" />
-              <div>
-                <span className="font-semibold font-outfit text-[#022434] text-sm block">NDPA Data Rights & Privacy Controls</span>
-                <span className="text-[11px] text-slate-400 font-nunito">Data access export, consent management & deletion</span>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-slate-300" />
-          </button>
-
-          <button
             onClick={() => {
               triggerHaptic('medium');
               onNavigate('health-records');

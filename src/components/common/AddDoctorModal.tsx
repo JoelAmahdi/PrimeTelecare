@@ -228,3 +228,4 @@ export const AddDoctorModal: React.FC<AddDoctorModalProps> = ({ isOpen, onClose,
     </div>
   );
 };
+

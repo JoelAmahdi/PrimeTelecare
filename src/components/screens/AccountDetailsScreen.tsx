@@ -29,9 +29,8 @@ import {
   Printer,
   SlidersHorizontal,
 } from 'lucide-react';
-import { ScreenId, User, CommunicationPreferences, OptionalConsents } from '../../types';
+import { ScreenId, User, CommunicationPreferences } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
-import { DataSubjectRightsModal } from '../common/DataSubjectRightsModal';
 import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
 import { showToast } from '../../utils/toast';
 
@@ -98,19 +97,10 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
     }
   );
 
-  const [optionalConsents, setOptionalConsents] = useState<OptionalConsents>(
-    user.optionalConsents || {
-      marketingConsent: false,
-      anonymizedResearchConsent: true,
-    }
-  );
-
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
 
   // Modals state
-  const [isDataRightsModalOpen, setIsDataRightsModalOpen] = useState(false);
-  const [dataRightsModalMode, setDataRightsModalMode] = useState<'access' | 'consent' | 'deletion'>('access');
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
 
   const handleSaveProfile = () => {
@@ -706,74 +696,6 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
               </div>
             </div>
 
-            {/* 3. NDPA DATA SUBJECT RIGHTS CARD */}
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-3">
-              <div className="flex items-center space-x-2">
-                <ShieldCheck className="w-5 h-5 text-[#006c44]" />
-                <div>
-                  <h3 className="font-extrabold font-outfit text-sm text-[#022434]">
-                    NDPA 2023 Statutory Data Subject Rights
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-nunito">
-                    Exercise your statutory rights under Nigeria Data Protection Act 2023.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs font-outfit">
-                <button
-                  onClick={() => {
-                    triggerHaptic('medium');
-                    setDataRightsModalMode('access');
-                    setIsDataRightsModalOpen(true);
-                  }}
-                  className="p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 text-left font-bold text-[#022434] flex flex-col justify-between space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span>1. Request Records Access</span>
-                    <Download className="w-4 h-4 text-[#006c44]" />
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-normal">
-                    Download complete data package (JSON/PDF)
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    triggerHaptic('medium');
-                    setDataRightsModalMode('consent');
-                    setIsDataRightsModalOpen(true);
-                  }}
-                  className="p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 text-left font-bold text-[#022434] flex flex-col justify-between space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span>2. Withdraw Optional Consent</span>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-normal">
-                    Manage marketing & research consents
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    triggerHaptic('medium');
-                    setDataRightsModalMode('deletion');
-                    setIsDataRightsModalOpen(true);
-                  }}
-                  className="p-3 bg-slate-50 hover:bg-rose-50 rounded-2xl border border-slate-200 hover:border-rose-200 text-left font-bold text-rose-700 flex flex-col justify-between space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span>3. Request Data Deletion</span>
-                    <Trash2 className="w-4 h-4 text-rose-600" />
-                  </div>
-                  <span className="text-[10px] text-rose-500 font-normal">
-                    Submit erasure request (NDPA Sec 34)
-                  </span>
-                </button>
-              </div>
-            </div>
-
             {/* Security & Payout Setup Card */}
             <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-3">
               <h3 className="font-extrabold font-outfit text-sm text-[#022434]">
@@ -1293,15 +1215,6 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
           </div>
         </div>
       )}
-
-      {/* NDPA Data Subject Rights Modal */}
-      <DataSubjectRightsModal
-        isOpen={isDataRightsModalOpen}
-        user={user}
-        initialMode={dataRightsModalMode}
-        onClose={() => setIsDataRightsModalOpen(false)}
-        onUpdateOptionalConsents={(updated) => setOptionalConsents(updated)}
-      />
 
       {/* Consultation Summary PDF Modal */}
       <ConsultationSummaryPDFModal
