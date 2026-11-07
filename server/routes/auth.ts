@@ -153,15 +153,6 @@ authRouter.post('/register', (req: Request, res: Response) => {
     user: newUser,
   });
 });
-    accessLocation: 'Patient Registration Portal',
-  });
-
-  return res.status(201).json({
-    success: true,
-    token: `jwt-${newUser.id}-${Date.now()}`,
-    user: newUser,
-  });
-});
 
 // GET /api/auth/me
 authRouter.get('/me', (req: Request, res: Response) => {
