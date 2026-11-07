@@ -47,23 +47,26 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
   } catch (error: any) {
     console.error('Google Sign-In Error:', error);
 
+    const codeTag = error?.code ? `(${error.code}) ` : '';
     let message = error?.message || 'Failed to authenticate with Google.';
     if (error.code === 'auth/popup-closed-by-user') {
-      message = 'Sign-in window closed before completion.';
+      message = 'Sign-in popup was closed before completing.';
     } else if (error.code === 'auth/cancelled-popup-request') {
       message = 'Sign-in was cancelled.';
     } else if (error.code === 'auth/unauthorized-domain') {
       const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'your domain';
-      message = `Domain "${currentHost}" is not authorized. Please add "${currentHost}" in Firebase Console > Authentication > Settings > Authorized domains.`;
+      message = `Domain "${currentHost}" is not recognized yet by Firebase. Ensure "${currentHost}" (no https://) is saved under Authorized Domains, or try in Incognito.`;
     } else if (error.code === 'auth/operation-not-allowed') {
       message = 'Google sign-in is not enabled in Firebase Console (Authentication > Sign-in method > Google).';
     } else if (error.code === 'auth/popup-blocked') {
       message = 'Popup blocked by browser. Please allow popups for this site.';
+    } else if (error.code === 'auth/internal-error') {
+      message = 'Firebase internal error. Please check Google Cloud OAuth credentials or test in an Incognito window.';
     }
 
     return {
       success: false,
-      error: message,
+      error: `${codeTag}${message}`,
     };
   }
 }
