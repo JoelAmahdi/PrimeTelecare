@@ -64,7 +64,10 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
   onNavigate,
   initialTab = 'details',
 }) => {
-  const [activeTab, setActiveTab] = useState<'details' | 'withdrawal' | 'history'>(initialTab);
+  const isDoctor = user.role === 'doctor';
+  const [activeTab, setActiveTab] = useState<'details' | 'withdrawal' | 'history'>(
+    isDoctor ? initialTab : 'details'
+  );
 
   // Editable Profile details state
   const [fullName, setFullName] = useState(user.name);
@@ -288,58 +291,93 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
 
       {/* Top Header */}
       <Header
-        title="Account & Withdrawals"
+        title={isDoctor ? "Clinician Earnings & Payouts" : "Account Profile"}
         showBack
         onBack={() => onNavigate('settings')}
       />
 
       <div className="w-full max-w-full min-w-0 space-y-4 mt-2">
-        {/* Wallet & Account Summary Banner */}
-        <div className="bg-gradient-to-br from-[#022434] via-[#1c3a4a] to-[#012f45] text-white rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden border border-slate-700/60">
-          <div className="absolute -top-12 -right-12 w-44 h-44 bg-[#77daa4]/20 rounded-full blur-3xl pointer-events-none" />
+        {/* Account Summary Banner */}
+        {!isDoctor ? (
+          <div className="bg-gradient-to-br from-[#022434] via-[#1c3a4a] to-[#012f45] text-white rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden border border-slate-700/60">
+            <div className="absolute -top-12 -right-12 w-44 h-44 bg-[#77daa4]/20 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 px-3 py-0.5 rounded-full text-[11px] font-bold font-outfit uppercase tracking-wider">
-                  {user.role === 'doctor' ? 'Verified Doctor Account' : 'Patient Account'}
-                </span>
-                <span className="text-xs text-slate-300 font-nunito flex items-center space-x-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>2FA Active</span>
-                </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 px-3 py-0.5 rounded-full text-[11px] font-bold font-outfit uppercase tracking-wider">
+                    Verified Patient Account
+                  </span>
+                  <span className="text-xs text-slate-300 font-nunito flex items-center space-x-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>2FA Protected</span>
+                  </span>
+                </div>
+
+                <div className="pt-1">
+                  <h2 className="text-2xl sm:text-3xl font-extrabold font-outfit text-white tracking-tight">
+                    {user.name}
+                  </h2>
+                  <p className="text-xs text-slate-300 font-nunito mt-0.5">
+                    {user.email} {user.phone ? `• ${user.phone}` : ''}
+                  </p>
+                </div>
               </div>
 
-              <div className="mt-3">
-                <span className="text-xs text-slate-300 font-nunito block uppercase tracking-wider font-semibold">
-                  Available Wallet Balance
-                </span>
-                <h2 className="text-3xl sm:text-4xl font-extrabold font-outfit text-white tracking-tight mt-0.5">
-                  ₦{walletBalance.toLocaleString('en-NG')}
-                </h2>
+              <div className="flex items-center space-x-2 bg-white/10 px-4 py-2.5 rounded-2xl border border-white/10 shrink-0">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <div>
+                  <span className="text-[10px] text-slate-300 uppercase tracking-wider block font-bold font-outfit">Status</span>
+                  <span className="text-xs font-bold text-white font-nunito">Active Telehealth Coverage</span>
+                </div>
               </div>
-            </div>
-
-            <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 border-t sm:border-0 border-white/10 pt-3 sm:pt-0">
-              <button
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setActiveTab('withdrawal');
-                }}
-                className="px-5 py-2.5 bg-[#77daa4] hover:bg-[#006c44] hover:text-white text-[#022434] font-bold font-outfit text-xs rounded-2xl shadow-md transition-all flex items-center space-x-1.5 active:scale-95"
-              >
-                <ArrowUpRight className="w-4 h-4" />
-                <span>Withdraw Funds</span>
-              </button>
-
-              <span className="text-[11px] text-slate-300 font-nunito">
-                Lifetime Withdrawn: ₦{totalWithdrawn.toLocaleString()}
-              </span>
             </div>
           </div>
+        ) : (
+          <div className="bg-gradient-to-br from-[#022434] via-[#1c3a4a] to-[#012f45] text-white rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden border border-slate-700/60">
+            <div className="absolute -top-12 -right-12 w-44 h-44 bg-[#77daa4]/20 rounded-full blur-3xl pointer-events-none" />
 
-          {/* Quick Financial Stats */}
-          {user.role === 'doctor' && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 px-3 py-0.5 rounded-full text-[11px] font-bold font-outfit uppercase tracking-wider">
+                    Verified Doctor Account
+                  </span>
+                  <span className="text-xs text-slate-300 font-nunito flex items-center space-x-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>2FA Active</span>
+                  </span>
+                </div>
+
+                <div className="mt-3">
+                  <span className="text-xs text-slate-300 font-nunito block uppercase tracking-wider font-semibold">
+                    Available Wallet Balance
+                  </span>
+                  <h2 className="text-3xl sm:text-4xl font-extrabold font-outfit text-white tracking-tight mt-0.5">
+                    ₦{walletBalance.toLocaleString('en-NG')}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 border-t sm:border-0 border-white/10 pt-3 sm:pt-0">
+                <button
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setActiveTab('withdrawal');
+                  }}
+                  className="px-5 py-2.5 bg-[#77daa4] hover:bg-[#006c44] hover:text-white text-[#022434] font-bold font-outfit text-xs rounded-2xl shadow-md transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer"
+                >
+                  <ArrowUpRight className="w-4 h-4" />
+                  <span>Withdraw Funds</span>
+                </button>
+
+                <span className="text-[11px] text-slate-300 font-nunito">
+                  Lifetime Withdrawn: ₦{totalWithdrawn.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Financial Stats for Doctor */}
             <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-white/10 text-xs font-nunito">
               <div className="flex items-center justify-between bg-white/5 p-2.5 rounded-2xl border border-white/10">
                 <span className="text-slate-300">Pending Settlement:</span>
@@ -352,11 +390,11 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
                 </span>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Success Alert Banner */}
-        {withdrawalSuccessMsg && (
+        {/* Success Alert Banner (Doctor only) */}
+        {isDoctor && withdrawalSuccessMsg && (
           <div className="bg-emerald-500 text-white p-4 rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn">
             <div className="flex items-center space-x-3">
               <CheckCircle2 className="w-6 h-6 shrink-0" />
@@ -368,53 +406,55 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
           </div>
         )}
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center space-x-1 bg-slate-200/80 p-1.5 rounded-2xl overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => {
-              triggerHaptic('selection');
-              setActiveTab('details');
-            }}
-            className={`flex-1 min-w-[105px] py-2 px-2 rounded-xl text-[11px] sm:text-xs font-bold font-outfit transition-all flex items-center justify-center space-x-1 whitespace-nowrap ${
-              activeTab === 'details'
-                ? 'bg-white text-[#022434] shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <UserIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Details</span>
-          </button>
+        {/* Navigation Tabs - Only for Doctors */}
+        {isDoctor && (
+          <div className="flex items-center space-x-1 bg-slate-200/80 p-1.5 rounded-2xl overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => {
+                triggerHaptic('selection');
+                setActiveTab('details');
+              }}
+              className={`flex-1 min-w-[105px] py-2 px-2 rounded-xl text-[11px] sm:text-xs font-bold font-outfit transition-all flex items-center justify-center space-x-1 whitespace-nowrap cursor-pointer ${
+                activeTab === 'details'
+                  ? 'bg-white text-[#022434] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <UserIcon className="w-3.5 h-3.5 shrink-0" />
+              <span>Details</span>
+            </button>
 
-          <button
-            onClick={() => {
-              triggerHaptic('selection');
-              setActiveTab('withdrawal');
-            }}
-            className={`flex-1 min-w-[115px] py-2 px-2 rounded-xl text-[11px] sm:text-xs font-bold font-outfit transition-all flex items-center justify-center space-x-1 whitespace-nowrap ${
-              activeTab === 'withdrawal'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
-            <span>Withdrawal</span>
-          </button>
+            <button
+              onClick={() => {
+                triggerHaptic('selection');
+                setActiveTab('withdrawal');
+              }}
+              className={`flex-1 min-w-[115px] py-2 px-2 rounded-xl text-[11px] sm:text-xs font-bold font-outfit transition-all flex items-center justify-center space-x-1 whitespace-nowrap cursor-pointer ${
+                activeTab === 'withdrawal'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
+              <span>Withdrawal</span>
+            </button>
 
-          <button
-            onClick={() => {
-              triggerHaptic('selection');
-              setActiveTab('history');
-            }}
-            className={`flex-1 min-w-[115px] py-2 px-2 rounded-xl text-[11px] sm:text-xs font-bold font-outfit transition-all flex items-center justify-center space-x-1 whitespace-nowrap ${
-              activeTab === 'history'
-                ? 'bg-[#1c3a4a] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 shrink-0" />
-            <span>History</span>
-          </button>
-        </div>
+            <button
+              onClick={() => {
+                triggerHaptic('selection');
+                setActiveTab('history');
+              }}
+              className={`flex-1 min-w-[115px] py-2 px-2 rounded-xl text-[11px] sm:text-xs font-bold font-outfit transition-all flex items-center justify-center space-x-1 whitespace-nowrap cursor-pointer ${
+                activeTab === 'history'
+                  ? 'bg-[#1c3a4a] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span>History</span>
+            </button>
+          </div>
+        )}
 
         {/* TAB 1: ACCOUNT DETAILS PROFILE */}
         {activeTab === 'details' && (
@@ -696,10 +736,10 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
               </div>
             </div>
 
-            {/* Security & Payout Setup Card */}
+            {/* Security Settings Card */}
             <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-3">
               <h3 className="font-extrabold font-outfit text-sm text-[#022434]">
-                Account Security & Payout Settings
+                {isDoctor ? 'Account Security & Payout Settings' : 'Account Security Settings'}
               </h3>
 
               <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
@@ -712,7 +752,9 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
                       Two-Factor Authentication (2FA)
                     </span>
                     <span className="text-[11px] text-slate-500 font-nunito">
-                      Required for high-value wallet withdrawals
+                      {isDoctor
+                        ? 'Required for high-value wallet withdrawals'
+                        : 'Enhanced protection for clinical records and prescriptions'}
                     </span>
                   </div>
                 </div>
@@ -730,8 +772,8 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
           </div>
         )}
 
-        {/* TAB 2: DEDICATED WITHDRAWAL PAGE */}
-        {activeTab === 'withdrawal' && (
+        {/* TAB 2: DEDICATED WITHDRAWAL PAGE (Doctor only) */}
+        {isDoctor && activeTab === 'withdrawal' && (
           <div className="w-full max-w-full space-y-4 overflow-hidden">
             {/* Main Withdrawal Card */}
             <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/90 shadow-xs space-y-5 w-full max-w-full overflow-hidden">
@@ -1019,8 +1061,8 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
           </div>
         )}
 
-        {/* TAB 3: WITHDRAWAL HISTORY */}
-        {activeTab === 'history' && (
+        {/* TAB 3: WITHDRAWAL HISTORY (Doctor only) */}
+        {isDoctor && activeTab === 'history' && (
           <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -1088,8 +1130,8 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
         )}
       </div>
 
-      {/* MODAL 1: PIN VERIFICATION MODAL */}
-      {isPinModalOpen && (
+      {/* MODAL 1: PIN VERIFICATION MODAL (Doctor only) */}
+      {isDoctor && isPinModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm border border-slate-200 shadow-2xl space-y-4 text-center">
             <div className="w-12 h-12 bg-emerald-100 text-[#006c44] rounded-2xl flex items-center justify-center mx-auto">
@@ -1135,8 +1177,8 @@ export const AccountDetailsScreen: React.FC<AccountDetailsScreenProps> = ({
         </div>
       )}
 
-      {/* MODAL 2: ADD BANK ACCOUNT MODAL */}
-      {isAddBankModalOpen && (
+      {/* MODAL 2: ADD BANK ACCOUNT MODAL (Doctor only) */}
+      {isDoctor && isAddBankModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md border border-slate-200 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">

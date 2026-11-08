@@ -286,7 +286,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
         role,
         avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
         phone: phone.trim() || '+234 800 000 0000',
-        walletBalance: 10000,
+        walletBalance: role === 'doctor' ? 45000 : 0,
         stateOfResidence: stateOfResidence || 'Lagos State',
         address,
         dob,

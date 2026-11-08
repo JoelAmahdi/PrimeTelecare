@@ -42,7 +42,7 @@ export const ConsultationSummaryPDFModal: React.FC<ConsultationSummaryPDFModalPr
   const [isGenerating, setIsGenerating] = useState(false);
   const [showCopiedToast, setShowCopiedToast] = useState(false);
   const [activeRecord, setActiveRecord] = useState<StructuredClinicalRecord | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'card' | 'transfer'>('wallet');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'transfer'>('card');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Hook into central export permissions & approval state
@@ -126,7 +126,6 @@ High fever exceeding 39.5°C, severe vomiting, shortness of breath, extreme leth
   const doctorName = activeRecord.doctorName || permission.doctorName || 'Dr. Sarah Johnson';
   const doctorLicense = activeRecord.doctorLicense || permission.doctorLicense || 'MDCN/2019/88492';
   const doctorSpecialty = activeRecord.doctorSpecialty || 'Pediatrician & Family Health Specialist';
-  const walletBalance = user.walletBalance ?? 25000;
 
   // Lifecycle check:
   // 1. Awaiting Doctor's Approval: status !== 'granted'
@@ -474,32 +473,8 @@ ${activeRecord.warningSigns || 'N/A'}
               <span className="text-xs font-bold text-slate-700 font-outfit block">
                 Select Payment Method:
               </span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {/* Method 1: Health Wallet */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('wallet')}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                    paymentMethod === 'wallet'
-                      ? 'border-[#006c44] bg-emerald-50/60 ring-2 ring-[#006c44]'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <Wallet className="w-4 h-4 text-[#006c44]" />
-                    {paymentMethod === 'wallet' && (
-                      <Check className="w-3.5 h-3.5 text-[#006c44]" />
-                    )}
-                  </div>
-                  <div className="mt-2">
-                    <strong className="text-xs font-bold text-slate-800 block">Health Wallet</strong>
-                    <span className="text-[11px] text-slate-500">
-                      Balance: ₦{walletBalance.toLocaleString()}
-                    </span>
-                  </div>
-                </button>
-
-                {/* Method 2: Debit Card */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Method 1: Debit Card */}
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('card')}
@@ -521,7 +496,7 @@ ${activeRecord.warningSigns || 'N/A'}
                   </div>
                 </button>
 
-                {/* Method 3: Bank Transfer */}
+                {/* Method 2: Bank Transfer */}
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('transfer')}

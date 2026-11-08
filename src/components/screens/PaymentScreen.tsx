@@ -9,7 +9,6 @@ import {
   Lock,
   CreditCard,
   Building2,
-  Wallet,
   CheckCircle2,
   ShieldCheck,
   Clock,
@@ -50,7 +49,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
   bookingSummary,
   onNavigate,
 }) => {
-  const [method, setMethod] = useState<'card' | 'bank' | 'wallet'>('card');
+  const [method, setMethod] = useState<'card' | 'bank'>('card');
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
@@ -83,7 +82,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
   const timeZone = bookingSummary?.timeZone || 'WAT (GMT+1)';
   const cleanTimeZone = timeZone.split('•')[0].replace('West Africa Time', '').replace('(', '').replace(')', '').trim() || 'WAT';
 
-  const handleMethodSelect = (m: 'card' | 'bank' | 'wallet') => {
+  const handleMethodSelect = (m: 'card' | 'bank') => {
     triggerHaptic('selection');
     setMethod(m);
     setPaymentError(null);
@@ -179,7 +178,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
     platformFee: platformCharge,
     vatFee: vatTaxFee,
     totalFee: totalAmount,
-    paymentMethod: method === 'card' ? 'Debit/Credit Card (Visa/Mastercard)' : method === 'bank' ? 'Instant Bank Transfer' : 'Prime Telecare Wallet',
+    paymentMethod: method === 'card' ? 'Debit/Credit Card (Visa/Mastercard)' : 'Instant Bank Transfer',
     paymentReference: 'PAY-PRIME-948201',
     paymentStatus: paymentStatus === 'Paid' ? ('Paid' as const) : paymentStatus === 'Failed' ? ('Failed' as const) : ('Pending' as const),
   };
@@ -251,7 +250,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
                 Select Payment Channel
               </h3>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {/* Card */}
                 <button
                   type="button"
@@ -262,9 +261,9 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
                       : 'bg-white border-slate-200/80 hover:border-slate-300'
                   }`}
                 >
-                  <span className="font-semibold text-xs text-[#0f172a] block">Card</span>
+                  <span className="font-semibold text-xs text-[#0f172a] block">Debit / Credit Card</span>
                   <div className="flex items-center justify-between text-slate-500">
-                    <span className="text-[11px]">Debit/Credit</span>
+                    <span className="text-[11px]">Visa, Mastercard, Verve</span>
                     <CreditCard className="w-4 h-4 text-[#006c44]" />
                   </div>
                 </button>
@@ -279,29 +278,10 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
                       : 'bg-white border-slate-200/80 hover:border-slate-300'
                   }`}
                 >
-                  <span className="font-semibold text-xs text-[#0f172a] block">Transfer</span>
+                  <span className="font-semibold text-xs text-[#0f172a] block">Bank Transfer</span>
                   <div className="flex items-center justify-between text-slate-500">
-                    <span className="text-[11px]">Virtual NUBAN</span>
+                    <span className="text-[11px]">Instant Virtual NUBAN</span>
                     <Building2 className="w-4 h-4 text-blue-600" />
-                  </div>
-                </button>
-
-                {/* Wallet */}
-                <button
-                  type="button"
-                  onClick={() => handleMethodSelect('wallet')}
-                  className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between h-24 transition-all cursor-pointer ${
-                    method === 'wallet'
-                      ? 'bg-emerald-50/50 border-[#006c44] ring-2 ring-[#006c44]/15 shadow-xs'
-                      : 'bg-white border-slate-200/80 hover:border-slate-300'
-                  }`}
-                >
-                  <span className="font-semibold text-xs text-[#0f172a] block">Wallet</span>
-                  <div className="flex items-center justify-between text-slate-500">
-                    <span className="text-[11px] font-mono font-medium text-emerald-700">
-                      ₦{(user.walletBalance || 25000).toLocaleString()}
-                    </span>
-                    <Wallet className="w-4 h-4 text-[#006c44]" />
                   </div>
                 </button>
               </div>
@@ -400,16 +380,6 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Wallet Details */}
-            {method === 'wallet' && (
-              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 text-center space-y-2 shadow-xs">
-                <h4 className="font-bold text-[#0f172a] font-outfit text-sm">Pay with Prime Wallet</h4>
-                <p className="text-xs text-slate-500">
-                  Your wallet balance of <strong className="text-[#0f172a]">₦{(user.walletBalance || 25000).toLocaleString()}</strong> will be debited <strong className="text-[#0f172a]">₦{totalAmount.toLocaleString()}</strong>.
-                </p>
               </div>
             )}
 

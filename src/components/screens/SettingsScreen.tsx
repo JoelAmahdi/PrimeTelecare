@@ -468,19 +468,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
             <ChevronRight className="w-4 h-4 text-[#006c44]" />
           </button>
 
-          <button
-            onClick={() => onNavigate('withdrawal')}
-            className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-emerald-50/50 transition-colors text-left"
-          >
-            <div className="flex items-center space-x-3.5">
-              <CreditCard className="w-4 h-4 text-emerald-600" />
-              <div>
-                <span className="font-semibold font-outfit text-[#022434] text-sm block">Withdrawal Page & Payouts</span>
-                <span className="text-[11px] text-emerald-600 font-bold font-nunito">Transfer wallet earnings to bank</span>
+          {role === 'doctor' && (
+            <button
+              onClick={() => onNavigate('withdrawal')}
+              className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-emerald-50/50 transition-colors text-left"
+            >
+              <div className="flex items-center space-x-3.5">
+                <CreditCard className="w-4 h-4 text-emerald-600" />
+                <div>
+                  <span className="font-semibold font-outfit text-[#022434] text-sm block">Withdrawal Page & Payouts</span>
+                  <span className="text-[11px] text-emerald-600 font-bold font-nunito">Transfer wallet earnings to bank</span>
+                </div>
               </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-emerald-600" />
-          </button>
+              <ChevronRight className="w-4 h-4 text-emerald-600" />
+            </button>
+          )}
 
           <button
             onClick={() => onNavigate('book-consultation')}

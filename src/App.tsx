@@ -153,6 +153,10 @@ export default function App() {
     }
 
     // Role synchronization when navigating explicitly to dedicated clinical or administrative screens:
+    if (targetScreen === 'withdrawal' && role !== 'doctor') {
+      targetScreen = 'account-details';
+    }
+
     if (targetScreen === 'doctor-home' || targetScreen === 'new-prescription') {
       if (role !== 'admin' && role !== 'doctor') {
         setRole('doctor');
@@ -509,7 +513,7 @@ export default function App() {
               <AccountDetailsScreen
                 user={activeUser}
                 onNavigate={navigateTo}
-                initialTab="withdrawal"
+                initialTab={role === 'doctor' ? 'withdrawal' : 'details'}
               />
             )}
 
