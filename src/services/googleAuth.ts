@@ -127,17 +127,8 @@ export async function checkGoogleRedirectResult(): Promise<GoogleAuthResult | nu
  * and registers/authenticates the user in the Prime Telecare backend database.
  */
 export async function signInWithGoogle(): Promise<GoogleAuthResult> {
-  // On iOS Safari / mobile, popups often fail due to WebKit cross-origin ITP restrictions.
-  // Use redirect for mobile devices:
-  if (isMobileDevice()) {
-    try {
-      await signInWithRedirect(firebaseAuth, googleProvider);
-      return { success: true }; // Page is redirecting
-    } catch (e: any) {
-      console.warn('Redirect sign-in error, falling back to popup:', e);
-    }
-  }
-
+  // Attempt popup first for both desktop and modern mobile devices.
+  // This keeps the SPA state alive and prevents cross-origin session drops on Safari.
   try {
     const result = await signInWithPopup(firebaseAuth, googleProvider);
     const fbUser = result.user;
@@ -161,6 +152,17 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
       token: apiRes.token,
     };
   } catch (error: any) {
+    // If popup was blocked by browser, fall back to redirect
+    if ((error?.code === 'auth/popup-blocked' || error?.code === 'auth/cancelled-popup-request') && isMobileDevice()) {
+      try {
+        localStorage.setItem('prime_pending_google_redirect', 'true');
+        await signInWithRedirect(firebaseAuth, googleProvider);
+        return { success: true };
+      } catch (redirectErr: any) {
+        console.warn('Redirect sign-in error:', redirectErr);
+      }
+    }
+
     console.error('Google Sign-In Error:', error);
 
     const codeTag = error?.code ? `(${error.code}) ` : '';

@@ -39,6 +39,9 @@ import { OfflineStatusBar } from './components/common/OfflineStatusBar';
 import { useOfflineStatus } from './utils/useOfflineStatus';
 import { DesktopNavbar } from './components/common/DesktopNavbar';
 import { checkGoogleRedirectResult } from './services/googleAuth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth as firebaseAuth } from './firebase';
+import { primeApi } from './services/apiClient';
 import { showToast } from './utils/toast';
 
 export default function App() {
@@ -121,7 +124,7 @@ export default function App() {
     };
   }, []);
 
-  // Listen for Google OAuth redirect result on mobile browsers
+  // Listen for Google OAuth redirect result and active Firebase session
   useEffect(() => {
     checkGoogleRedirectResult().then((res) => {
       if (res && res.success && res.user) {
@@ -136,6 +139,39 @@ export default function App() {
         showToast(`Welcome back, ${res.user.name}!`, 'success');
       }
     });
+
+    // Listen for Firebase Auth state changes (crucial for mobile Safari redirects)
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (fbUser) => {
+      if (fbUser && fbUser.email) {
+        const storedUser = localStorage.getItem('prime_telecare_user');
+        if (!storedUser) {
+          try {
+            const apiRes = await primeApi.googleAuth({
+              email: fbUser.email,
+              name: fbUser.displayName || fbUser.email.split('@')[0],
+              avatarUrl: fbUser.photoURL || undefined,
+              googleUid: fbUser.uid,
+              role: 'patient',
+            });
+            if (apiRes.user) {
+              setCurrentUser(apiRes.user);
+              const resolvedRole = apiRes.user.role || 'patient';
+              setRole(resolvedRole);
+              localStorage.setItem('prime_telecare_user', JSON.stringify(apiRes.user));
+              localStorage.setItem('prime_telecare_role', resolvedRole);
+              const homeScreen: ScreenId = resolvedRole === 'doctor' ? 'doctor-home' : resolvedRole === 'admin' ? 'admin-dashboard' : 'patient-home';
+              localStorage.setItem('prime_telecare_screen', homeScreen);
+              setCurrentScreen(homeScreen);
+              showToast(`Welcome, ${apiRes.user.name}!`, 'success');
+            }
+          } catch (err) {
+            console.warn('Auto Google login error on auth state change:', err);
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const navigateTo = (nextScreen: ScreenId) => {
@@ -243,6 +279,7 @@ export default function App() {
   const handleLogoutConfirm = () => {
     setIsLogoutModalOpen(false);
     setCurrentUser(null);
+    signOut(firebaseAuth).catch(() => {});
     try {
       localStorage.removeItem('prime_telecare_user');
       localStorage.removeItem('prime_telecare_role');
