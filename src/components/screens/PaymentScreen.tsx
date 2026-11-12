@@ -137,6 +137,21 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       price: details.amount,
     }).catch(() => {});
 
+    // Credit doctor's account balance with consultation earnings
+    try {
+      const activeUserStr = localStorage.getItem('prime_telecare_user');
+      if (activeUserStr) {
+        const parsed = JSON.parse(activeUserStr);
+        if (parsed.role === 'doctor') {
+          parsed.walletBalance = (parsed.walletBalance || 0) + details.amount;
+          localStorage.setItem('prime_telecare_user', JSON.stringify(parsed));
+        }
+      }
+      currentUserDoctor.walletBalance = (currentUserDoctor.walletBalance || 0) + details.amount;
+      const prevEarnings = Number(localStorage.getItem('prime_telecare_doctor_earnings') || '0');
+      localStorage.setItem('prime_telecare_doctor_earnings', (prevEarnings + details.amount).toString());
+    } catch {}
+
     if (autoSyncCalendar && isGoogleCalendarConnected()) {
       addConsultationToGoogleCalendar({
         doctorName: doctor.fullNameWithTitle || doctor.name,

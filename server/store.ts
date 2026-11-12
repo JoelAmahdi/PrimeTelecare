@@ -398,6 +398,13 @@ class MemoryStore {
         user.walletBalance = (user.walletBalance || 0) + payment.amount;
         this.saveUser(user);
       }
+    } else if (payment.purpose === 'consultation' && payment.status === 'successful') {
+      // Credit doctor's wallet with consultation earnings
+      const doc = this.getUserById('doc-1') || this.getUserById(payment.userId);
+      if (doc) {
+        doc.walletBalance = (doc.walletBalance || 0) + payment.amount;
+        this.saveUser(doc);
+      }
     } else if (payment.method === 'wallet' && payment.status === 'successful') {
       const user = this.getUserById(payment.userId);
       if (user && (user.walletBalance || 0) >= payment.amount) {

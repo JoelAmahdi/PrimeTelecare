@@ -274,7 +274,25 @@ export interface Prescription {
   consultationTime?: string;
   consultationDuration?: string;
   diagnosis?: string;
+  followUpTime?: string; // e.g. "3 Days", "1 Week", "2 Weeks", or custom date
+  labTestsToPerform?: string[]; // Recommended lab investigations to do
+  carePlanSummary?: string; // Personalized recovery guidance
   versionHistory?: PrescriptionChangeRecord[];
+}
+
+export interface PatientComplaint {
+  id: string;
+  patientName: string;
+  patientEmail: string;
+  doctorName?: string;
+  consultationId?: string;
+  category: 'clinical' | 'technical' | 'billing' | 'conduct';
+  subject: string;
+  description: string;
+  createdAt: string;
+  status: 'pending' | 'in_review' | 'resolved' | 'dismissed';
+  resolutionNotes?: string;
+  severity: 'low' | 'medium' | 'high';
 }
 
 export type MessageStatus = 'sent' | 'delivered' | 'read';

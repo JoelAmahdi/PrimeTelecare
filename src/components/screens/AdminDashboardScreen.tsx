@@ -38,8 +38,11 @@ import {
   Filter,
   CheckSquare,
   Award,
+  LifeBuoy,
+  HelpCircle,
+  Send,
 } from 'lucide-react';
-import { ScreenId, UserRole, User } from '../../types';
+import { ScreenId, UserRole, User, PatientComplaint } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { StatusBar } from '../common/StatusBar';
 import { primeApi } from '../../services/apiClient';
@@ -97,12 +100,59 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   onNavigate,
   onSetRolePreview,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'complaints' | 'settings'>('overview');
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Complaints & Grievances State
+  const [complaintsList, setComplaintsList] = useState<PatientComplaint[]>([
+    {
+      id: 'cmp-101',
+      patientName: 'Ada Okonkwo',
+      patientEmail: 'ada.o@example.com',
+      doctorName: 'Dr. Anya Sharma',
+      consultationId: 'CNS-2026-9482',
+      category: 'technical',
+      subject: 'Video Connection Dropped in Minute 18',
+      description: 'The video feed froze for 4 minutes during our pediatric consultation. Requesting review or grace minutes.',
+      createdAt: '2 hours ago',
+      status: 'pending',
+      severity: 'medium',
+    },
+    {
+      id: 'cmp-102',
+      patientName: 'Emeka Eze',
+      patientEmail: 'emeka.eze@example.com',
+      doctorName: 'Dr. Kenji Tanaka',
+      consultationId: 'CNS-2026-8812',
+      category: 'clinical',
+      subject: 'Prescription Dosage Clarification Needed',
+      description: 'The prescribed Amoxicillin dosage says 500mg TDS, but pharmacy required clarification on pediatric suspension equivalence.',
+      createdAt: 'Yesterday',
+      status: 'in_review',
+      severity: 'high',
+    },
+    {
+      id: 'cmp-103',
+      patientName: 'Fatima Bello',
+      patientEmail: 'fatima.b@example.com',
+      doctorName: 'Dr. Sarah Johnson',
+      consultationId: 'CNS-2026-7731',
+      category: 'billing',
+      subject: 'Double Deduction on Card Gateway',
+      description: 'My card was debited twice during checkout for appointment scheduling. Bank transaction reference: TR-884920.',
+      createdAt: '2 days ago',
+      status: 'resolved',
+      severity: 'high',
+      resolutionNotes: 'Refund of ₦10,000 processed via Paystack. Patient notified via SMS.',
+    },
+  ]);
+  const [complaintFilter, setComplaintFilter] = useState<'all' | 'pending' | 'in_review' | 'resolved'>('all');
+  const [selectedComplaint, setSelectedComplaint] = useState<PatientComplaint | null>(null);
+  const [resolutionInput, setResolutionInput] = useState('');
 
   // Modal states
   const [selectedLiveSession, setSelectedLiveSession] = useState<LiveSession | null>(null);
@@ -363,6 +413,28 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     showToast('Live consultation concluded by platform supervisor');
   };
 
+  const pendingComplaintsCount = complaintsList.filter((c) => c.status === 'pending' || c.status === 'in_review').length;
+
+  const handleResolveComplaint = (id: string, notes?: string) => {
+    triggerHaptic('success');
+    setComplaintsList((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, status: 'resolved', resolutionNotes: notes || 'Complaint resolved by Platform Administrator.' } : c))
+    );
+    setSelectedComplaint(null);
+    setResolutionInput('');
+    showToast('Complaint marked as resolved. Patient notified via SMS & Email!');
+  };
+
+  const handleIssueRefundComplaint = (id: string, patientName: string) => {
+    triggerHaptic('success');
+    setComplaintsList((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, status: 'resolved', resolutionNotes: '100% full consultation fee refunded to patient.' } : c))
+    );
+    setSelectedComplaint(null);
+    setResolutionInput('');
+    showToast(`100% full refund approved and issued for ${patientName}!`);
+  };
+
   const handleInviteDoctor = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail) return;
@@ -383,6 +455,18 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     return matchesSearch && matchesStatus;
   });
 
+  const filteredComplaints = complaintsList.filter((c) => {
+    if (complaintFilter !== 'all' && c.status !== complaintFilter) return false;
+    if (!globalSearch.trim()) return true;
+    const q = globalSearch.toLowerCase();
+    return (
+      c.patientName.toLowerCase().includes(q) ||
+      c.subject.toLowerCase().includes(q) ||
+      c.description.toLowerCase().includes(q) ||
+      (c.doctorName && c.doctorName.toLowerCase().includes(q))
+    );
+  });
+
   const navItems = [
     {
       id: 'overview' as const,
@@ -392,8 +476,15 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     },
     {
+      id: 'complaints' as const,
+      label: 'Grievance & Complaints',
+      icon: LifeBuoy,
+      badge: pendingComplaintsCount > 0 ? `${pendingComplaintsCount} Active` : undefined,
+      badgeColor: 'bg-rose-50 text-rose-800 border-rose-200',
+    },
+    {
       id: 'settings' as const,
-      label: 'Settings & Profile',
+      label: 'Settings & Compliance',
       icon: Sliders,
     },
   ];
@@ -402,6 +493,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     switch (activeTab) {
       case 'overview':
         return 'Dashboard & Live Operations';
+      case 'complaints':
+        return 'Patient & Clinician Grievance Handling';
       case 'settings':
         return 'Administrator Profile & Governance';
       default:
@@ -843,6 +936,33 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                     Review Payouts
                   </button>
                 </div>
+
+                {/* Grievances / Complaints Attention Banner */}
+                <div className="p-4 rounded-2xl bg-rose-50/80 border border-rose-200/80 flex items-center justify-between md:col-span-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center text-rose-800 shrink-0">
+                      <LifeBuoy className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold font-outfit text-rose-900">
+                        {pendingComplaintsCount} Patient Grievances & Disputes Awaiting Action
+                      </h4>
+                      <p className="text-[11px] text-rose-800 font-nunito">
+                        Connection drop reviews, dosage queries, and billing refund requests
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setActiveTab('complaints');
+                    }}
+                    className="px-3.5 py-1.5 bg-rose-700 hover:bg-rose-800 text-white text-xs font-semibold font-outfit rounded-xl transition-colors shrink-0 cursor-pointer"
+                  >
+                    Triage Complaints
+                  </button>
+                </div>
               </div>
 
               {/* Dual-Column Operational View */}
@@ -1144,7 +1264,156 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 2: SETTINGS & ADMINISTRATOR PROFILE PAGE                              */}
+          {/* TAB 2: COMPLAINTS & GRIEVANCE RESOLUTION PORTAL                           */}
+          {/* ========================================================================= */}
+          {activeTab === 'complaints' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Header Title & Counters */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold font-outfit text-[#0f172a] flex items-center space-x-2">
+                    <LifeBuoy className="w-5 h-5 text-rose-600" />
+                    <span>Patient & Clinician Complaints Portal</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 font-nunito mt-0.5">
+                    Triage grievances, issue consultation refunds, investigate clinical disputes, and maintain regulatory compliance.
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <span className="px-3 py-1 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl font-outfit">
+                    {pendingComplaintsCount} Active Issues
+                  </span>
+                </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center space-x-2 border-b border-slate-200 pb-2 overflow-x-auto">
+                {[
+                  { id: 'all', label: 'All Tickets', count: complaintsList.length },
+                  { id: 'pending', label: 'Pending Review', count: complaintsList.filter((c) => c.status === 'pending').length },
+                  { id: 'in_review', label: 'In Investigation', count: complaintsList.filter((c) => c.status === 'in_review').length },
+                  { id: 'resolved', label: 'Resolved & Closed', count: complaintsList.filter((c) => c.status === 'resolved').length },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      setComplaintFilter(f.id as any);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold font-outfit transition-all flex items-center space-x-1.5 whitespace-nowrap cursor-pointer ${
+                      complaintFilter === f.id
+                        ? 'bg-[#006c44] text-white shadow-xs'
+                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+                    }`}
+                  >
+                    <span>{f.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                      complaintFilter === f.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {f.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Complaints List */}
+              <div className="space-y-3">
+                {filteredComplaints.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center space-y-2">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                    <h4 className="font-bold font-outfit text-slate-800 text-sm">All Complaints Resolved</h4>
+                    <p className="text-xs text-slate-400 font-nunito">No tickets currently match the selected filter.</p>
+                  </div>
+                ) : (
+                  filteredComplaints.map((c) => (
+                    <div
+                      key={c.id}
+                      className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-3 hover:border-slate-300 transition-all"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+                        <div className="flex items-center space-x-2.5">
+                          <span className={`w-2.5 h-2.5 rounded-full ${
+                            c.severity === 'high' ? 'bg-rose-500' : c.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
+                          }`} />
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-xs font-outfit text-[#0f172a]">{c.patientName}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">({c.patientEmail})</span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 block">
+                              Target Clinician: <strong className="text-slate-600">{c.doctorName || 'General Platform'}</strong> • Session #{c.consultationId}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider font-outfit border ${
+                            c.status === 'resolved'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : c.status === 'in_review'
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}>
+                            {c.status.replace('_', ' ')}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-nunito">{c.createdAt}</span>
+                        </div>
+                      </div>
+
+                      {/* Complaint Details */}
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold font-outfit text-[#0f172a] mb-1">
+                          {c.subject}
+                        </h4>
+                        <p className="text-xs text-slate-600 font-nunito leading-relaxed">
+                          {c.description}
+                        </p>
+                      </div>
+
+                      {/* Resolution Notes (if resolved) */}
+                      {c.resolutionNotes && (
+                        <div className="p-3 bg-emerald-50/70 border border-emerald-200/70 rounded-xl text-xs space-y-0.5">
+                          <span className="font-bold font-outfit text-emerald-950 block text-[11px]">Resolution Recorded:</span>
+                          <p className="text-emerald-800 text-[11px] font-nunito">{c.resolutionNotes}</p>
+                        </div>
+                      )}
+
+                      {/* Administrator Action Bar */}
+                      {c.status !== 'resolved' && (
+                        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold font-outfit text-slate-400">
+                            Category: <span className="uppercase text-slate-600">{c.category}</span>
+                          </span>
+
+                          <div className="flex items-center space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleIssueRefundComplaint(c.id, c.patientName)}
+                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold font-outfit transition-colors cursor-pointer"
+                            >
+                              Issue 100% Refund
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleResolveComplaint(c.id)}
+                              className="px-3 py-1.5 bg-[#006c44] hover:bg-[#005837] text-white rounded-xl text-xs font-bold font-outfit shadow-2xs transition-colors cursor-pointer"
+                            >
+                              Mark Resolved & Notify
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 3: SETTINGS & ADMINISTRATOR PROFILE PAGE                              */}
           {/* ========================================================================= */}
           {activeTab === 'settings' && (
             <div className="space-y-6">

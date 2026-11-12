@@ -17,6 +17,8 @@ import {
   Lock,
   Sparkles,
   Info,
+  TestTube,
+  Calendar,
 } from 'lucide-react';
 import { ScreenId, Prescription, UserRole, Medication, MedicationReminder } from '../../types';
 import { getStoredPrescriptions } from '../../utils/prescriptionStore';
@@ -401,6 +403,50 @@ export const PrescriptionDetailScreen: React.FC<PrescriptionDetailScreenProps> =
               })}
             </div>
 
+            {/* Required Diagnostic Lab Tests to Do */}
+            {currentRx.labTestsToPerform && currentRx.labTestsToPerform.length > 0 && (
+              <div className="bg-purple-50/70 p-4 rounded-2xl border border-purple-200/80 space-y-2">
+                <div className="flex items-center space-x-1.5 text-xs font-extrabold font-outfit text-purple-900">
+                  <TestTube className="w-4 h-4 text-purple-600" />
+                  <span>Required Laboratory Tests & Investigations</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {currentRx.labTestsToPerform.map((test, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 bg-white text-purple-800 rounded-xl text-xs font-bold font-nunito border border-purple-200 shadow-2xs"
+                    >
+                      <span>🔬</span>
+                      <span>{test}</span>
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-purple-700 font-nunito mt-1">
+                  Please complete these diagnostics before your next follow-up consultation and upload results to your health records.
+                </p>
+              </div>
+            )}
+
+            {/* Recommended Follow-up Schedule */}
+            {currentRx.followUpTime && (
+              <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200/80 flex items-center justify-between text-xs">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-[#006c44]" />
+                  <div>
+                    <span className="font-bold text-[#022434] block">Recommended Follow-up Evaluation</span>
+                    <span className="text-[11px] text-slate-600">Re-evaluation scheduled in <strong>{currentRx.followUpTime}</strong></span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('book-consultation')}
+                  className="px-3 py-1.5 bg-[#006c44] text-white rounded-xl font-bold font-outfit text-[11px] shadow-2xs hover:bg-[#022434] transition-colors cursor-pointer"
+                >
+                  Schedule Follow-Up
+                </button>
+              </div>
+            )}
+
             {/* Clinical Instructions / Doctor Notes */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-1">
               <div className="flex items-center space-x-1.5 text-xs font-extrabold font-outfit text-[#022434]">
@@ -408,7 +454,7 @@ export const PrescriptionDetailScreen: React.FC<PrescriptionDetailScreenProps> =
                 <span>Doctor's Directions & Lifestyle Notes</span>
               </div>
               <p className="text-xs text-slate-700 font-nunito leading-relaxed font-medium">
-                {currentRx.doctorNotes}
+                {currentRx.carePlanSummary || currentRx.doctorNotes}
               </p>
             </div>
 

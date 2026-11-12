@@ -24,6 +24,8 @@ import {
   User,
   ShieldAlert,
   HelpCircle,
+  Upload,
+  FileCheck,
 } from 'lucide-react';
 import { ScreenId, UserRole, User as UserType } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
@@ -37,6 +39,16 @@ interface CreateAccountScreenProps {
   onNavigate: (screen: ScreenId) => void;
   onSignupSuccess: (role: UserRole, user?: UserType) => void;
 }
+
+export const DOCTOR_SPECIALTIES = [
+  'General Practice / Family Medicine',
+  'Paediatrics',
+  'Cardiology',
+  'Gastroenterology',
+  'Nephrology',
+  'Pulmonology / Respiratory',
+  'Neurology',
+];
 
 const REGION_STATES = [
   'Lagos State',
@@ -95,6 +107,8 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
   // Role Metadata
   const [doctorLicenseNo, setDoctorLicenseNo] = useState('');
   const [doctorSpecialty, setDoctorSpecialty] = useState('General Practice / Family Medicine');
+  const [doctorLicenseFileName, setDoctorLicenseFileName] = useState<string | null>(null);
+  const [doctorLicenseFileSize, setDoctorLicenseFileSize] = useState<string | null>(null);
   const [adminAccessKey, setAdminAccessKey] = useState('ADMIN-KEY-9948');
 
   // Active Consent Checkboxes (UN-TICKED BY DEFAULT for NDPA compliance)
@@ -235,6 +249,18 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
         return;
       }
     }
+    if (role === 'doctor') {
+      if (!doctorLicenseNo.trim()) {
+        showToast('Please enter your Medical Board / MDCN License number.', 'error');
+        triggerHaptic('error');
+        return;
+      }
+      if (!doctorLicenseFileName) {
+        showToast('Please upload your Medical License document to prove your status as a doctor.', 'error');
+        triggerHaptic('error');
+        return;
+      }
+    }
     goToNextStep();
   };
 
@@ -286,7 +312,9 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
         role,
         avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
         phone: phone.trim() || '+234 800 000 0000',
-        walletBalance: role === 'doctor' ? 45000 : 0,
+        walletBalance: 0,
+        doctorLicenseNo: role === 'doctor' ? doctorLicenseNo.trim() : undefined,
+        doctorSpecialty: role === 'doctor' ? doctorSpecialty : undefined,
         stateOfResidence: stateOfResidence || 'Lagos State',
         address,
         dob,
@@ -681,6 +709,115 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* DOCTOR CREDENTIALS & LICENSURE UPLOAD */}
+            {role === 'doctor' && (
+              <div className="bg-blue-50/70 border-2 border-blue-200 p-5 rounded-2xl space-y-4 shadow-xs">
+                <div className="flex items-center space-x-2 text-[#022434] font-bold font-outfit text-sm">
+                  <Stethoscope className="w-5 h-5 text-blue-700 shrink-0" />
+                  <span>Doctor Verification & Clinical Specialty</span>
+                </div>
+                <p className="text-xs text-slate-600 font-nunito leading-relaxed">
+                  To practice on Prime Telecare, doctors must declare their specialty and upload their active medical practicing license for administrative compliance review.
+                </p>
+
+                {/* Specialty Selection */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold font-outfit text-slate-700 block">
+                    Medical Specialty
+                  </label>
+                  <select
+                    value={doctorSpecialty}
+                    onChange={(e) => setDoctorSpecialty(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-blue-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-[#022434]"
+                  >
+                    {DOCTOR_SPECIALTIES.map((spec) => (
+                      <option key={spec} value={spec}>
+                        {spec}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Medical License Number */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold font-outfit text-slate-700 block">
+                    Medical Board / License Number
+                  </label>
+                  <div className="flex items-center space-x-2 border border-blue-300 rounded-xl p-2.5 bg-white focus-within:ring-2 focus-within:ring-blue-500/20">
+                    <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                    <input
+                      type="text"
+                      value={doctorLicenseNo}
+                      onChange={(e) => setDoctorLicenseNo(e.target.value)}
+                      placeholder="e.g. MDCN/R/12345 or State Medical Board ID"
+                      className="w-full bg-transparent text-xs font-nunito focus:outline-none text-[#022434] font-bold"
+                      required={role === 'doctor'}
+                    />
+                  </div>
+                </div>
+
+                {/* Medical License Document Upload */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-xs font-bold font-outfit text-slate-700 block">
+                    Upload Medical License Certificate (PDF, JPG, PNG)
+                  </label>
+                  
+                  {doctorLicenseFileName ? (
+                    <div className="p-3 bg-white rounded-xl border border-emerald-300 flex items-center justify-between">
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <FileCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold font-outfit text-slate-800 truncate">
+                            {doctorLicenseFileName}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {doctorLicenseFileSize || 'Ready for admin verification'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDoctorLicenseFileName(null);
+                          setDoctorLicenseFileSize(null);
+                        }}
+                        className="text-xs font-bold text-rose-600 hover:text-rose-800 ml-2"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-xl p-4 bg-white/80 hover:bg-white flex flex-col items-center justify-center cursor-pointer transition-all group">
+                      <Upload className="w-6 h-6 text-blue-600 group-hover:scale-110 transition-transform mb-1" />
+                      <span className="text-xs font-bold font-outfit text-[#022434]">
+                        Click to upload practicing license document
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-nunito mt-0.5">
+                        PDF, JPG, or PNG up to 10MB
+                      </span>
+                      <input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setDoctorLicenseFileName(file.name);
+                            setDoctorLicenseFileSize(`${(file.size / (1024 * 1024)).toFixed(2)} MB`);
+                            triggerHaptic('success');
+                            showToast('License certificate attached!', 'success');
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                  <span className="text-[10px] text-slate-500 font-nunito block">
+                    Your license will be held securely and reviewed by Platform Administrators before activation.
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* MINOR GUARDIAN PROTECTION WORKFLOW (If calculated age < 18) */}
             {isMinor && role === 'patient' && (

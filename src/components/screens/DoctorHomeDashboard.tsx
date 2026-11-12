@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check } from 'lucide-react';
 import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
@@ -22,6 +22,35 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
   const { isOffline, lastSyncTime } = useOfflineStatus();
   const effectiveOffline = isOfflineMode ?? isOffline;
   const [selectedPatientForDoc, setSelectedPatientForDoc] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleShareBookingLink = async () => {
+    triggerHaptic('selection');
+    const doctorBookingUrl = `${window.location.origin}/?doctor=${user.id || 'doc-1'}&book=true`;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Book a Consultation with ${user.name}`,
+          text: `Consult with ${user.name} on Prime Telecare. Choose Video, Voice, or Chat for instant or scheduled medical consultations.`,
+          url: doctorBookingUrl,
+        });
+        showToast('Booking link shared successfully!', 'success');
+        return;
+      } catch {
+        // Fallback to clipboard
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(doctorBookingUrl);
+      setCopiedLink(true);
+      showToast('Doctor booking link copied! Share it with patients to book sessions directly.', 'success');
+      setTimeout(() => setCopiedLink(false), 3000);
+    } catch {
+      showToast('Booking URL: ' + doctorBookingUrl, 'info');
+    }
+  };
 
   // Health record export authorization management
   const { permission, grantPermission, revokePermission } = useHealthRecordPermission('app-1');
@@ -203,22 +232,33 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                 <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#77daa4]/15 rounded-full blur-2xl pointer-events-none" />
 
                 <div className="relative z-10 mb-5">
-                  <div className="flex justify-between items-start">
-                    <span className="text-xs font-semibold text-slate-300 font-nunito uppercase tracking-wider">
-                      Today's Consultation Earnings
-                    </span>
-                    <span className="text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2.5 py-0.5 rounded-md">
-                      +18% vs yesterday
-                    </span>
-                  </div>
-                  <div className="flex items-baseline space-x-2 mt-2">
-                    <h3 className="text-3xl sm:text-4xl font-extrabold font-outfit tracking-tight text-white">
-                      ₦45,200
-                    </h3>
-                  </div>
-                  <p className="text-xs text-slate-300 font-nunito mt-1.5">
-                    12 Telehealth Consultations Completed • Direct NUBAN Settled
-                  </p>
+                  {(() => {
+                    const currentDoctorEarnings = (user.walletBalance && user.walletBalance > 0)
+                      ? user.walletBalance
+                      : Number(localStorage.getItem('prime_telecare_doctor_earnings') || '0');
+                    return (
+                      <>
+                        <div className="flex justify-between items-start">
+                          <span className="text-xs font-semibold text-slate-300 font-nunito uppercase tracking-wider">
+                            Consultation Earnings & Balance
+                          </span>
+                          <span className="text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2.5 py-0.5 rounded-md">
+                            {currentDoctorEarnings > 0 ? 'Active Balance' : 'Zero Balance'}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline space-x-2 mt-2">
+                          <h3 className="text-3xl sm:text-4xl font-extrabold font-outfit tracking-tight text-white">
+                            ₦{currentDoctorEarnings.toLocaleString()}
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-300 font-nunito mt-1.5">
+                          {currentDoctorEarnings > 0
+                            ? 'Available balance credited from patient consultation payments'
+                            : 'Starts with ₦0. Balance updates automatically once patients make consultation payments.'}
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="pt-4 border-t border-white/10 relative z-10">
@@ -226,24 +266,23 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                     Clinical Quick Actions
                   </span>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <button
                       onClick={() => {
                         triggerHaptic('selection');
                         onNavigate('active-chat');
                       }}
-                      className="px-3.5 py-3 rounded-2xl border transition-all text-left flex items-center justify-between group active:scale-98 cursor-pointer bg-white/10 hover:bg-white/15 border-white/15 text-white"
+                      className="px-3 py-2.5 rounded-2xl border transition-all text-left flex items-center justify-between group active:scale-98 cursor-pointer bg-white/10 hover:bg-white/15 border-white/15 text-white"
                     >
-                      <div className="flex items-center space-x-2.5 min-w-0">
-                        <div className="p-2 bg-emerald-500/20 border border-emerald-400/40 rounded-xl text-emerald-300 shrink-0 group-hover:scale-105 transition-transform">
-                          <Video className="w-4 h-4" />
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <div className="p-1.5 bg-emerald-500/20 border border-emerald-400/40 rounded-lg text-emerald-300 shrink-0">
+                          <Video className="w-3.5 h-3.5" />
                         </div>
                         <div className="min-w-0">
-                          <span className="text-xs font-extrabold font-outfit block text-white truncate">Live Sessions</span>
-                          <span className="text-[11px] font-bold font-outfit text-emerald-200 block truncate">Enter Room</span>
+                          <span className="text-xs font-bold font-outfit block text-white truncate">Live Rooms</span>
+                          <span className="text-[10px] text-emerald-200 block truncate">Enter Room</span>
                         </div>
                       </div>
-                      <ArrowUpRight className="w-4 h-4 text-emerald-300 opacity-80 group-hover:opacity-100 shrink-0" />
                     </button>
 
                     <button
@@ -251,18 +290,34 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                         triggerHaptic('selection');
                         onNavigate('new-prescription');
                       }}
-                      className="px-3.5 py-3 rounded-2xl border transition-all text-left flex items-center justify-between group active:scale-98 cursor-pointer bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/30 text-amber-100"
+                      className="px-3 py-2.5 rounded-2xl border transition-all text-left flex items-center justify-between group active:scale-98 cursor-pointer bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/30 text-amber-100"
                     >
-                      <div className="flex items-center space-x-2.5 min-w-0">
-                        <div className="p-2 bg-amber-500/20 border border-amber-400/40 rounded-xl text-amber-300 shrink-0 group-hover:scale-105 transition-transform">
-                          <FileText className="w-4 h-4" />
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <div className="p-1.5 bg-amber-500/20 border border-amber-400/40 rounded-lg text-amber-300 shrink-0">
+                          <FileText className="w-3.5 h-3.5" />
                         </div>
                         <div className="min-w-0">
-                          <span className="text-xs font-extrabold font-outfit block text-amber-200 truncate">Digital Rx Pad</span>
-                          <span className="text-[11px] font-bold font-outfit text-amber-300 block truncate">Write Rx</span>
+                          <span className="text-xs font-bold font-outfit block text-amber-200 truncate">Prescriptions</span>
+                          <span className="text-[10px] text-amber-300 block truncate">Write Rx</span>
                         </div>
                       </div>
-                      <ArrowUpRight className="w-4 h-4 text-amber-300 opacity-80 group-hover:opacity-100 shrink-0" />
+                    </button>
+
+                    <button
+                      onClick={handleShareBookingLink}
+                      className="px-3 py-2.5 rounded-2xl border transition-all text-left flex items-center justify-between group active:scale-98 cursor-pointer bg-emerald-600/30 hover:bg-emerald-600/50 border-emerald-400/40 text-white"
+                    >
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <div className="p-1.5 bg-emerald-400/30 rounded-lg text-emerald-200 shrink-0">
+                          {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold font-outfit block text-white truncate">Share Link</span>
+                          <span className="text-[10px] text-emerald-200 block truncate">
+                            {copiedLink ? 'Copied!' : 'Copy Link'}
+                          </span>
+                        </div>
+                      </div>
                     </button>
                   </div>
                 </div>

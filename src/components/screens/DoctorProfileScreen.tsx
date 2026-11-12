@@ -21,10 +21,13 @@ import {
   ChevronRight,
   FileText,
   BadgeCheck,
+  Share2,
+  Copy,
 } from 'lucide-react';
 import { ScreenId, Doctor, UserRole, BookingSummary } from '../../types';
 import { mockDoctors } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';
+import { showToast } from '../../utils/toast';
 import { DoctorWeeklyCalendar } from '../common/DoctorWeeklyCalendar';
 import { processJoinOrPayConsultation } from '../../utils/consultationPayment';
 
@@ -104,6 +107,28 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
     },
   ];
 
+  const handleShareDoctor = async () => {
+    triggerHaptic('selection');
+    const doctorBookingUrl = `${window.location.origin}/?doctor=${currentDoctor.id}&book=true`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Book a Session with ${fullName}`,
+          text: `Consult with ${fullName} (${currentDoctor.specialty}) on Prime Telecare.`,
+          url: doctorBookingUrl,
+        });
+        showToast('Doctor booking link shared!', 'success');
+        return;
+      } catch {}
+    }
+    try {
+      await navigator.clipboard.writeText(doctorBookingUrl);
+      showToast('Doctor booking link copied! Patients can book sessions directly.', 'success');
+    } catch {
+      showToast(doctorBookingUrl, 'info');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f6fafd] pb-32 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 text-[#171c1f]">
       <StatusBar className="-mx-4 sm:-mx-6 lg:-mx-8 md:hidden" />
@@ -129,18 +154,29 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
         <div className="absolute inset-0 bg-gradient-to-t from-[#022434] via-[#022434]/40 to-transparent" />
 
         <div className="absolute bottom-5 left-5 right-5 text-white space-y-1.5">
-          {/* 9. VERIFIED PRACTITIONER STATUS BADGE */}
-          <div className="flex items-center space-x-2">
-            <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-500/90 backdrop-blur-md text-white text-[11px] font-extrabold font-outfit rounded-full border border-emerald-300/40 shadow-sm">
-              <BadgeCheck className="w-4 h-4 text-emerald-200 fill-emerald-600" />
-              <span>{verification.verifiedBadgeText}</span>
-            </span>
-            {availability.isOnline && (
-              <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-950/80 text-emerald-300 text-[10px] font-bold rounded-full border border-emerald-500/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                <span>Online Now</span>
+          {/* 9. VERIFIED PRACTITIONER STATUS BADGE & SHARE BUTTON */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-500/90 backdrop-blur-md text-white text-[11px] font-extrabold font-outfit rounded-full border border-emerald-300/40 shadow-sm">
+                <BadgeCheck className="w-4 h-4 text-emerald-200 fill-emerald-600" />
+                <span>{verification.verifiedBadgeText}</span>
               </span>
-            )}
+              {availability.isOnline && (
+                <span className="inline-flex items-center space-x-1 px-2.5 py-1 bg-emerald-950/80 text-emerald-300 text-[10px] font-bold rounded-full border border-emerald-500/30">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Online Now</span>
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleShareDoctor}
+              className="inline-flex items-center space-x-1.5 px-3 py-1 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white text-xs font-bold font-outfit rounded-full border border-white/20 transition-all cursor-pointer active:scale-95"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Share Link</span>
+            </button>
           </div>
 
           {/* 1. Full Professional Name */}

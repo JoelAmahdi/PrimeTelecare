@@ -11,6 +11,9 @@ import {
   User,
   Sparkles,
   Lock,
+  TestTube,
+  Calendar,
+  Clock,
 } from 'lucide-react';
 import { Prescription, Medication } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
@@ -21,6 +24,26 @@ import {
   generatePrescriberAuthToken,
 } from '../../utils/prescriptionSafety';
 import { addPrescription, updatePrescription } from '../../utils/prescriptionStore';
+
+const COMMON_LAB_TESTS = [
+  'Full Blood Count (FBC)',
+  'Malaria Parasite (MP) Test',
+  'Urinalysis / Urine Dipstick',
+  'Fasting Blood Sugar (FBS)',
+  'Lipid Profile (Cholesterol)',
+  'Kidney Function (E/U/Cr)',
+  'Liver Function (LFT)',
+  'Stool Microscopy & Culture',
+];
+
+const FOLLOW_UP_OPTIONS = [
+  '3 Days',
+  '5 Days',
+  '1 Week',
+  '2 Weeks',
+  '1 Month',
+  'SOS (As Needed)',
+];
 
 interface PrescriptionComposerModalProps {
   isOpen: boolean;
@@ -79,6 +102,9 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [medications, setMedications] = useState<Medication[]>([]);
   const [doctorNotes, setDoctorNotes] = useState('');
+  const [followUpTime, setFollowUpTime] = useState('1 Week');
+  const [selectedLabTests, setSelectedLabTests] = useState<string[]>([]);
+  const [customLabTest, setCustomLabTest] = useState('');
   const [isDigitallySigned, setIsDigitallySigned] = useState(true);
   const [restrictionError, setRestrictionError] = useState<string | null>(null);
 
@@ -100,6 +126,8 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
       setAllergies(initialPrescription.patientAllergies || ['Penicillin', 'Sulfa drugs']);
       setDiagnosis(initialPrescription.diagnosis || '');
       setChiefComplaint(initialPrescription.chiefComplaint || '');
+      setFollowUpTime(initialPrescription.followUpTime || '1 Week');
+      setSelectedLabTests(initialPrescription.labTestsToPerform || []);
       setMedications(initialPrescription.medications && initialPrescription.medications.length > 0
         ? [...initialPrescription.medications]
         : [{
@@ -125,6 +153,8 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
       setAllergies(patientInfo?.allergies || ['Penicillin', 'Sulfa drugs']);
       setDiagnosis('');
       setChiefComplaint('');
+      setFollowUpTime('1 Week');
+      setSelectedLabTests([]);
       setMedications([
         {
           id: 'med-1',
@@ -242,6 +272,9 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
         chiefComplaint: chiefComplaint || initialPrescription.chiefComplaint,
         medications,
         doctorNotes,
+        followUpTime,
+        labTestsToPerform: selectedLabTests,
+        carePlanSummary: doctorNotes,
         authSealToken: sealToken.authToken,
         authVerificationDate: `${todayStr} ${timeStr}`,
       });
@@ -273,10 +306,13 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
         consultationId: consultationId || `CNS-2026-${Math.floor(1000 + Math.random() * 9000)}`,
         consultationType,
         consultationDate: todayStr,
-        consultationTime: timeStr,
-        diagnosis: diagnosis || 'Clinical Encounter Treatment Plan',
+        diagnosis: diagnosis || 'General Clinical Evaluation',
+        followUpTime,
+        labTestsToPerform: selectedLabTests,
+        carePlanSummary: doctorNotes,
         medications,
         doctorNotes,
+        consultationTime: timeStr,
       };
 
       const saved = addPrescription(newPrescription);
@@ -581,6 +617,109 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
               ))}
             </div>
           )}
+
+          {/* Required Laboratory Investigations to Do */}
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 font-outfit flex items-center space-x-1.5">
+                <TestTube className="w-4 h-4 text-purple-600" />
+                <span>Recommended Laboratory Tests & Investigations</span>
+              </label>
+              <span className="text-[10px] text-slate-400 font-nunito">
+                {selectedLabTests.length} tests requested
+              </span>
+            </div>
+
+            {/* Quick Diagnostic Test Pills */}
+            <div className="flex flex-wrap gap-1.5">
+              {COMMON_LAB_TESTS.map((test) => {
+                const isSelected = selectedLabTests.includes(test);
+                return (
+                  <button
+                    key={test}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      if (isSelected) {
+                        setSelectedLabTests(selectedLabTests.filter((t) => t !== test));
+                      } else {
+                        setSelectedLabTests([...selectedLabTests, test]);
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-nunito font-bold transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:border-purple-300'
+                    }`}
+                  >
+                    {isSelected ? '✓ ' : '+ '}
+                    {test}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Lab Test Adder */}
+            <div className="flex items-center space-x-2 pt-1">
+              <input
+                type="text"
+                placeholder="Or type custom diagnostic test (e.g. Chest X-Ray, HbA1c)..."
+                value={customLabTest}
+                onChange={(e) => setCustomLabTest(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customLabTest.trim()) {
+                    e.preventDefault();
+                    if (!selectedLabTests.includes(customLabTest.trim())) {
+                      setSelectedLabTests([...selectedLabTests, customLabTest.trim()]);
+                    }
+                    setCustomLabTest('');
+                  }
+                }}
+                className="w-full px-3 py-1.5 bg-white rounded-xl border border-slate-200 text-xs font-nunito text-[#022434] focus:outline-none focus:border-purple-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (customLabTest.trim()) {
+                    if (!selectedLabTests.includes(customLabTest.trim())) {
+                      setSelectedLabTests([...selectedLabTests, customLabTest.trim()]);
+                    }
+                    setCustomLabTest('');
+                  }
+                }}
+                className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold font-outfit shrink-0 cursor-pointer"
+              >
+                Add Test
+              </button>
+            </div>
+          </div>
+
+          {/* Follow-Up Schedule */}
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-2.5">
+            <label className="text-xs font-bold text-slate-700 font-outfit flex items-center space-x-1.5">
+              <Calendar className="w-4 h-4 text-emerald-600" />
+              <span>Recommended Follow-Up Evaluation Time</span>
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {FOLLOW_UP_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setFollowUpTime(opt);
+                  }}
+                  className={`py-2 px-2 rounded-xl text-xs font-bold font-outfit text-center transition-all cursor-pointer ${
+                    followUpTime === opt
+                      ? 'bg-[#006c44] text-white shadow-xs'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-[#006c44]/40'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Clinical Advice / Doctor Notes */}
           <div>
