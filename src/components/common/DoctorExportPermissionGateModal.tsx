@@ -192,9 +192,6 @@ export const DoctorExportPermissionGateModal: React.FC<DoctorExportPermissionGat
                     <Stethoscope className="w-3.5 h-3.5 text-emerald-700" />
                     <span>Clinician Sign-Off Control</span>
                   </span>
-                  <span className="text-[10px] bg-emerald-200 text-emerald-900 font-extrabold px-1.5 py-0.5 rounded">
-                    Doctor Demo
-                  </span>
                 </div>
                 <p className="text-[10px] text-emerald-800">
                   Doctors can grant permission from their clinical dashboard or right here:

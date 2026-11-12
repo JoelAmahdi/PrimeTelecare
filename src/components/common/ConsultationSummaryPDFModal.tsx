@@ -572,15 +572,6 @@ ${activeRecord.warningSigns || 'N/A'}
                   Session unlocked!
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={handleResetForTesting}
-                title="Reset demo to test awaiting approval and payment wall again"
-                className="text-[11px] text-emerald-800 underline hover:text-emerald-950 font-semibold flex items-center space-x-1 cursor-pointer"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Re-test Paywall</span>
-              </button>
             </div>
 
             {/* Printable PDF Document Body */}

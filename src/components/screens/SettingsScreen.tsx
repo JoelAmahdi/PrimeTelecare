@@ -254,9 +254,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
                   <h3 className="font-bold font-outfit text-[#022434] text-sm group-hover:text-indigo-700 transition-colors truncate">
                     Trust & Security Center
                   </h3>
-                  <span className="bg-indigo-100 text-indigo-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-200 font-outfit shrink-0">
-                    COMPLIANCE
-                  </span>
                 </div>
                 <p className="text-xs text-slate-500 font-nunito mt-0.5 truncate">
                   View encryption details, privacy policies, MFA & data retention.

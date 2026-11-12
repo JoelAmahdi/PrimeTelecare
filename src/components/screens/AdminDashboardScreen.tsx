@@ -542,7 +542,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                   Admin
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-nunito">Clinical Governance v2.4</p>
+              <p className="text-[11px] text-slate-400 font-nunito">Clinical Governance</p>
             </div>
           </div>
         </div>
@@ -566,7 +566,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                 {user.email || 'admin@telecare.ng'}
               </p>
               <span className="text-[9px] font-semibold text-emerald-700 block mt-0.5">
-                SysAdmin / Super Root
+                System Administrator
               </span>
             </div>
           </div>

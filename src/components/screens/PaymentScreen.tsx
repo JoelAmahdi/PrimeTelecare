@@ -607,22 +607,11 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
               </div>
 
               {/* Security Assurance */}
-              <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+              <div className="flex items-center text-xs text-slate-400 pt-1">
                 <span className="flex items-center space-x-1">
                   <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>256-bit encrypted checkout</span>
+                  <span>256-bit encrypted secure checkout</span>
                 </span>
-
-                {/* Discreet simulation control */}
-                <label className="flex items-center space-x-1.5 text-[11px] text-slate-400 cursor-pointer hover:text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={simulatedDeclineMode}
-                    onChange={(e) => setSimulatedDeclineMode(e.target.checked)}
-                    className="rounded text-[#006c44] w-3 h-3"
-                  />
-                  <span>Test decline</span>
-                </label>
               </div>
 
               {/* Submit Payment Button */}

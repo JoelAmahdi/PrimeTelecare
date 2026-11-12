@@ -203,9 +203,8 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
 
   const handleSkip = () => {
     triggerHaptic('light');
-    // Save flag so user isn't prompted on every single navigation, but keep default 1234
     localStorage.setItem('prime_telecare_quick_login_setup', 'true');
-    showToast('Quick unlock skipped. Default PIN is 1234 (changeable in Settings).', 'info');
+    showToast('Quick unlock skipped. You can configure a PIN anytime in Settings.', 'info');
     onClose();
   };
 
@@ -217,20 +216,14 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
           <button
             type="button"
             onClick={handleSkip}
-            className="absolute top-4 right-4 p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+            className="absolute top-4 right-4 p-1.5 rounded-full text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             title="Skip for now"
           >
             <X className="w-5 h-5" />
           </button>
 
-          <div className="flex items-center space-x-2 mb-2">
-            <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 text-[11px] font-bold font-outfit uppercase tracking-wider">
-              <Sparkles className="w-3 h-3 text-emerald-300" />
-              <span>Subsequent Login Setup</span>
-            </span>
-            <span className="text-[11px] text-slate-300 font-mono">
-              {userRole.toUpperCase()}
-            </span>
+          <div className="w-10 h-10 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-[#77daa4] mb-3 shadow-xs">
+            <Lock className="w-5 h-5" />
           </div>
 
           <h3 className="text-xl font-bold font-outfit text-white">
@@ -450,7 +443,7 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
             onClick={handleSkip}
             className="w-full sm:w-auto px-4 py-3 text-xs font-bold font-outfit text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
           >
-            Skip for Now (Use 1234)
+            Skip for Now
           </button>
 
           <button
@@ -480,3 +473,4 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
     </div>
   );
 };
+

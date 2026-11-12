@@ -88,9 +88,6 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
                 <span className="font-extrabold font-outfit text-base text-[#022434] tracking-tight block leading-none">
                   Prime Telecare
                 </span>
-                <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider block mt-0.5">
-                  Clinical Cloud Suite
-                </span>
               </div>
             </button>
 
@@ -120,29 +117,8 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
             </nav>
           </div>
 
-          {/* Right: Role Pill, Emulator Switch, Profile & Alerts */}
+          {/* Right: Profile & Actions */}
           <div className="flex items-center space-x-3">
-            
-            {/* Verified Account Role Badge (Strict RBAC - Single Role per Account) */}
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border shadow-2xs font-outfit text-xs font-bold select-none cursor-default">
-              {role === 'doctor' ? (
-                <div className="flex items-center space-x-1.5 text-blue-900 bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200/60">
-                  <Stethoscope className="w-3.5 h-3.5 text-blue-700" />
-                  <span>Doctor Account</span>
-                </div>
-              ) : role === 'admin' ? (
-                <div className="flex items-center space-x-1.5 text-purple-900 bg-purple-50/80 px-2 py-0.5 rounded-lg border border-purple-200/60">
-                  <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
-                  <span>Admin Account</span>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-1.5 text-[#006c44] bg-emerald-50/80 px-2 py-0.5 rounded-lg border border-emerald-200/60">
-                  <User className="w-3.5 h-3.5 text-[#006c44]" />
-                  <span>Patient Account</span>
-                </div>
-              )}
-            </div>
-
             {/* Profile Menu Dropdown */}
             <div className="relative">
               <button

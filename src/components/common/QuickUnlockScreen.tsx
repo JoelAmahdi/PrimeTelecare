@@ -196,10 +196,6 @@ export const QuickUnlockScreen: React.FC<QuickUnlockScreenProps> = ({
             Session Locked
           </span>
         </div>
-        <div className="flex items-center space-x-1.5 text-[11px] text-slate-400 font-nunito bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>15m Inactivity Guard</span>
-        </div>
       </div>
 
       {/* Center User Profile & Unlock Form */}

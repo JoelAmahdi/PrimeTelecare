@@ -17,8 +17,8 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuccess }) => {
-  const [email, setEmail] = useState('patient@telecare.com');
-  const [password, setPassword] = useState('Password@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Rate Limiter State
@@ -161,47 +161,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             <h1 className="text-2xl font-bold font-outfit text-[#022434]">Welcome back</h1>
           </div>
 
-          {/* Role Selectors */}
-          <div className="bg-slate-100 p-1.5 rounded-2xl mb-4 flex items-center justify-between border border-slate-200">
-            <div className="grid grid-cols-3 gap-1 w-full">
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setEmail('patient@telecare.com');
-                }}
-                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold font-outfit transition-all text-center ${
-                  email.includes('patient') ? 'bg-white text-[#022434] shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Patient
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setEmail('dr.emeka@primetelecare.com');
-                }}
-                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold font-outfit transition-all text-center ${
-                  email.includes('doctor') || email.includes('dr') ? 'bg-[#1c3a4a] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Doctor
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setEmail('admin@primetelecare.com');
-                }}
-                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold font-outfit transition-all text-center ${
-                  email.includes('admin') ? 'bg-[#006c44] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Admin
-              </button>
-            </div>
-          </div>
           {/* Apple-style Biometric Sign-in Banner */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs mb-5 flex items-center justify-between">
             <div className="flex items-center space-x-3">

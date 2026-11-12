@@ -109,7 +109,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
   const [doctorSpecialty, setDoctorSpecialty] = useState('General Practice / Family Medicine');
   const [doctorLicenseFileName, setDoctorLicenseFileName] = useState<string | null>(null);
   const [doctorLicenseFileSize, setDoctorLicenseFileSize] = useState<string | null>(null);
-  const [adminAccessKey, setAdminAccessKey] = useState('ADMIN-KEY-9948');
+  const [adminAccessKey, setAdminAccessKey] = useState('');
 
   // Active Consent Checkboxes (UN-TICKED BY DEFAULT for NDPA compliance)
   const [consentPrivacy, setConsentPrivacy] = useState(false);
@@ -1019,22 +1019,6 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
               {otpError && (
                 <p className="text-xs font-bold text-rose-600 font-nunito">{otpError}</p>
               )}
-
-              {/* Auto-fill Helper Test Button */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setOtpCode(['8', '4', '9', '2']);
-                    setOtpError(null);
-                  }}
-                  className="text-xs font-bold text-[#006c44] hover:underline inline-flex items-center space-x-1"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Auto-fill Test Code (8492)</span>
-                </button>
-              </div>
 
               <button
                 type="submit"

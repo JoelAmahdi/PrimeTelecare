@@ -187,13 +187,10 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                 <WifiOff className="w-5 h-5 animate-pulse" />
               </div>
               <div>
-                <span className="font-extrabold font-outfit text-amber-900 block text-sm">Offline Mode — Cached Dashboard Active</span>
-                <span className="text-xs text-amber-800">Preserved in IndexedDB storage. Records and offline features remain available.</span>
+                <span className="font-extrabold font-outfit text-amber-900 block text-sm">Offline Mode</span>
+                <span className="text-xs text-amber-800">Your health records and appointments remain accessible.</span>
               </div>
             </div>
-            <span className="text-xs font-bold font-mono bg-amber-200 text-amber-900 px-2.5 py-1 rounded-full shrink-0">
-              IndexedDB Active
-            </span>
           </div>
         )}
 
@@ -411,7 +408,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                   <div className="flex items-center space-x-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
                     <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-                      NDPA 2023 Statutory Protection
+                      Data Privacy & Security
                     </span>
                   </div>
                   <h4 className="font-extrabold font-outfit text-lg sm:text-xl text-white">

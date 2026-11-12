@@ -200,7 +200,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
           </div>
         </div>
 
-        {/* Offline IndexedDB Banner */}
+        {/* Offline Banner */}
         {effectiveOffline && (
           <div className="bg-amber-500/10 border border-amber-300 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-950 animate-in fade-in duration-200">
             <div className="flex items-center space-x-3">
@@ -208,13 +208,10 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                 <WifiOff className="w-5 h-5 animate-pulse" />
               </div>
               <div>
-                <span className="font-extrabold font-outfit text-amber-900 text-sm block">Offline Mode — Cached Doctor Dashboard</span>
-                <span className="text-xs text-amber-800">Practice records and earnings saved locally in IndexedDB. Will sync when reconnected.</span>
+                <span className="font-extrabold font-outfit text-amber-900 text-sm block">Offline Mode</span>
+                <span className="text-xs text-amber-800">Practice records saved locally. Will sync when reconnected.</span>
               </div>
             </div>
-            <span className="text-[11px] font-bold font-mono bg-amber-200 text-amber-900 px-3 py-1 rounded-full shrink-0">
-              IndexedDB Local
-            </span>
           </div>
         )}
 
@@ -241,9 +238,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                         <div className="flex justify-between items-start">
                           <span className="text-xs font-semibold text-slate-300 font-nunito uppercase tracking-wider">
                             Consultation Earnings & Balance
-                          </span>
-                          <span className="text-xs font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2.5 py-0.5 rounded-md">
-                            {currentDoctorEarnings > 0 ? 'Active Balance' : 'Zero Balance'}
                           </span>
                         </div>
                         <div className="flex items-baseline space-x-2 mt-2">

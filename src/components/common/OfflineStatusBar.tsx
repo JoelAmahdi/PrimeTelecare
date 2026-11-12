@@ -22,24 +22,9 @@ export const OfflineStatusBar: React.FC<OfflineStatusBarProps> = ({ currentScree
 
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // If user is online and not simulated offline, show a subtle dev/test button or keep hidden
+  // Only render when the app is genuinely offline
   if (!isOffline) {
-    return (
-      <div className="fixed bottom-20 right-4 z-40 hidden sm:block">
-        <button
-          onClick={() => {
-            triggerHaptic('selection');
-            toggleSimulateOffline();
-          }}
-          title="Test Offline Mode (IndexedDB & Service Worker)"
-          className="bg-white/90 hover:bg-white text-slate-700 hover:text-[#022434] px-3 py-1.5 rounded-full border border-slate-200/90 shadow-md text-xs font-bold font-outfit flex items-center space-x-1.5 backdrop-blur-md transition-all active:scale-95"
-        >
-          <Wifi className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="text-[11px]">Online</span>
-          <span className="text-[10px] text-slate-400 border-l border-slate-200 pl-1.5 hover:text-amber-600">Simulate Offline</span>
-        </button>
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -58,18 +43,9 @@ export const OfflineStatusBar: React.FC<OfflineStatusBarProps> = ({ currentScree
                   <span>Offline Mode</span>
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                 </span>
-                <span className="bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1">
-                  <Database className="w-3 h-3 text-emerald-400" />
-                  <span>IndexedDB Local Storage Active</span>
-                </span>
-                {isSimulatedOffline && (
-                  <span className="bg-slate-800 text-slate-300 text-[10px] font-mono px-1.5 py-0.5 rounded hidden md:inline">
-                    Simulated
-                  </span>
-                )}
               </div>
               <p className="text-[11px] text-slate-300 truncate font-nunito mt-0.5">
-                Viewing cached Dashboard & Health Records • Service Worker active
+                Viewing cached records • Changes will sync automatically when reconnected
               </p>
             </div>
           </div>
