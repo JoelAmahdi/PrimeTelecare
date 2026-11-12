@@ -22,7 +22,7 @@ interface DesktopNavbarProps {
   currentScreen: ScreenId;
   onNavigate: (screen: ScreenId) => void;
   role: UserRole;
-  onRoleChange: (role: UserRole) => void;
+  onRoleChange?: (role: UserRole) => void;
   user: UserType;
   isEmulatorActive?: boolean;
   onToggleEmulator?: () => void;
@@ -33,7 +33,6 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
   currentScreen,
   onNavigate,
   role,
-  onRoleChange,
   user,
   onOpenLogoutModal,
 }) => {
@@ -124,54 +123,24 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
           {/* Right: Role Pill, Emulator Switch, Profile & Alerts */}
           <div className="flex items-center space-x-3">
             
-            {/* Quick Role Switcher Pill */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
-              <button
-                onClick={() => {
-                  triggerHaptic('selection');
-                  onRoleChange('patient');
-                  if (currentScreen === 'doctor-home' || currentScreen === 'admin-dashboard') {
-                    onNavigate('patient-home');
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-outfit transition-all cursor-pointer ${
-                  role === 'patient'
-                    ? 'bg-[#006c44] text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Patient
-              </button>
-              <button
-                onClick={() => {
-                  triggerHaptic('selection');
-                  onRoleChange('doctor');
-                  if (currentScreen === 'patient-home' || currentScreen === 'admin-dashboard') {
-                    onNavigate('doctor-home');
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-outfit transition-all cursor-pointer ${
-                  role === 'doctor'
-                    ? 'bg-[#006c44] text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Doctor
-              </button>
-              <button
-                onClick={() => {
-                  triggerHaptic('selection');
-                  onRoleChange('admin');
-                  onNavigate('admin-dashboard');
-                }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-outfit transition-all cursor-pointer ${
-                  role === 'admin'
-                    ? 'bg-[#006c44] text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Admin
-              </button>
+            {/* Verified Account Role Badge (Strict RBAC - Single Role per Account) */}
+            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border shadow-2xs font-outfit text-xs font-bold select-none cursor-default">
+              {role === 'doctor' ? (
+                <div className="flex items-center space-x-1.5 text-blue-900 bg-blue-50/80 px-2 py-0.5 rounded-lg border border-blue-200/60">
+                  <Stethoscope className="w-3.5 h-3.5 text-blue-700" />
+                  <span>Doctor Account</span>
+                </div>
+              ) : role === 'admin' ? (
+                <div className="flex items-center space-x-1.5 text-purple-900 bg-purple-50/80 px-2 py-0.5 rounded-lg border border-purple-200/60">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                  <span>Admin Account</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-1.5 text-[#006c44] bg-emerald-50/80 px-2 py-0.5 rounded-lg border border-emerald-200/60">
+                  <User className="w-3.5 h-3.5 text-[#006c44]" />
+                  <span>Patient Account</span>
+                </div>
+              )}
             </div>
 
             {/* Profile Menu Dropdown */}

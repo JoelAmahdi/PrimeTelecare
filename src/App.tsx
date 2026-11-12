@@ -43,12 +43,85 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth as firebaseAuth } from './firebase';
 import { primeApi } from './services/apiClient';
 import { showToast } from './utils/toast';
+import { QuickUnlockScreen } from './components/common/QuickUnlockScreen';
+import { AccessDeniedScreen } from './components/common/AccessDeniedScreen';
+import { triggerHaptic } from './utils/haptics';
+import {
+  isSessionLocked,
+  setSessionLocked,
+  recordAppActivity,
+  isIdleOver15Minutes,
+} from './utils/sessionLock';
+
+// Strict Role-Based Screen Access List
+// Each account created strictly and solely accesses the dashboard and features intended for its role
+const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
+  patient: [
+    'patient-home',
+    'book-consultation',
+    'doctor-discovery',
+    'doctor-profile',
+    'payment',
+    'active-chat',
+    'video-call',
+    'upload-media',
+    'health-records',
+    'settings',
+    'security-center',
+    'account-details',
+    'family-account',
+    'service-router',
+    'post-consultation-journey',
+  ],
+  doctor: [
+    'doctor-home',
+    'active-chat',
+    'video-call',
+    'upload-media',
+    'new-prescription',
+    'prescription-detail',
+    'doctor-profile',
+    'withdrawal',
+    'settings',
+    'security-center',
+    'account-details',
+    'service-router',
+    'post-consultation-journey',
+  ],
+  admin: [
+    'admin-dashboard',
+    'doctor-discovery',
+    'doctor-profile',
+    'settings',
+    'security-center',
+    'account-details',
+    'service-router',
+  ],
+};
+
+const getDefaultDashboardForRole = (r: UserRole): ScreenId => {
+  if (r === 'doctor') return 'doctor-home';
+  if (r === 'admin') return 'admin-dashboard';
+  return 'patient-home';
+};
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(() => {
     try {
-      const saved = localStorage.getItem('prime_telecare_screen') as ScreenId;
-      if (saved) return saved;
+      const savedUser = localStorage.getItem('prime_telecare_user');
+      const savedScreen = localStorage.getItem('prime_telecare_screen') as ScreenId;
+      if (savedUser) {
+        if (savedScreen && !['welcome', 'login', 'signup'].includes(savedScreen)) {
+          return savedScreen;
+        }
+        const savedRole = localStorage.getItem('prime_telecare_role');
+        return savedRole === 'doctor'
+          ? 'doctor-home'
+          : savedRole === 'admin'
+          ? 'admin-dashboard'
+          : 'patient-home';
+      }
+      if (savedScreen) return savedScreen;
     } catch {}
     return 'welcome';
   });
@@ -65,6 +138,18 @@ export default function App() {
       if (saved) return JSON.parse(saved);
     } catch {}
     return null;
+  });
+
+  // Session Lock State (requires shorter log in after first login on close or 15m idle)
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    try {
+      const hasSavedUser = !!localStorage.getItem('prime_telecare_user');
+      if (hasSavedUser) {
+        // App was closed or reloaded or left idle -> require quick unlock
+        return isSessionLocked() || isIdleOver15Minutes() || true;
+      }
+    } catch {}
+    return false;
   });
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('doc-anya');
   const [currentBookingSummary, setCurrentBookingSummary] = useState<BookingSummary | undefined>(undefined);
@@ -136,6 +221,9 @@ export default function App() {
         const homeScreen: ScreenId = resolvedRole === 'doctor' ? 'doctor-home' : resolvedRole === 'admin' ? 'admin-dashboard' : 'patient-home';
         localStorage.setItem('prime_telecare_screen', homeScreen);
         setCurrentScreen(homeScreen);
+        setSessionLocked(false);
+        setIsLocked(false);
+        recordAppActivity();
         showToast(`Welcome back, ${res.user.name}!`, 'success');
       }
     });
@@ -162,6 +250,9 @@ export default function App() {
               const homeScreen: ScreenId = resolvedRole === 'doctor' ? 'doctor-home' : resolvedRole === 'admin' ? 'admin-dashboard' : 'patient-home';
               localStorage.setItem('prime_telecare_screen', homeScreen);
               setCurrentScreen(homeScreen);
+              setSessionLocked(false);
+              setIsLocked(false);
+              recordAppActivity();
               showToast(`Welcome, ${apiRes.user.name}!`, 'success');
             }
           } catch (err) {
@@ -174,37 +265,104 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // 15-Minute Idle Timer & App Close / Session Lock Listeners
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Record activity on user interactions
+    const handleUserActivity = () => {
+      if (!isLocked) {
+        recordAppActivity();
+      }
+    };
+
+    const activityEvents: (keyof WindowEventMap)[] = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, handleUserActivity, { passive: true });
+    });
+
+    // Check idle timeout every 15 seconds
+    const idleCheckInterval = setInterval(() => {
+      if (currentUser && !isLocked && isIdleOver15Minutes()) {
+        setSessionLocked(true);
+        setIsLocked(true);
+      }
+    }, 15000);
+
+    // Lock session when app or tab is closed / unloaded
+    const handleAppClose = () => {
+      if (currentUser) {
+        setSessionLocked(true);
+      }
+    };
+
+    window.addEventListener('pagehide', handleAppClose);
+    window.addEventListener('beforeunload', handleAppClose);
+
+    // Check lock when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && currentUser) {
+        if (isSessionLocked() || isIdleOver15Minutes()) {
+          setIsLocked(true);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, handleUserActivity);
+      });
+      clearInterval(idleCheckInterval);
+      window.removeEventListener('pagehide', handleAppClose);
+      window.removeEventListener('beforeunload', handleAppClose);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [currentUser, isLocked]);
+
+  // Authenticated Role of the current user (strictly locked to account details)
+  const effectiveRole: UserRole = (currentUser?.role as UserRole) || role;
+
   const navigateTo = (nextScreen: ScreenId) => {
+    // Unauthenticated / Auth screens
+    if (['welcome', 'terms', 'login', 'signup'].includes(nextScreen)) {
+      if (nextScreen !== 'active-chat') {
+        setIsChatSessionActive(false);
+      }
+      try {
+        localStorage.setItem('prime_telecare_screen', nextScreen);
+      } catch {}
+      setCurrentScreen(nextScreen);
+      return;
+    }
+
     let targetScreen = nextScreen;
 
-    // Role-based home resolution:
-    // If navigating to the default home screen ('patient-home'), resolve to the current user's role dashboard
-    // rather than inadvertently defaulting doctors to the patient dashboard
+    // Resolve generic 'patient-home' navigation requests to user's authorized dashboard
     if (targetScreen === 'patient-home') {
-      if (role === 'doctor') {
-        targetScreen = 'doctor-home';
-      } else if (role === 'admin') {
-        targetScreen = 'admin-dashboard';
-      }
+      targetScreen = getDefaultDashboardForRole(effectiveRole);
     }
 
-    // Role synchronization when navigating explicitly to dedicated clinical or administrative screens:
-    if (targetScreen === 'withdrawal' && role !== 'doctor') {
-      targetScreen = 'account-details';
-    }
-
-    if (targetScreen === 'doctor-home' || targetScreen === 'new-prescription') {
-      if (role !== 'admin' && role !== 'doctor') {
-        setRole('doctor');
-      }
-    } else if (targetScreen === 'patient-home') {
-      if (role !== 'admin' && role !== 'patient') {
-        setRole('patient');
-      }
-    } else if (targetScreen === 'admin-dashboard') {
-      if (role !== 'admin') {
-        setRole('admin');
-      }
+    // Role-Based Access Control (RBAC): Enforce strict single-role dashboard access
+    const allowed = ROLE_ALLOWED_SCREENS[effectiveRole] || ROLE_ALLOWED_SCREENS.patient;
+    if (!allowed.includes(targetScreen)) {
+      const fallbackDashboard = getDefaultDashboardForRole(effectiveRole);
+      triggerHaptic('error');
+      const requiredRoleName =
+        targetScreen === 'doctor-home' || targetScreen === 'new-prescription' || targetScreen === 'withdrawal'
+          ? 'Doctor'
+          : targetScreen === 'admin-dashboard'
+          ? 'Administrator'
+          : 'Patient';
+      showToast(
+        `Access Denied: Your ${effectiveRole} account cannot access the ${requiredRoleName} portal. An account only accesses the dashboard it was created for.`,
+        'error'
+      );
+      setCurrentScreen(fallbackDashboard);
+      try {
+        localStorage.setItem('prime_telecare_screen', fallbackDashboard);
+      } catch {}
+      return;
     }
 
     if (targetScreen !== 'active-chat') {
@@ -218,26 +376,33 @@ export default function App() {
     setCurrentScreen(targetScreen);
   };
 
+  // Active user data: If logged in, strictly use the authenticated user (no mock doctor overwrite)
   const activeUser: User =
-    (currentUser && currentUser.role === role ? currentUser : null) ||
     currentUser ||
-    (role === 'admin'
+    (effectiveRole === 'admin'
       ? currentUserAdmin
-      : role === 'doctor' || currentScreen === 'doctor-home' || currentScreen === 'new-prescription'
+      : effectiveRole === 'doctor'
       ? currentUserDoctor
       : currentUserPatient);
 
-  // Guard against role/screen mismatch for home dashboards
+  // Continuous RBAC Guard: Ensure active screen matches authenticated user's role permissions
   useEffect(() => {
-    if (role === 'doctor' && currentScreen === 'patient-home') {
-      setCurrentScreen('doctor-home');
+    if (['welcome', 'terms', 'login', 'signup'].includes(currentScreen)) return;
+    const allowed = ROLE_ALLOWED_SCREENS[effectiveRole] || ROLE_ALLOWED_SCREENS.patient;
+    if (!allowed.includes(currentScreen)) {
+      const fallback = getDefaultDashboardForRole(effectiveRole);
+      setCurrentScreen(fallback);
+      try {
+        localStorage.setItem('prime_telecare_screen', fallback);
+      } catch {}
     }
-  }, [role, currentScreen]);
+  }, [effectiveRole, currentScreen]);
 
   const handleLoginSuccess = (newRole: UserRole, user?: User) => {
-    setRole(newRole);
+    const finalRole = user?.role || newRole;
+    setRole(finalRole);
     try {
-      localStorage.setItem('prime_telecare_role', newRole);
+      localStorage.setItem('prime_telecare_role', finalRole);
     } catch {}
 
     if (user) {
@@ -247,17 +412,23 @@ export default function App() {
       } catch {}
     }
 
+    setSessionLocked(false);
+    setIsLocked(false);
+    recordAppActivity();
+
+    const homeScreen = getDefaultDashboardForRole(finalRole);
+
     if (hasAcceptedTerms) {
-      if (newRole === 'admin') {
-        navigateTo('admin-dashboard');
-      } else if (newRole === 'doctor') {
-        navigateTo('doctor-home');
-      } else {
-        navigateTo('patient-home');
-      }
+      navigateTo(homeScreen);
     } else {
       navigateTo('terms');
     }
+  };
+
+  const handleQuickUnlock = () => {
+    setSessionLocked(false);
+    setIsLocked(false);
+    recordAppActivity();
   };
 
   const handleTermsAccepted = () => {
@@ -267,23 +438,21 @@ export default function App() {
     } catch (e) {
       console.error('Failed to save terms acceptance', e);
     }
-    if (role === 'admin') {
-      navigateTo('admin-dashboard');
-    } else if (role === 'doctor') {
-      navigateTo('doctor-home');
-    } else {
-      navigateTo('patient-home');
-    }
+    navigateTo(getDefaultDashboardForRole(effectiveRole));
   };
 
   const handleLogoutConfirm = () => {
     setIsLogoutModalOpen(false);
     setCurrentUser(null);
+    setSessionLocked(false);
+    setIsLocked(false);
     signOut(firebaseAuth).catch(() => {});
     try {
       localStorage.removeItem('prime_telecare_user');
       localStorage.removeItem('prime_telecare_role');
       localStorage.removeItem('prime_telecare_terms_accepted');
+      localStorage.removeItem('prime_telecare_app_locked');
+      localStorage.removeItem('prime_telecare_screen');
     } catch {}
     navigateTo('welcome');
   };
@@ -292,11 +461,6 @@ export default function App() {
     if (navigator.onLine) {
       setIsNetworkIssue(false);
     }
-  };
-
-  const handleSetRolePreview = (previewRole: UserRole, targetScreen: ScreenId) => {
-    setRole(previewRole);
-    navigateTo(targetScreen);
   };
 
   const screenDisplayNames: Record<ScreenId, string> = {
@@ -353,8 +517,7 @@ export default function App() {
               <DesktopNavbar
                 currentScreen={currentScreen}
                 onNavigate={navigateTo}
-                role={role}
-                onRoleChange={setRole}
+                role={effectiveRole}
                 user={activeUser}
                 onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
               />
@@ -395,21 +558,41 @@ export default function App() {
             )}
 
             {currentScreen === 'patient-home' && (
-              <PatientHomeDashboard
-                user={activeUser}
-                onNavigate={navigateTo}
-                onSelectDoctor={setSelectedDoctorId}
-                onSaveBookingSummary={setCurrentBookingSummary}
-                isOfflineMode={effectiveOffline}
-              />
+              effectiveRole === 'patient' ? (
+                <PatientHomeDashboard
+                  user={activeUser}
+                  onNavigate={navigateTo}
+                  onSelectDoctor={setSelectedDoctorId}
+                  onSaveBookingSummary={setCurrentBookingSummary}
+                  isOfflineMode={effectiveOffline}
+                />
+              ) : (
+                <AccessDeniedScreen
+                  currentRole={effectiveRole}
+                  requiredRole="patient"
+                  targetScreenName="Patient Care Dashboard"
+                  onNavigateHome={() => navigateTo(getDefaultDashboardForRole(effectiveRole))}
+                  onLogout={handleLogoutConfirm}
+                />
+              )
             )}
 
             {currentScreen === 'doctor-home' && (
-              <DoctorHomeDashboard
-                user={activeUser}
-                onNavigate={navigateTo}
-                isOfflineMode={effectiveOffline}
-              />
+              effectiveRole === 'doctor' ? (
+                <DoctorHomeDashboard
+                  user={activeUser}
+                  onNavigate={navigateTo}
+                  isOfflineMode={effectiveOffline}
+                />
+              ) : (
+                <AccessDeniedScreen
+                  currentRole={effectiveRole}
+                  requiredRole="doctor"
+                  targetScreenName="Doctor Clinical Dashboard"
+                  onNavigateHome={() => navigateTo(getDefaultDashboardForRole(effectiveRole))}
+                  onLogout={handleLogoutConfirm}
+                />
+              )
             )}
 
 
@@ -486,10 +669,20 @@ export default function App() {
             )}
 
             {currentScreen === 'new-prescription' && (
-              <NewPrescriptionScreen
-                onNavigate={navigateTo}
-                role={role}
-              />
+              effectiveRole === 'doctor' ? (
+                <NewPrescriptionScreen
+                  onNavigate={navigateTo}
+                  role={effectiveRole}
+                />
+              ) : (
+                <AccessDeniedScreen
+                  currentRole={effectiveRole}
+                  requiredRole="doctor"
+                  targetScreenName="Clinical Prescription Pad"
+                  onNavigateHome={() => navigateTo(getDefaultDashboardForRole(effectiveRole))}
+                  onLogout={handleLogoutConfirm}
+                />
+              )
             )}
 
             {currentScreen === 'prescription-detail' && (
@@ -547,19 +740,38 @@ export default function App() {
             )}
 
             {currentScreen === 'withdrawal' && (
-              <AccountDetailsScreen
-                user={activeUser}
-                onNavigate={navigateTo}
-                initialTab={role === 'doctor' ? 'withdrawal' : 'details'}
-              />
+              effectiveRole === 'doctor' ? (
+                <AccountDetailsScreen
+                  user={activeUser}
+                  onNavigate={navigateTo}
+                  initialTab="withdrawal"
+                />
+              ) : (
+                <AccessDeniedScreen
+                  currentRole={effectiveRole}
+                  requiredRole="doctor"
+                  targetScreenName="Clinician Earnings & Payouts"
+                  onNavigateHome={() => navigateTo(getDefaultDashboardForRole(effectiveRole))}
+                  onLogout={handleLogoutConfirm}
+                />
+              )
             )}
 
             {currentScreen === 'admin-dashboard' && (
-              <AdminDashboardScreen
-                user={activeUser}
-                onNavigate={navigateTo}
-                onSetRolePreview={handleSetRolePreview}
-              />
+              effectiveRole === 'admin' ? (
+                <AdminDashboardScreen
+                  user={activeUser}
+                  onNavigate={navigateTo}
+                />
+              ) : (
+                <AccessDeniedScreen
+                  currentRole={effectiveRole}
+                  requiredRole="admin"
+                  targetScreenName="Administrator Command Center"
+                  onNavigateHome={() => navigateTo(getDefaultDashboardForRole(effectiveRole))}
+                  onLogout={handleLogoutConfirm}
+                />
+              )
             )}
               </motion.div>
             </AnimatePresence>
@@ -580,7 +792,7 @@ export default function App() {
           <BottomNav
             currentScreen={currentScreen}
             onNavigate={navigateTo}
-            role={role === 'admin' ? 'admin' : (currentScreen === 'doctor-home' || currentScreen === 'new-prescription' ? 'doctor' : role)}
+            role={effectiveRole}
           />
         )}
 
@@ -604,6 +816,15 @@ export default function App() {
           onClose={() => setIsLogoutModalOpen(false)}
           onConfirmLogout={handleLogoutConfirm}
         />
+
+        {/* Quick Unlock Screen (PIN / Face ID / Password) when app is locked after 15m idle or app re-opened */}
+        {currentUser && isLocked && (
+          <QuickUnlockScreen
+            user={currentUser}
+            onUnlock={handleQuickUnlock}
+            onLogout={handleLogoutConfirm}
+          />
+        )}
 
       </div>
     </div>

@@ -547,12 +547,11 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
               type="button"
               onClick={() => {
                 triggerHaptic('light');
-                if (onSetRolePreview) onSetRolePreview('patient', 'patient-home');
-                else onNavigate('patient-home');
+                onNavigate('security-center');
               }}
               className="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors text-center cursor-pointer truncate"
             >
-              Patient View
+              Security Center
             </button>
           </div>
 
@@ -560,12 +559,12 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
             type="button"
             onClick={() => {
               triggerHaptic('medium');
-              onNavigate(user.role === 'doctor' ? 'doctor-home' : 'patient-home');
+              onNavigate('settings');
             }}
-            className="w-full flex items-center justify-center space-x-2 px-3 py-2 text-xs font-semibold font-outfit text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+            className="w-full flex items-center justify-center space-x-2 px-3 py-2 text-xs font-semibold font-outfit text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Exit Admin Mode</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />
+            <span>Administrator Settings</span>
           </button>
         </div>
       </aside>
