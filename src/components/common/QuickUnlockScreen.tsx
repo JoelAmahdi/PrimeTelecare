@@ -116,7 +116,11 @@ export const QuickUnlockScreen: React.FC<QuickUnlockScreenProps> = ({
         } else {
           triggerHaptic('error');
           setShake(true);
-          setErrorMsg('Incorrect PIN. Default is 1234');
+          setErrorMsg(
+            biometricSettings.pinFallback && biometricSettings.pinFallback !== '1234'
+              ? 'Incorrect Security PIN. Please try again.'
+              : 'Incorrect PIN. Default is 1234'
+          );
           setTimeout(() => {
             setPin('');
             setShake(false);

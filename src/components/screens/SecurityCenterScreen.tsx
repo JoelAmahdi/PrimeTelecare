@@ -23,6 +23,7 @@ import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { getBiometricSettings, saveBiometricSettings, BiometricType } from '../../utils/biometrics';
 import { showToast } from '../../utils/toast';
+import { QuickLoginSetupModal } from '../common/QuickLoginSetupModal';
 
 interface SecurityCenterScreenProps {
   user: User;
@@ -32,6 +33,7 @@ interface SecurityCenterScreenProps {
 export const SecurityCenterScreen: React.FC<SecurityCenterScreenProps> = ({ user, onNavigate }) => {
   const [mfaEnabled, setMfaEnabled] = useState(true);
   const [sessionTimeout, setSessionTimeout] = useState('15');
+  const [showPinSetupModal, setShowPinSetupModal] = useState(false);
   
   // Biometric authentication state
   const [biometricEnabled, setBiometricEnabled] = useState<boolean>(true);
@@ -196,6 +198,26 @@ export const SecurityCenterScreen: React.FC<SecurityCenterScreenProps> = ({ user
               )}
             </div>
 
+            {/* Quick Unlock 4-Digit Security PIN */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="font-bold text-sm text-slate-800 block">Quick Unlock Security PIN</span>
+                <span className="text-xs text-slate-500">
+                  Used for returning logins and 15m idle unlocks. Fallback for Face ID.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('light');
+                  setShowPinSetupModal(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#022434] font-bold text-xs font-outfit transition-colors shrink-0"
+              >
+                Change PIN
+              </button>
+            </div>
+
             {/* MFA (For sensitive accounts) */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -338,6 +360,14 @@ export const SecurityCenterScreen: React.FC<SecurityCenterScreenProps> = ({ user
         </div>
 
       </div>
+
+      <QuickLoginSetupModal
+        isOpen={showPinSetupModal}
+        onClose={() => setShowPinSetupModal(false)}
+        onComplete={() => setShowPinSetupModal(false)}
+        userRole={user.role}
+        userName={user.name}
+      />
     </div>
   );
 };

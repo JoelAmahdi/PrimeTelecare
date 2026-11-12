@@ -44,6 +44,7 @@ import { auth as firebaseAuth } from './firebase';
 import { primeApi } from './services/apiClient';
 import { showToast } from './utils/toast';
 import { QuickUnlockScreen } from './components/common/QuickUnlockScreen';
+import { QuickLoginSetupModal } from './components/common/QuickLoginSetupModal';
 import { AccessDeniedScreen } from './components/common/AccessDeniedScreen';
 import { triggerHaptic } from './utils/haptics';
 import {
@@ -154,6 +155,7 @@ export default function App() {
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('doc-anya');
   const [currentBookingSummary, setCurrentBookingSummary] = useState<BookingSummary | undefined>(undefined);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [showQuickLoginSetup, setShowQuickLoginSetup] = useState<boolean>(false);
   const [isNetworkIssue, setIsNetworkIssue] = useState<boolean>(false);
   const [showWireframeFallback, setShowWireframeFallback] = useState<boolean>(false);
   const [isChatSessionActive, setIsChatSessionActive] = useState<boolean>(false);
@@ -225,6 +227,9 @@ export default function App() {
         setIsLocked(false);
         recordAppActivity();
         showToast(`Welcome back, ${res.user.name}!`, 'success');
+        if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
+          setShowQuickLoginSetup(true);
+        }
       }
     });
 
@@ -254,6 +259,9 @@ export default function App() {
               setIsLocked(false);
               recordAppActivity();
               showToast(`Welcome, ${apiRes.user.name}!`, 'success');
+              if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
+                setShowQuickLoginSetup(true);
+              }
             }
           } catch (err) {
             console.warn('Auto Google login error on auth state change:', err);
@@ -420,6 +428,9 @@ export default function App() {
 
     if (hasAcceptedTerms) {
       navigateTo(homeScreen);
+      if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
+        setShowQuickLoginSetup(true);
+      }
     } else {
       navigateTo('terms');
     }
@@ -439,6 +450,9 @@ export default function App() {
       console.error('Failed to save terms acceptance', e);
     }
     navigateTo(getDefaultDashboardForRole(effectiveRole));
+    if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
+      setShowQuickLoginSetup(true);
+    }
   };
 
   const handleLogoutConfirm = () => {
@@ -453,6 +467,7 @@ export default function App() {
       localStorage.removeItem('prime_telecare_terms_accepted');
       localStorage.removeItem('prime_telecare_app_locked');
       localStorage.removeItem('prime_telecare_screen');
+      localStorage.removeItem('prime_telecare_quick_login_setup');
     } catch {}
     navigateTo('welcome');
   };
@@ -825,6 +840,15 @@ export default function App() {
             onLogout={handleLogoutConfirm}
           />
         )}
+
+        {/* Quick Login PIN & Face ID Setup Modal Prompt After Login */}
+        <QuickLoginSetupModal
+          isOpen={showQuickLoginSetup && !isLocked && !['welcome', 'login', 'signup'].includes(currentScreen)}
+          onClose={() => setShowQuickLoginSetup(false)}
+          onComplete={() => setShowQuickLoginSetup(false)}
+          userRole={effectiveRole}
+          userName={activeUser.name}
+        />
 
       </div>
     </div>
