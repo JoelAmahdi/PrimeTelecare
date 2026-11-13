@@ -41,6 +41,7 @@ import {
   LifeBuoy,
   HelpCircle,
   Send,
+  Stethoscope,
 } from 'lucide-react';
 import { ScreenId, UserRole, User, PatientComplaint } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
@@ -67,6 +68,23 @@ interface AdminDoctor {
   earnings: number;
   avatar: string;
   availability?: string;
+  isOnline: boolean;
+}
+
+interface AdminPatient {
+  id: string;
+  name: string;
+  healthId: string;
+  email: string;
+  phone: string;
+  age: number;
+  gender: string;
+  avatar: string;
+  isOnline: boolean;
+  status: 'active' | 'suspended';
+  lastSeen: string;
+  totalConsultations: number;
+  registeredDate: string;
 }
 
 interface PayoutRequest {
@@ -179,7 +197,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     {
       id: 'doc-anya',
       name: 'Dr. Anya Sharma',
-      specialty: 'Pediatric Specialist',
+      specialty: 'Paediatrics',
       licenseNo: 'MDCN-78912-A',
       mdcnStatus: 'verified',
       hospitalAffiliation: 'Lagos Island Maternity Hospital',
@@ -190,11 +208,12 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       earnings: 425000,
       avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
       availability: 'Active In Video Room 2',
+      isOnline: true,
     },
     {
       id: 'doc-kenji',
       name: 'Dr. Kenji Tanaka',
-      specialty: 'Cardiologist',
+      specialty: 'Cardiology',
       licenseNo: 'MDCN-66201-B',
       mdcnStatus: 'verified',
       hospitalAffiliation: 'National Hospital Abuja',
@@ -205,26 +224,28 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       earnings: 680000,
       avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=300',
       availability: 'Online (Accepting Calls)',
+      isOnline: true,
     },
     {
-      id: 'doc-fatima',
-      name: 'Dr. Fatima Al-Fayed',
-      specialty: 'Consultant Dermatologist',
-      licenseNo: 'MDCN-99214-C',
+      id: 'doc-sarah',
+      name: 'Dr. Sarah Johnson',
+      specialty: 'Neurology',
+      licenseNo: 'MDCN-88492-S',
       mdcnStatus: 'verified',
       hospitalAffiliation: 'Lagos University Teaching Hospital (LUTH)',
-      graduatedFrom: 'Ahmadu Bello University',
-      status: 'pending',
-      rating: 4.8,
-      patients: 1400,
-      earnings: 310000,
+      graduatedFrom: 'College of Medicine, University of Lagos',
+      status: 'verified',
+      rating: 4.9,
+      patients: 1320,
+      earnings: 540000,
       avatar: 'https://images.unsplash.com/photo-1594824813566-88855ce78961?auto=format&fit=crop&q=80&w=300',
-      availability: 'Credentials Submitted',
+      availability: 'Active In Video Room 1',
+      isOnline: true,
     },
     {
       id: 'doc-ching',
       name: 'Dr. Ching Ming Yu',
-      specialty: 'Family Physician',
+      specialty: 'Pulmonology / Respiratory',
       licenseNo: 'MDCN-55410-D',
       mdcnStatus: 'verified',
       hospitalAffiliation: 'Reddington Multi-Specialist Hospital',
@@ -235,11 +256,44 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       earnings: 890000,
       avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=300',
       availability: 'Active In Chat Refills',
+      isOnline: true,
+    },
+    {
+      id: 'doc-chike',
+      name: 'Dr. Chike Obi',
+      specialty: 'Nephrology',
+      licenseNo: 'MDCN-44120-K',
+      mdcnStatus: 'verified',
+      hospitalAffiliation: 'Federal Medical Centre',
+      graduatedFrom: 'University of Benin College of Medical Sciences',
+      status: 'verified',
+      rating: 4.8,
+      patients: 980,
+      earnings: 320000,
+      avatar: 'https://images.unsplash.com/photo-1612349317150-e410f624c427?auto=format&fit=crop&w=400',
+      availability: 'Online (Scheduled Only)',
+      isOnline: true,
+    },
+    {
+      id: 'doc-fatima',
+      name: 'Dr. Fatima Al-Fayed',
+      specialty: 'Gastroenterology',
+      licenseNo: 'MDCN-99214-C',
+      mdcnStatus: 'verified',
+      hospitalAffiliation: 'Lagos University Teaching Hospital (LUTH)',
+      graduatedFrom: 'Ahmadu Bello University',
+      status: 'pending',
+      rating: 4.8,
+      patients: 1400,
+      earnings: 310000,
+      avatar: 'https://images.unsplash.com/photo-1594824813566-88855ce78961?auto=format&fit=crop&q=80&w=300',
+      availability: 'Offline',
+      isOnline: false,
     },
     {
       id: 'doc-emeka',
       name: 'Dr. Emeka Nnamdi',
-      specialty: 'General Practitioner',
+      specialty: 'General Practice',
       licenseNo: 'MDCN-33129-E',
       mdcnStatus: 'verified',
       hospitalAffiliation: 'University of Nigeria Teaching Hospital (UNTH)',
@@ -250,8 +304,138 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       earnings: 180000,
       avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
       availability: 'Awaiting Final Review',
+      isOnline: false,
     },
   ]);
+
+  // Patients State
+  const [patientsList, setPatientsList] = useState<AdminPatient[]>([
+    {
+      id: 'pat-1',
+      name: 'Ada Okonkwo',
+      healthId: 'PRM-8821',
+      email: 'ada.okonkwo@email.com',
+      phone: '+234 801 234 5678',
+      age: 28,
+      gender: 'Female',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+      isOnline: true,
+      status: 'active',
+      lastSeen: 'Online Now',
+      totalConsultations: 8,
+      registeredDate: 'Jan 15, 2026',
+    },
+    {
+      id: 'pat-2',
+      name: 'Tunde Bakare',
+      healthId: 'PRM-5520',
+      email: 'tunde.bakare@example.com',
+      phone: '+234 802 345 6789',
+      age: 42,
+      gender: 'Male',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
+      isOnline: true,
+      status: 'active',
+      lastSeen: 'Online Now',
+      totalConsultations: 5,
+      registeredDate: 'Feb 02, 2026',
+    },
+    {
+      id: 'pat-3',
+      name: 'Ngozi Adebayo',
+      healthId: 'PRM-9412',
+      email: 'ngozi.adebayo@example.com',
+      phone: '+234 803 456 7890',
+      age: 34,
+      gender: 'Female',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300',
+      isOnline: true,
+      status: 'active',
+      lastSeen: 'Online Now',
+      totalConsultations: 6,
+      registeredDate: 'Feb 10, 2026',
+    },
+    {
+      id: 'pat-4',
+      name: 'Mama Bose',
+      healthId: 'PRM-3310',
+      email: 'mama.bose@example.com',
+      phone: '+234 804 567 8901',
+      age: 62,
+      gender: 'Female',
+      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=300',
+      isOnline: true,
+      status: 'active',
+      lastSeen: 'Online Now',
+      totalConsultations: 12,
+      registeredDate: 'Dec 18, 2025',
+    },
+    {
+      id: 'pat-5',
+      name: 'Emeka Eze',
+      healthId: 'PRM-7719',
+      email: 'emeka.eze@example.com',
+      phone: '+234 805 678 9012',
+      age: 38,
+      gender: 'Male',
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300',
+      isOnline: true,
+      status: 'active',
+      lastSeen: 'Online Now',
+      totalConsultations: 3,
+      registeredDate: 'Mar 01, 2026',
+    },
+    {
+      id: 'pat-6',
+      name: 'Kemi Adeyemi',
+      healthId: 'PRM-4491',
+      email: 'kemi.adeyemi@example.com',
+      phone: '+234 806 789 0123',
+      age: 31,
+      gender: 'Female',
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=300',
+      isOnline: true,
+      status: 'active',
+      lastSeen: 'Online Now',
+      totalConsultations: 7,
+      registeredDate: 'Jan 28, 2026',
+    },
+    {
+      id: 'pat-7',
+      name: 'Fatima Bello',
+      healthId: 'PRM-6184',
+      email: 'fatima.bello@example.com',
+      phone: '+234 807 890 1234',
+      age: 29,
+      gender: 'Female',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+      isOnline: false,
+      status: 'active',
+      lastSeen: '2 hours ago',
+      totalConsultations: 4,
+      registeredDate: 'Feb 19, 2026',
+    },
+    {
+      id: 'pat-8',
+      name: 'Samuel Okonkwo',
+      healthId: 'PRM-1928',
+      email: 'samuel.okonkwo@example.com',
+      phone: '+234 808 901 2345',
+      age: 55,
+      gender: 'Male',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=300',
+      isOnline: false,
+      status: 'active',
+      lastSeen: 'Yesterday',
+      totalConsultations: 2,
+      registeredDate: 'Mar 05, 2026',
+    },
+  ]);
+
+  // Presence directory filter state
+  const [presenceFilterRole, setPresenceFilterRole] = useState<'all' | 'doctors' | 'patients'>('all');
+  const [presenceStatusFilter, setPresenceStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [presenceSearch, setPresenceSearch] = useState('');
 
   // Live Active Consultations
   const [liveSessions, setLiveSessions] = useState<LiveSession[]>([
@@ -359,6 +543,10 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const pendingDoctorsCount = doctorsList.filter((d) => d.status === 'pending').length;
   const pendingPayoutsCount = payoutsList.filter((p) => p.status === 'pending').length;
   const liveSessionsCount = liveSessions.length;
+  const onlineDoctorsCount = doctorsList.filter((d) => d.isOnline).length;
+  const onlinePatientsCount = patientsList.filter((p) => p.isOnline).length;
+  const totalDoctorsCount = doctorsList.length;
+  const totalPatientsCount = patientsList.length;
 
   // Handlers
   const handleApproveDoctor = (id: string, name: string) => {
@@ -413,6 +601,42 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
     showToast('Live consultation concluded by platform supervisor');
   };
 
+  const handleToggleDoctorOnline = (id: string) => {
+    triggerHaptic('selection');
+    setDoctorsList((prev) =>
+      prev.map((d) => {
+        if (d.id === id) {
+          const nextOnline = !d.isOnline;
+          return {
+            ...d,
+            isOnline: nextOnline,
+            availability: nextOnline ? 'Online (Accepting Calls)' : 'Offline / Off Duty',
+          };
+        }
+        return d;
+      })
+    );
+    showToast('Doctor online presence updated');
+  };
+
+  const handleTogglePatientOnline = (id: string) => {
+    triggerHaptic('selection');
+    setPatientsList((prev) =>
+      prev.map((p) => {
+        if (p.id === id) {
+          const nextOnline = !p.isOnline;
+          return {
+            ...p,
+            isOnline: nextOnline,
+            lastSeen: nextOnline ? 'Online Now' : 'Just now',
+          };
+        }
+        return p;
+      })
+    );
+    showToast('Patient online presence updated');
+  };
+
   const pendingComplaintsCount = complaintsList.filter((c) => c.status === 'pending' || c.status === 'in_review').length;
 
   const handleResolveComplaint = (id: string, notes?: string) => {
@@ -464,6 +688,49 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       c.subject.toLowerCase().includes(q) ||
       c.description.toLowerCase().includes(q) ||
       (c.doctorName && c.doctorName.toLowerCase().includes(q))
+    );
+  });
+
+  const filteredPresenceUsers = [
+    ...(presenceFilterRole === 'patients'
+      ? []
+      : doctorsList.map((d) => ({
+          id: d.id,
+          role: 'doctor' as const,
+          name: d.name,
+          subtitle: d.specialty,
+          extra: d.hospitalAffiliation,
+          avatar: d.avatar,
+          isOnline: d.isOnline,
+          status: d.status,
+          detail: d.licenseNo,
+          originalDoctor: d,
+        }))),
+    ...(presenceFilterRole === 'doctors'
+      ? []
+      : patientsList.map((p) => ({
+          id: p.id,
+          role: 'patient' as const,
+          name: p.name,
+          subtitle: `Health ID: ${p.healthId}`,
+          extra: `${p.gender}, ${p.age}y · ${p.totalConsultations} Consults`,
+          avatar: p.avatar,
+          isOnline: p.isOnline,
+          status: p.status,
+          detail: p.email,
+          originalPatient: p,
+        }))),
+  ].filter((user) => {
+    if (presenceStatusFilter === 'online' && !user.isOnline) return false;
+    if (presenceStatusFilter === 'offline' && user.isOnline) return false;
+    const searchTarget = presenceSearch.trim() || globalSearch.trim();
+    if (!searchTarget) return true;
+    const q = searchTarget.toLowerCase();
+    return (
+      user.name.toLowerCase().includes(q) ||
+      user.subtitle.toLowerCase().includes(q) ||
+      user.extra.toLowerCase().includes(q) ||
+      user.detail.toLowerCase().includes(q)
     );
   });
 
@@ -567,6 +834,34 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
               </p>
               <span className="text-[9px] font-semibold text-emerald-700 block mt-0.5">
                 System Administrator
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Real-time Presence Ticker in Sidebar */}
+        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+            <span>Platform Presence</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          </div>
+          <div className="space-y-1.5 text-xs font-nunito">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center space-x-1.5 text-slate-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shadow-xs shadow-emerald-400/50" />
+                <span>Doctors Online</span>
+              </span>
+              <span className="font-bold font-mono text-emerald-800 text-xs">
+                {onlineDoctorsCount} <span className="text-[10px] text-slate-400 font-normal">/ {totalDoctorsCount}</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center space-x-1.5 text-slate-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shadow-xs shadow-emerald-400/50" />
+                <span>Patients Online</span>
+              </span>
+              <span className="font-bold font-mono text-emerald-800 text-xs">
+                {onlinePatientsCount} <span className="text-[10px] text-slate-400 font-normal">/ {totalPatientsCount}</span>
               </span>
             </div>
           </div>
@@ -809,74 +1104,120 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
           {/* ========================================================================= */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Executive KPI Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Metric 1 */}
+              {/* Executive KPI & Real-Time Presence Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
+                {/* Metric 1: Doctors on Platform with Online Indicator */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs relative overflow-hidden transition-all hover:border-emerald-300">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-nunito">
+                    <span className="font-semibold text-slate-600">Doctors On Platform</span>
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-700">
+                      <Stethoscope className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2.5 flex items-baseline justify-between">
+                    <span className="text-2xl sm:text-3xl font-bold font-outfit text-[#0f172a] tabular-nums">
+                      {totalDoctorsCount}
+                    </span>
+                    <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                      <span>{onlineDoctorsCount} Online</span>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-nunito text-slate-400">
+                    <span>{totalDoctorsCount - onlineDoctorsCount} Offline</span>
+                    <span className="text-emerald-700 font-semibold">{doctorsList.filter((d) => d.status === 'verified').length} Verified</span>
+                  </div>
+                </div>
+
+                {/* Metric 2: Patients on Platform with Online Indicator */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs relative overflow-hidden transition-all hover:border-sky-300">
+                  <div className="flex items-center justify-between text-slate-500 text-xs font-nunito">
+                    <span className="font-semibold text-slate-600">Patients On Platform</span>
+                    <div className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center text-sky-700">
+                      <Users className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2.5 flex items-baseline justify-between">
+                    <span className="text-2xl sm:text-3xl font-bold font-outfit text-[#0f172a] tabular-nums">
+                      {totalPatientsCount}
+                    </span>
+                    <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                      <span>{onlinePatientsCount} Online</span>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-nunito text-slate-400">
+                    <span>{totalPatientsCount - onlinePatientsCount} Offline</span>
+                    <span className="text-sky-700 font-semibold">100% Active</span>
+                  </div>
+                </div>
+
+                {/* Metric 3: Active Consultations */}
                 <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
                   <div className="flex items-center justify-between text-slate-500 text-xs font-nunito">
-                    <span>Active Tele-Consultations</span>
+                    <span className="font-semibold text-slate-600">Active Consultations</span>
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   </div>
-                  <div className="mt-2 flex items-baseline space-x-2">
+                  <div className="mt-2.5 flex items-baseline space-x-2">
                     <span className="text-2xl sm:text-3xl font-bold font-outfit text-[#0f172a] tabular-nums">
                       {liveSessionsCount}
                     </span>
                     <span className="text-xs font-semibold text-emerald-700">Live Now</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-nunito mt-1">
-                    10 Video · 3 Voice · 1 Chat
-                  </p>
+                  <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-400 font-nunito">
+                    Encrypted WebRTC
+                  </div>
                 </div>
 
-                {/* Metric 2 */}
+                {/* Metric 4: Pending Licensures */}
                 <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
                   <div className="flex items-center justify-between text-slate-500 text-xs font-nunito">
-                    <span>Pending Licensures</span>
+                    <span className="font-semibold text-slate-600">Pending Licensures</span>
                     <AlertTriangle className="w-4 h-4 text-amber-500" />
                   </div>
-                  <div className="mt-2 flex items-baseline space-x-2">
+                  <div className="mt-2.5 flex items-baseline space-x-2">
                     <span className="text-2xl sm:text-3xl font-bold font-outfit text-[#0f172a] tabular-nums">
                       {pendingDoctorsCount}
                     </span>
-                    <span className="text-xs font-semibold text-amber-700">Awaiting MDCN Audit</span>
+                    <span className="text-xs font-semibold text-amber-700">Awaiting MDCN</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-nunito mt-1">
-                    Requires admin verification
-                  </p>
+                  <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-400 font-nunito">
+                    Admin verification
+                  </div>
                 </div>
 
-                {/* Metric 3 */}
+                {/* Metric 5: Monthly Gross Booking */}
                 <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
                   <div className="flex items-center justify-between text-slate-500 text-xs font-nunito">
-                    <span>Monthly Gross Booking</span>
+                    <span className="font-semibold text-slate-600">Monthly Gross</span>
                     <TrendingUp className="w-4 h-4 text-emerald-600" />
                   </div>
-                  <div className="mt-2 flex items-baseline space-x-2">
+                  <div className="mt-2.5 flex items-baseline space-x-1.5">
                     <span className="text-2xl sm:text-3xl font-bold font-outfit text-[#0f172a] tabular-nums">
                       ₦4.85M
                     </span>
-                    <span className="text-xs font-semibold text-emerald-700 font-mono">+18% MoM</span>
+                    <span className="text-xs font-semibold text-emerald-700 font-mono">+18%</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-nunito mt-1">
-                    Platform 15% Take: <strong className="text-slate-700 font-mono">₦727,500</strong>
-                  </p>
+                  <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-400 font-nunito">
+                    Platform: <strong className="text-slate-700 font-mono">₦727.5k</strong>
+                  </div>
                 </div>
 
-                {/* Metric 4 */}
+                {/* Metric 6: Platform Uptime */}
                 <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
                   <div className="flex items-center justify-between text-slate-500 text-xs font-nunito">
-                    <span>Platform Uptime</span>
+                    <span className="font-semibold text-slate-600">Platform Uptime</span>
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
                   </div>
-                  <div className="mt-2 flex items-baseline space-x-2">
+                  <div className="mt-2.5 flex items-baseline space-x-2">
                     <span className="text-2xl sm:text-3xl font-bold font-outfit text-[#0f172a] tabular-nums">
                       99.98%
                     </span>
                     <span className="text-xs font-semibold text-emerald-700">Nominal</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-nunito mt-1">
-                    WebRTC media clusters green
-                  </p>
+                  <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-400 font-nunito">
+                    Media clusters green
+                  </div>
                 </div>
               </div>
 
@@ -1259,6 +1600,293 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* ========================================================================= */}
+              {/* PLATFORM USERS & REAL-TIME PRESENCE MONITOR                              */}
+              {/* ========================================================================= */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-5">
+                {/* Section Header */}
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#006c44] flex items-center justify-center">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <h3 className="font-bold font-outfit text-base text-[#0f172a]">
+                        Platform Users & Live Online Presence Directory
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-500 font-nunito mt-1">
+                      Monitor all registered doctors and patients on Telecare with live online status indicators.
+                    </p>
+                  </div>
+
+                  {/* Summary Counters with Green Dots */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-xs font-semibold text-emerald-900 font-outfit">
+                      <Stethoscope className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Doctors:</span>
+                      <strong className="font-mono text-emerald-900">{totalDoctorsCount}</strong>
+                      <span className="text-slate-300">|</span>
+                      <span className="inline-flex items-center space-x-1 text-emerald-700">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>{onlineDoctorsCount} Online</span>
+                      </span>
+                    </div>
+
+                    <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-sky-50/70 border border-sky-200/80 text-xs font-semibold text-sky-900 font-outfit">
+                      <UserIcon className="w-3.5 h-3.5 text-sky-700" />
+                      <span>Patients:</span>
+                      <strong className="font-mono text-sky-900">{totalPatientsCount}</strong>
+                      <span className="text-slate-300">|</span>
+                      <span className="inline-flex items-center space-x-1 text-emerald-700">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>{onlinePatientsCount} Online</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter and Search Controls Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  {/* Role Tabs */}
+                  <div className="flex items-center space-x-1.5 p-1 bg-slate-100/80 rounded-xl text-xs font-semibold font-outfit">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setPresenceFilterRole('all');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        presenceFilterRole === 'all'
+                          ? 'bg-white text-[#0f172a] shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      All Users ({doctorsList.length + patientsList.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setPresenceFilterRole('doctors');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        presenceFilterRole === 'doctors'
+                          ? 'bg-white text-emerald-800 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Doctors ({doctorsList.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        setPresenceFilterRole('patients');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        presenceFilterRole === 'patients'
+                          ? 'bg-white text-sky-800 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Patients ({patientsList.length})
+                    </button>
+                  </div>
+
+                  {/* Presence Status Filter & Search */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center space-x-1 p-1 bg-slate-100/80 rounded-xl text-xs font-semibold font-outfit">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('light');
+                          setPresenceStatusFilter('all');
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          presenceStatusFilter === 'all'
+                            ? 'bg-white text-[#0f172a] shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        All Status
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('light');
+                          setPresenceStatusFilter('online');
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1 cursor-pointer ${
+                          presenceStatusFilter === 'online'
+                            ? 'bg-white text-emerald-800 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Online ({onlineDoctorsCount + onlinePatientsCount})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('light');
+                          setPresenceStatusFilter('offline');
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center space-x-1 cursor-pointer ${
+                          presenceStatusFilter === 'offline'
+                            ? 'bg-white text-slate-800 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                        <span>Offline</span>
+                      </button>
+                    </div>
+
+                    <div className="relative w-44 sm:w-56">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={presenceSearch}
+                        onChange={(e) => setPresenceSearch(e.target.value)}
+                        placeholder="Search name, ID..."
+                        className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-nunito focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white"
+                      />
+                      {presenceSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setPresenceSearch('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Users List Grid */}
+                {filteredPresenceUsers.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                    <Users className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                    <p className="text-xs font-semibold font-outfit text-slate-600">No users match your criteria</p>
+                    <p className="text-[11px] text-slate-400 font-nunito mt-0.5">Try clearing filters or search keywords.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+                    {filteredPresenceUsers.map((item) => (
+                      <div
+                        key={`${item.role}-${item.id}`}
+                        className="p-3.5 rounded-xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between"
+                      >
+                        <div className="flex items-start justify-between gap-2.5">
+                          <div className="flex items-center space-x-3 min-w-0">
+                            {/* Avatar with Status Pip */}
+                            <div className="relative shrink-0">
+                              <img
+                                src={item.avatar}
+                                alt={item.name}
+                                className="w-11 h-11 rounded-xl object-cover ring-1 ring-slate-100"
+                              />
+                              <span
+                                className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white flex items-center justify-center ${
+                                  item.isOnline ? 'bg-emerald-500' : 'bg-slate-300'
+                                }`}
+                              >
+                                {item.isOnline && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                                )}
+                              </span>
+                            </div>
+
+                            {/* Name & Role */}
+                            <div className="min-w-0">
+                              <div className="flex items-center space-x-1.5">
+                                <h4 className="font-bold font-outfit text-xs text-[#0f172a] truncate">
+                                  {item.name}
+                                </h4>
+                                {item.status === 'verified' && (
+                                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-[11px] font-semibold text-slate-600 truncate font-nunito">
+                                {item.subtitle}
+                              </p>
+                              <p className="text-[10px] text-slate-400 truncate font-nunito">
+                                {item.extra}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Role Pill */}
+                          <span
+                            className={`shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                              item.role === 'doctor'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : 'bg-sky-50 text-sky-800 border-sky-200'
+                            }`}
+                          >
+                            {item.role}
+                          </span>
+                        </div>
+
+                        {/* Presence Status Bar & Actions */}
+                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                          {/* Live Indicator with Green Dot */}
+                          <div className="flex items-center space-x-1.5">
+                            {item.isOnline ? (
+                              <div className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>Online</span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 text-[11px] font-medium">
+                                <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                <span>Offline</span>
+                              </div>
+                            )}
+                            <span className="text-[10px] text-slate-400 font-nunito truncate max-w-[100px]">
+                              {item.detail}
+                            </span>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center space-x-1.5">
+                            {item.role === 'doctor' && item.originalDoctor && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDoctorDossier(item.originalDoctor)}
+                                className="px-2 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Dossier
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (item.role === 'doctor') {
+                                  handleToggleDoctorOnline(item.id);
+                                } else {
+                                  handleTogglePatientOnline(item.id);
+                                }
+                              }}
+                              className={`px-2.5 py-1 text-[11px] font-semibold font-outfit rounded-lg transition-colors cursor-pointer ${
+                                item.isOnline
+                                  ? 'bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700'
+                                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
+                              }`}
+                            >
+                              {item.isOnline ? 'Set Offline' : 'Set Online'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
