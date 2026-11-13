@@ -10,12 +10,16 @@ authRouter.post('/login', (req: Request, res: Response) => {
 
   if (biometricToken) {
     // Biometric instant authentication
-    const user = store.getUserById('pat-1') || store.getDoctors()[0];
+    const user = role === 'doctor'
+      ? (store.getUserById('doc-1') || store.getDoctors()[0])
+      : role === 'admin'
+      ? (store.getUserById('admin-1') || store.getUserById('pat-1'))
+      : (store.getUserById('pat-1') || store.getDoctors()[0]);
     return res.json({
       success: true,
       message: 'Biometric authentication successful',
       token: `bio-jwt-${Date.now()}`,
-      user,
+      user: { ...user, role: (role as UserRole) || user.role },
     });
   }
 
@@ -72,23 +76,29 @@ authRouter.post('/login', (req: Request, res: Response) => {
     return res.json({
       success: true,
       token: `jwt-doc-${Date.now()}`,
-      user: doctorUser,
+      user: { ...doctorUser, role: 'doctor' as UserRole },
     });
   }
 
   // Pre-configured demo accounts
   if (normalizedEmail === 'patient@telecare.com') {
     const user = store.getUserById('pat-1')!;
-    return res.json({ success: true, token: `jwt-pat-1-${Date.now()}`, user });
+    return res.json({ success: true, token: `jwt-pat-1-${Date.now()}`, user: { ...user, role: 'patient' as UserRole } });
   }
 
   // Check if registered user exists in database
   const existing = store.getUserByEmail(email);
   if (existing) {
+    const targetRole = (role === 'doctor' || role === 'admin') ? (role as UserRole) : (existing.role || (role as UserRole) || 'patient');
+    const updated = {
+      ...existing,
+      role: targetRole,
+    };
+    store.saveUser(updated);
     return res.json({
       success: true,
       token: `jwt-${existing.id}-${Date.now()}`,
-      user: existing,
+      user: updated,
     });
   }
 
@@ -129,10 +139,12 @@ authRouter.post('/google', (req: Request, res: Response) => {
   // Check if user already exists
   const existing = store.getUserByEmail(email);
   if (existing) {
+    const targetRole = (role === 'doctor' || role === 'admin') ? (role as UserRole) : (existing.role || (role as UserRole) || 'patient');
     const updated: User = {
       ...existing,
       name: existing.name || name || email.split('@')[0],
       avatarUrl: avatarUrl || existing.avatarUrl,
+      role: targetRole,
     };
     store.saveUser(updated);
     return res.json({

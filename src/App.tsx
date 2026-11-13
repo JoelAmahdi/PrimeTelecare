@@ -215,18 +215,20 @@ export default function App() {
   useEffect(() => {
     checkGoogleRedirectResult().then((res) => {
       if (res && res.success && res.user) {
-        setCurrentUser(res.user);
-        const resolvedRole = res.user.role || 'patient';
+        const pendingRole = (localStorage.getItem('prime_pending_login_role') as UserRole) || 'patient';
+        const resolvedRole = (pendingRole === 'doctor' || pendingRole === 'admin') ? pendingRole : (res.user.role || pendingRole);
+        const resolvedUser: User = { ...res.user, role: resolvedRole };
+        setCurrentUser(resolvedUser);
         setRole(resolvedRole);
-        localStorage.setItem('prime_telecare_user', JSON.stringify(res.user));
+        localStorage.setItem('prime_telecare_user', JSON.stringify(resolvedUser));
         localStorage.setItem('prime_telecare_role', resolvedRole);
-        const homeScreen: ScreenId = resolvedRole === 'doctor' ? 'doctor-home' : resolvedRole === 'admin' ? 'admin-dashboard' : 'patient-home';
+        const homeScreen: ScreenId = getDefaultDashboardForRole(resolvedRole);
         localStorage.setItem('prime_telecare_screen', homeScreen);
         setCurrentScreen(homeScreen);
         setSessionLocked(false);
         setIsLocked(false);
         recordAppActivity();
-        showToast(`Welcome back, ${res.user.name}!`, 'success');
+        showToast(`Welcome back, ${resolvedUser.name}!`, 'success');
         if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
           setShowQuickLoginSetup(true);
         }
@@ -239,26 +241,28 @@ export default function App() {
         const storedUser = localStorage.getItem('prime_telecare_user');
         if (!storedUser) {
           try {
+            const pendingRole = (localStorage.getItem('prime_pending_login_role') as UserRole) || (localStorage.getItem('prime_telecare_role') as UserRole) || 'patient';
             const apiRes = await primeApi.googleAuth({
               email: fbUser.email,
               name: fbUser.displayName || fbUser.email.split('@')[0],
               avatarUrl: fbUser.photoURL || undefined,
               googleUid: fbUser.uid,
-              role: 'patient',
+              role: pendingRole,
             });
             if (apiRes.user) {
-              setCurrentUser(apiRes.user);
-              const resolvedRole = apiRes.user.role || 'patient';
+              const resolvedRole = (pendingRole === 'doctor' || pendingRole === 'admin') ? pendingRole : (apiRes.user.role || pendingRole);
+              const resolvedUser: User = { ...apiRes.user, role: resolvedRole };
+              setCurrentUser(resolvedUser);
               setRole(resolvedRole);
-              localStorage.setItem('prime_telecare_user', JSON.stringify(apiRes.user));
+              localStorage.setItem('prime_telecare_user', JSON.stringify(resolvedUser));
               localStorage.setItem('prime_telecare_role', resolvedRole);
-              const homeScreen: ScreenId = resolvedRole === 'doctor' ? 'doctor-home' : resolvedRole === 'admin' ? 'admin-dashboard' : 'patient-home';
+              const homeScreen: ScreenId = getDefaultDashboardForRole(resolvedRole);
               localStorage.setItem('prime_telecare_screen', homeScreen);
               setCurrentScreen(homeScreen);
               setSessionLocked(false);
               setIsLocked(false);
               recordAppActivity();
-              showToast(`Welcome, ${apiRes.user.name}!`, 'success');
+              showToast(`Welcome, ${resolvedUser.name}!`, 'success');
               if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
                 setShowQuickLoginSetup(true);
               }
@@ -407,18 +411,20 @@ export default function App() {
   }, [effectiveRole, currentScreen]);
 
   const handleLoginSuccess = (newRole: UserRole, user?: User) => {
-    const finalRole = user?.role || newRole;
+    const finalRole: UserRole = (newRole === 'doctor' || newRole === 'admin') ? newRole : (user?.role || newRole);
     setRole(finalRole);
+    const resolvedUser: User = {
+      ...(user || (finalRole === 'doctor' ? currentUserDoctor : finalRole === 'admin' ? currentUserAdmin : currentUserPatient)),
+      role: finalRole,
+    };
+    setCurrentUser(resolvedUser);
     try {
       localStorage.setItem('prime_telecare_role', finalRole);
+      localStorage.setItem('prime_telecare_user', JSON.stringify(resolvedUser));
+      if (finalRole === 'doctor' || finalRole === 'admin') {
+        localStorage.setItem('prime_telecare_terms_accepted', 'true');
+      }
     } catch {}
-
-    if (user) {
-      setCurrentUser(user);
-      try {
-        localStorage.setItem('prime_telecare_user', JSON.stringify(user));
-      } catch {}
-    }
 
     setSessionLocked(false);
     setIsLocked(false);
@@ -426,8 +432,11 @@ export default function App() {
 
     const homeScreen = getDefaultDashboardForRole(finalRole);
 
-    if (finalRole === 'admin' || hasAcceptedTerms) {
-      navigateTo(homeScreen);
+    if (finalRole === 'admin' || finalRole === 'doctor' || hasAcceptedTerms) {
+      try {
+        localStorage.setItem('prime_telecare_screen', homeScreen);
+      } catch {}
+      setCurrentScreen(homeScreen);
       if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
         setShowQuickLoginSetup(true);
       }
@@ -449,7 +458,12 @@ export default function App() {
     } catch (e) {
       console.error('Failed to save terms acceptance', e);
     }
-    navigateTo(getDefaultDashboardForRole(effectiveRole));
+    const currentRole = (localStorage.getItem('prime_telecare_role') as UserRole) || effectiveRole;
+    const targetDashboard = getDefaultDashboardForRole(currentRole);
+    try {
+      localStorage.setItem('prime_telecare_screen', targetDashboard);
+    } catch {}
+    setCurrentScreen(targetDashboard);
     if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
       setShowQuickLoginSetup(true);
     }

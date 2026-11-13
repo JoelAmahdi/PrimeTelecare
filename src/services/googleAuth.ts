@@ -6,7 +6,7 @@ import {
 } from 'firebase/auth';
 import { auth as firebaseAuth } from '../firebase';
 import { primeApi } from './apiClient';
-import { User } from '../types';
+import { User, UserRole } from '../types';
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('profile');
@@ -31,7 +31,10 @@ export function isMobileDevice(): boolean {
  * Directly launches Google's official OAuth Account Picker.
  * Works for any Google user worldwide across mobile Safari, Chrome, and desktop.
  */
-export function launchGoogleOAuth(): void {
+export function launchGoogleOAuth(role: UserRole = 'patient'): void {
+  try {
+    localStorage.setItem('prime_pending_login_role', role);
+  } catch {}
   const clientId = '841125042406-0f7ansh4it7lh57cu7fgd2ktt4bgmbp2.apps.googleusercontent.com';
   const redirectUri = window.location.origin;
   const scope = encodeURIComponent('email profile openid');
@@ -45,6 +48,8 @@ export function launchGoogleOAuth(): void {
  * Checks for a pending redirect result (used after signInWithRedirect on mobile)
  */
 export async function checkGoogleRedirectResult(): Promise<GoogleAuthResult | null> {
+  const pendingRole = (typeof window !== 'undefined' ? (localStorage.getItem('prime_pending_login_role') as UserRole) : null) || 'patient';
+
   // First check URL hash for direct OAuth tokens
   if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
     try {
@@ -85,7 +90,7 @@ export async function checkGoogleRedirectResult(): Promise<GoogleAuthResult | nu
           email,
           name: name || email.split('@')[0],
           avatarUrl: picture || undefined,
-          role: 'patient',
+          role: pendingRole,
         });
         return {
           success: true,
@@ -109,7 +114,7 @@ export async function checkGoogleRedirectResult(): Promise<GoogleAuthResult | nu
       name: fbUser.displayName || fbUser.email.split('@')[0],
       avatarUrl: fbUser.photoURL || undefined,
       googleUid: fbUser.uid,
-      role: 'patient',
+      role: pendingRole,
     });
     return {
       success: true,
@@ -126,7 +131,11 @@ export async function checkGoogleRedirectResult(): Promise<GoogleAuthResult | nu
  * Initiates Google OAuth Sign-In via Firebase popup (desktop) or redirect (mobile)
  * and registers/authenticates the user in the Prime Telecare backend database.
  */
-export async function signInWithGoogle(): Promise<GoogleAuthResult> {
+export async function signInWithGoogle(role: UserRole = 'patient'): Promise<GoogleAuthResult> {
+  try {
+    localStorage.setItem('prime_pending_login_role', role);
+  } catch {}
+
   // Attempt popup first for both desktop and modern mobile devices.
   // This keeps the SPA state alive and prevents cross-origin session drops on Safari.
   try {
@@ -143,7 +152,7 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
       name: fbUser.displayName || fbUser.email.split('@')[0],
       avatarUrl: fbUser.photoURL || undefined,
       googleUid: fbUser.uid,
-      role: 'patient',
+      role,
     });
 
     return {
@@ -192,12 +201,12 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
 /**
  * Direct Google email fallback in case of strict mobile cookie/popup restrictions
  */
-export async function directGoogleLogin(email: string, name?: string): Promise<GoogleAuthResult> {
+export async function directGoogleLogin(email: string, name?: string, role: UserRole = 'patient'): Promise<GoogleAuthResult> {
   try {
     const apiRes = await primeApi.googleAuth({
       email: email.trim().toLowerCase(),
       name: name || email.split('@')[0],
-      role: 'patient',
+      role,
     });
     return {
       success: true,

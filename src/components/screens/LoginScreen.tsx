@@ -147,7 +147,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
         });
         triggerHaptic('success');
         showToast(`Welcome Dr. ${res.user.name || 'Clinician'}!`, 'success');
-        onLoginSuccess('doctor', res.user);
+        const docUser: User = {
+          ...(res.user || currentUserDoctor),
+          role: 'doctor',
+        };
+        onLoginSuccess('doctor', docUser);
       } catch {
         onLoginSuccess('doctor', currentUserDoctor);
       }
@@ -177,10 +181,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
     setGoogleErrorMsg(undefined);
 
     try {
-      const res = await signInWithGoogle();
+      const res = await signInWithGoogle(loginRole);
       if (res.success && res.user) {
         showToast(`Welcome, ${res.user.name}!`, 'success');
-        onLoginSuccess(res.user.role || loginRole, res.user);
+        const resolvedRole: UserRole = (loginRole === 'doctor' || loginRole === 'admin') ? loginRole : (res.user.role || loginRole);
+        onLoginSuccess(resolvedRole, { ...res.user, role: resolvedRole });
         return;
       }
       if (res.error) {
@@ -643,9 +648,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
           setShowBiometricModal(false);
           try {
             const res = await primeApi.login({ biometricToken: 'valid-biometric-token', role: loginRole });
-            onLoginSuccess(res.user.role || loginRole, res.user);
+            const resolvedRole = (loginRole === 'doctor' || loginRole === 'admin') ? loginRole : (res.user?.role || loginRole);
+            onLoginSuccess(resolvedRole, { ...res.user, role: resolvedRole });
           } catch {
-            onLoginSuccess(loginRole);
+            const fallbackUser = loginRole === 'doctor' ? currentUserDoctor : loginRole === 'admin' ? currentUserAdmin : currentUserPatient;
+            onLoginSuccess(loginRole, fallbackUser);
           }
         }}
       />
@@ -659,6 +666,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
         }}
         errorMessage={googleErrorMsg}
         initialEmail={email.includes('@gmail') ? email : ''}
+        initialRole={loginRole}
         onSuccess={(userRole, user) => onLoginSuccess(userRole, user)}
       />
     </div>

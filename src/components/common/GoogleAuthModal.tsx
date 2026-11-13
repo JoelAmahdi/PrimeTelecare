@@ -11,6 +11,7 @@ interface GoogleAuthModalProps {
   onSuccess: (role: UserRole, user: User) => void;
   initialEmail?: string;
   errorMessage?: string;
+  initialRole?: UserRole;
 }
 
 export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
@@ -19,6 +20,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   onSuccess,
   initialEmail = '',
   errorMessage,
+  initialRole = 'patient',
 }) => {
   const [googleEmail, setGoogleEmail] = useState(initialEmail);
   const [fullName, setFullName] = useState('');
@@ -38,10 +40,12 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
     try {
       setIsLoading(true);
       triggerHaptic('medium');
-      const res = await directGoogleLogin(googleEmail.trim(), fullName.trim());
+      const res = await directGoogleLogin(googleEmail.trim(), fullName.trim(), initialRole);
       if (res.success && res.user) {
-        showToast(`Welcome, ${res.user.name}!`, 'success');
-        onSuccess(res.user.role || 'patient', res.user);
+        const resolvedRole = initialRole === 'doctor' || initialRole === 'admin' ? initialRole : (res.user.role || initialRole);
+        const resolvedUser = { ...res.user, role: resolvedRole };
+        showToast(`Welcome, ${resolvedUser.name}!`, 'success');
+        onSuccess(resolvedRole, resolvedUser);
         onClose();
       } else {
         showToast(res.error || 'Failed to sign in', 'error');
@@ -57,10 +61,12 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
     triggerHaptic('selection');
     setIsOAuthLoading(true);
     try {
-      const res = await signInWithGoogle();
+      const res = await signInWithGoogle(initialRole);
       if (res.success && res.user) {
-        showToast(`Welcome, ${res.user.name}!`, 'success');
-        onSuccess(res.user.role || 'patient', res.user);
+        const resolvedRole = initialRole === 'doctor' || initialRole === 'admin' ? initialRole : (res.user.role || initialRole);
+        const resolvedUser = { ...res.user, role: resolvedRole };
+        showToast(`Welcome, ${resolvedUser.name}!`, 'success');
+        onSuccess(resolvedRole, resolvedUser);
         onClose();
       } else if (res.error) {
         showToast(res.error, 'error');
