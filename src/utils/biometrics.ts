@@ -66,10 +66,16 @@ export function getDefaultBiometricSettings(): BiometricSettings {
 
 export function getBiometricSettings(): BiometricSettings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
     if (!raw) {
       const defaults = getDefaultBiometricSettings();
-      saveBiometricSettings(defaults);
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(defaults));
+        }
+      } catch {
+        // ignore storage errors
+      }
       return defaults;
     }
     const parsed = JSON.parse(raw);
@@ -97,13 +103,28 @@ export function getBiometricSettings(): BiometricSettings {
 
 export function saveBiometricSettings(settings: Partial<BiometricSettings>): void {
   try {
-    const current = getBiometricSettings();
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+    let current: Partial<BiometricSettings> = {};
+    if (raw) {
+      try {
+        current = JSON.parse(raw);
+      } catch {
+        current = {};
+      }
+    } else {
+      current = getDefaultBiometricSettings();
+    }
     const merged: BiometricSettings = {
+      ...getDefaultBiometricSettings(),
       ...current,
       ...settings,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-    window.dispatchEvent(new CustomEvent('biometric-settings-updated', { detail: merged }));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('biometric-settings-updated', { detail: merged }));
+    }
   } catch (e) {
     console.error('Failed to save biometric settings', e);
   }
