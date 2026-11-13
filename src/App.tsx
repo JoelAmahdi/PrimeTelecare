@@ -426,7 +426,7 @@ export default function App() {
 
     const homeScreen = getDefaultDashboardForRole(finalRole);
 
-    if (hasAcceptedTerms) {
+    if (finalRole === 'admin' || hasAcceptedTerms) {
       navigateTo(homeScreen);
       if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
         setShowQuickLoginSetup(true);

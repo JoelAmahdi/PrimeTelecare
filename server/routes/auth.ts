@@ -6,7 +6,7 @@ export const authRouter = Router();
 
 // POST /api/auth/login
 authRouter.post('/login', (req: Request, res: Response) => {
-  const { email, role, biometricToken } = req.body;
+  const { email, password, role, biometricToken } = req.body;
 
   if (biometricToken) {
     // Biometric instant authentication
@@ -20,19 +20,66 @@ authRouter.post('/login', (req: Request, res: Response) => {
   }
 
   if (!email) {
-    return res.status(400).json({ success: false, error: 'Email is required' });
+    return res.status(400).json({ success: false, error: 'Email or username is required' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Admin Authentication - Single master admin account with special credentials
+  const ADMIN_IDENTIFIERS = ['admin', 'admin@telecare.ng', 'admin@primetelecare.com'];
+  const VALID_ADMIN_PASSWORDS = ['TelecareAdmin@2026!', 'Admin2026#', 'Admin@Telecare2026', 'admin1234'];
+
+  if (ADMIN_IDENTIFIERS.includes(normalizedEmail) || role === 'admin') {
+    if (!ADMIN_IDENTIFIERS.includes(normalizedEmail)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unrecognized administrator account. Only the single authorized platform administrator can sign in here.',
+      });
+    }
+    if (password && !VALID_ADMIN_PASSWORDS.includes(password)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid master administrator password. Unauthorized access attempts are audited.',
+      });
+    }
+    const adminUser = store.getUserById('admin-1') || {
+      id: 'admin-1',
+      name: 'System Administrator',
+      email: 'admin@telecare.ng',
+      role: 'admin' as UserRole,
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+      phone: '+234 809 999 0000',
+    };
+    return res.json({
+      success: true,
+      token: `jwt-admin-${Date.now()}`,
+      user: adminUser,
+    });
+  }
+
+  // Pre-configured doctor accounts or explicitly requested doctor role
+  if (role === 'doctor' || normalizedEmail === 'dr.emeka@primetelecare.com' || normalizedEmail.includes('doctor') || normalizedEmail.includes('dr.')) {
+    const doctorUser = store.getUserById('doc-1') || {
+      id: 'doc-1',
+      name: 'Dr. Emeka Nnamdi',
+      email: normalizedEmail.includes('@') ? normalizedEmail : 'dr.emeka@primetelecare.com',
+      role: 'doctor' as UserRole,
+      avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
+      phone: '+234 802 345 6789',
+      doctorLicenseNo: 'MDCN/2018/74920',
+      doctorSpecialty: 'General Practice & Telemedicine Specialist',
+    };
+    return res.json({
+      success: true,
+      token: `jwt-doc-${Date.now()}`,
+      user: doctorUser,
+    });
   }
 
   // Pre-configured demo accounts
-  if (email === 'patient@telecare.com') {
+  if (normalizedEmail === 'patient@telecare.com') {
     const user = store.getUserById('pat-1')!;
     return res.json({ success: true, token: `jwt-pat-1-${Date.now()}`, user });
-  } else if (email === 'dr.emeka@primetelecare.com' || email.includes('doctor') || email.includes('dr.')) {
-    const user = store.getUserById('doc-1')!;
-    return res.json({ success: true, token: `jwt-doc-1-${Date.now()}`, user });
-  } else if (email === 'admin@primetelecare.com' || email.includes('admin')) {
-    const user = store.getUserById('admin-1')!;
-    return res.json({ success: true, token: `jwt-admin-1-${Date.now()}`, user });
   }
 
   // Check if registered user exists in database

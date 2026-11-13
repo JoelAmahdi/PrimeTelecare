@@ -17,6 +17,7 @@ import {
 import {
   currentUserPatient,
   currentUserDoctor,
+  currentUserAdmin,
   mockDoctors,
   mockPrescriptions,
   mockHealthRecordAuditLogs,
@@ -59,7 +60,7 @@ export const primeApi = {
   },
 
   // --- Authentication ---
-  async login(payload: { email?: string; role?: string; biometricToken?: string }): Promise<{ user: User; token: string }> {
+  async login(payload: { email?: string; password?: string; role?: string; biometricToken?: string }): Promise<{ user: User; token: string }> {
     try {
       const res = await request<{ success: boolean; user: User; token: string }>('/auth/login', {
         method: 'POST',
@@ -68,7 +69,12 @@ export const primeApi = {
       return { user: res.user, token: res.token };
     } catch {
       // Offline fallback
-      const user = payload.role === 'doctor' ? currentUserDoctor : currentUserPatient;
+      const user =
+        payload.role === 'admin'
+          ? currentUserAdmin
+          : payload.role === 'doctor'
+          ? currentUserDoctor
+          : currentUserPatient;
       return { user, token: 'offline-token' };
     }
   },
