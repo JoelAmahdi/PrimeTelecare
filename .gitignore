@@ -9,6 +9,9 @@ coverage/
 previews/
 bun.lock
 
+# Netlify Local State
+.netlify/
+
 # Capacitor Mobile Builds
 android/.gradle/
 android/app/build/
