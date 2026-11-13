@@ -9,9 +9,19 @@ doctorsRouter.get('/', (req: Request, res: Response) => {
   let doctors = store.getDoctors();
 
   if (specialty && specialty !== 'All') {
-    doctors = doctors.filter((d) =>
-      d.specialty.toLowerCase().includes((specialty as string).toLowerCase())
-    );
+    const specQuery = (specialty as string).toLowerCase();
+    doctors = doctors.filter((d) => {
+      const docSpec = d.specialty.toLowerCase();
+      if (docSpec.includes(specQuery)) return true;
+      // Normalize Paediatrics vs Pediatrics
+      if (
+        (specQuery.includes('paed') || specQuery.includes('ped')) &&
+        (docSpec.includes('paed') || docSpec.includes('ped'))
+      ) {
+        return true;
+      }
+      return false;
+    });
   }
 
   if (onlineOnly === 'true') {
