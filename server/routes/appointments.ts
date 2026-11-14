@@ -62,15 +62,15 @@ appointmentsRouter.post('/', (req: Request, res: Response) => {
     type: type || 'Video',
     status: 'upcoming',
     notes: notes || '',
-    price: price || doctor.consultationFee.video || 10000,
+    price: price || (doctor as any).consultationFee?.video || (doctor as any).prices?.video || 10000,
   });
 
   // Automatically record NDPA audit log
   store.createAuditLog({
     accessedBy: patientName,
     accessorRole: 'Doctor',
-    accessorTitle: doctor.title,
-    accessorLicenseOrDept: doctor.qualifications[0] || 'Clinical Staff',
+    accessorTitle: doctor.title || 'Doctor',
+    accessorLicenseOrDept: (doctor.qualifications && doctor.qualifications[0]) || 'Clinical Staff',
     recordAccessed: `Appointment Record (#${newAppointment.id})`,
     accessReason: `Telehealth consultation booked for ${scheduledDate} at ${timeSlot}`,
     actionType: 'Updated',

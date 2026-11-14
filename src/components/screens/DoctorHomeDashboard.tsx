@@ -138,11 +138,22 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
       loadQueue();
     };
 
-    window.addEventListener('appointment-alerts-updated', loadQueue);
+    const handleAlertsUpdated = () => {
+      try {
+        const raw = localStorage.getItem('prime_telecare_new_consultation_alert');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setLiveConsultationAlert(parsed);
+        }
+      } catch {}
+      loadQueue();
+    };
+
+    window.addEventListener('appointment-alerts-updated', handleAlertsUpdated);
     window.addEventListener('new-consultation-booked', handleNewBooking);
     return () => {
       isMounted = false;
-      window.removeEventListener('appointment-alerts-updated', loadQueue);
+      window.removeEventListener('appointment-alerts-updated', handleAlertsUpdated);
       window.removeEventListener('new-consultation-booked', handleNewBooking);
     };
   }, []);
