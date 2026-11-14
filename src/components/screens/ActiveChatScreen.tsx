@@ -59,7 +59,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
       const apts = await primeApi.getAppointments();
       const mapped: ConsultationItem[] = (apts || []).map((a) => ({
         id: a.id,
-        patientName: a.patientName || 'Ada Okonkwo',
+        patientName: a.patientName || 'Patient',
         patientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
         doctorName: a.doctorName,
         doctorAvatar: a.doctorAvatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=150&q=80',
@@ -152,7 +152,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
       processJoinOrPayConsultation({
         id: item.id,
         type: item.type,
-        doctorId: 'doc-anya',
+        doctorId: item.id || 'doc-attending',
         doctorName: item.doctorName,
         doctorSpecialty: item.specialty,
         doctorAvatar: item.doctorAvatar,
@@ -912,7 +912,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         isOpen={isPrescriptionModalOpen}
         onClose={() => setIsPrescriptionModalOpen(false)}
         patientInfo={{
-          name: activeSession?.patientName || selectedPatientForRx || 'Ada Okonkwo',
+          name: activeSession?.patientName || selectedPatientForRx || 'Patient',
           allergies: ['Penicillin', 'Sulfa drugs'],
         }}
         consultationId={activeSession?.id}

@@ -86,7 +86,7 @@ export const NextAppointmentBanner: React.FC<NextAppointmentBannerProps> = ({
     processJoinOrPayConsultation({
       id: activeAlert.id,
       type: activeAlert.type,
-      doctorId: 'doc-anya',
+      doctorId: activeAlert.doctorId || 'doc-attending',
       doctorName: activeAlert.doctorName,
       doctorSpecialty: activeAlert.doctorSpecialty,
       doctorAvatar: activeAlert.doctorAvatar,

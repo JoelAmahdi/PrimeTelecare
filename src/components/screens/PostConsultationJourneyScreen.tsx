@@ -41,9 +41,9 @@ type JourneyStage =
 
 export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScreenProps> = ({
   onNavigate,
-  doctorName = 'Dr. Sarah Johnson',
-  doctorId = 'doc-anya',
-  patientName = 'Ada Okonkwo',
+  doctorName = 'Attending Physician',
+  doctorId = 'doc-attending',
+  patientName = 'Patient',
 }) => {
   const [currentStage, setCurrentStage] = useState<JourneyStage>('consultation-completed');
 

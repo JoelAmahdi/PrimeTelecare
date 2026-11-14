@@ -45,7 +45,7 @@ export function createDefaultRecoveryReminder(): PostConsultationReminder {
     doctorName: 'Dr. Sarah Johnson',
     doctorSpecialty: 'Pediatric Specialist',
     doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-    patientName: 'Ada Okonkwo',
+    patientName: 'Patient',
     chiefComplaint: 'Acute High Fever (38.8°C) & Pediatric Cough',
     prescribedPlan: [
       {

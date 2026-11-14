@@ -24,7 +24,7 @@ const EVENT_NAME = 'health-record-permission-change';
 
 const DEFAULT_PERMISSION: HealthRecordExportPermission = {
   sessionId: 'SESS-2026-9948',
-  patientName: 'Ada Okonkwo',
+  patientName: 'Patient',
   doctorName: 'Dr. Sarah Johnson',
   doctorLicense: 'MDCN/2019/88492',
   status: 'pending_doctor_approval', // Requires doctor permission before export

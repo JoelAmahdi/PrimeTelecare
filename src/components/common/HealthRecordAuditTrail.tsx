@@ -32,7 +32,7 @@ interface HealthRecordAuditTrailProps {
 }
 
 export const HealthRecordAuditTrail: React.FC<HealthRecordAuditTrailProps> = ({
-  patientName = 'Ada Okonkwo',
+  patientName = 'Patient',
   isEmbedded = false,
   auditLogs,
 }) => {

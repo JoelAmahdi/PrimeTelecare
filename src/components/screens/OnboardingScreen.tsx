@@ -366,7 +366,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Ada Okonkwo"
+                  placeholder="e.g. Amaka Obi"
                   className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:border-[#006c44] focus:ring-1 focus:ring-[#006c44] outline-hidden font-nunito"
                 />
               </div>

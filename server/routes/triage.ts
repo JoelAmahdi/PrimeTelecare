@@ -6,10 +6,10 @@ export const triageRouter = Router();
 // POST /api/triage/evaluate
 triageRouter.post('/evaluate', async (req: Request, res: Response) => {
   const {
-    patientId = 'pat-1',
-    patientName = 'Ada Okonkwo',
-    patientAge = 28,
-    gender = 'Female',
+    patientId = 'pat-guest',
+    patientName = 'Patient',
+    patientAge,
+    gender,
     vitals = {},
     redFlags = {},
   } = req.body;

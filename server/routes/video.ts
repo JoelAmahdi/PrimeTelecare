@@ -7,7 +7,7 @@ export const videoRouter = Router();
 videoRouter.get('/:sessionId/token', (req: Request, res: Response) => {
   const sessionId = req.params.sessionId;
   const role = (req.query.role as string) || 'patient';
-  const userName = (req.query.userName as string) || 'Ada Okonkwo';
+  const userName = (req.query.userName as string) || 'Patient';
 
   const roomToken = crypto
     .createHmac('sha256', 'prime-video-secret')

@@ -91,11 +91,11 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
   const isEditing = Boolean(initialPrescription);
 
   // Patient data
-  const [patientName, setPatientName] = useState('Ada Okonkwo');
-  const [patientId, setPatientId] = useState('PAT-88219401');
-  const [patientDob, setPatientDob] = useState('May 10, 1996');
-  const [patientAgeGender, setPatientAgeGender] = useState('28 Yrs • Female');
-  const [allergies, setAllergies] = useState<string[]>(['Penicillin', 'Sulfa drugs']);
+  const [patientName, setPatientName] = useState(patientInfo?.name || 'Patient');
+  const [patientId, setPatientId] = useState(patientInfo?.id || 'PAT-User');
+  const [patientDob, setPatientDob] = useState(patientInfo?.dob || 'Not specified');
+  const [patientAgeGender, setPatientAgeGender] = useState(patientInfo?.ageGender || 'Adult');
+  const [allergies, setAllergies] = useState<string[]>(patientInfo?.allergies || []);
 
   // Prescription clinical data
   const [diagnosis, setDiagnosis] = useState('');
@@ -119,11 +119,11 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
 
     if (initialPrescription) {
       // Load existing prescription for editing
-      setPatientName(initialPrescription.patientName || 'Ada Okonkwo');
-      setPatientId(initialPrescription.patientId || 'PAT-88219401');
-      setPatientDob(initialPrescription.patientDob || 'May 10, 1996');
-      setPatientAgeGender(initialPrescription.patientAgeGender || '28 Yrs • Female');
-      setAllergies(initialPrescription.patientAllergies || ['Penicillin', 'Sulfa drugs']);
+      setPatientName(initialPrescription.patientName || patientInfo?.name || 'Patient');
+      setPatientId(initialPrescription.patientId || patientInfo?.id || 'PAT-User');
+      setPatientDob(initialPrescription.patientDob || patientInfo?.dob || 'Not specified');
+      setPatientAgeGender(initialPrescription.patientAgeGender || patientInfo?.ageGender || 'Adult');
+      setAllergies(initialPrescription.patientAllergies || patientInfo?.allergies || []);
       setDiagnosis(initialPrescription.diagnosis || '');
       setChiefComplaint(initialPrescription.chiefComplaint || '');
       setFollowUpTime(initialPrescription.followUpTime || '1 Week');
@@ -145,12 +145,12 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
       setRestrictionError(null);
     } else {
       // New prescription
-      const name = patientInfo?.name || 'Ada Okonkwo';
+      const name = patientInfo?.name || 'Patient';
       setPatientName(name);
-      setPatientId(patientInfo?.id || 'PAT-88219401');
-      setPatientDob(patientInfo?.dob || 'May 10, 1996');
-      setPatientAgeGender(patientInfo?.ageGender || '28 Yrs • Female');
-      setAllergies(patientInfo?.allergies || ['Penicillin', 'Sulfa drugs']);
+      setPatientId(patientInfo?.id || 'PAT-User');
+      setPatientDob(patientInfo?.dob || 'Not specified');
+      setPatientAgeGender(patientInfo?.ageGender || 'Adult');
+      setAllergies(patientInfo?.allergies || []);
       setDiagnosis('');
       setChiefComplaint('');
       setFollowUpTime('1 Week');

@@ -120,7 +120,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
     processJoinOrPayConsultation({
       id: consult.id,
       type: consult.type,
-      doctorId: consult.doctorId || 'doc-anya',
+      doctorId: consult.doctorId || 'doc-attending',
       doctorName: consult.doctorName,
       doctorSpecialty: consult.doctorSpecialty,
       doctorAvatar: consult.doctorAvatar,

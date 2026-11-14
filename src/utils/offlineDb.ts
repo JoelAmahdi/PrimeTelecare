@@ -236,7 +236,7 @@ export function generateInitialHealthRecordsData(): HealthRecordsCache {
       {
         id: 'CS-2026-9948',
         type: 'Text Tele-Consultation',
-        doctorName: 'Dr. Anya Sharma',
+        doctorName: 'Dr. Sarah Johnson',
         doctorSpecialty: 'Pediatrician & Family Health Specialist',
         doctorLicense: 'MDCN/2019/88492',
         dateStr: 'September 15, 2026 at 10:30 AM',
@@ -330,7 +330,7 @@ export function generateInitialHealthRecordsData(): HealthRecordsCache {
       {
         id: 'cert-1',
         type: 'Medical Fitness Certificate (Travel & Work)',
-        issuedBy: 'Dr. Anya Sharma, MDCN #74920',
+        issuedBy: 'Dr. Sarah Lee, MDCN #74920',
         date: 'September 16, 2026',
         validUntil: 'September 16, 2027',
         status: 'Valid & Verified',

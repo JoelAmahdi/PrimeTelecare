@@ -72,9 +72,9 @@ export const ConsultationSummaryPDFModal: React.FC<ConsultationSummaryPDFModalPr
     // Default fallback structured record
     setActiveRecord({
       id: 'CR-2026-9948',
-      patientId: user.id || 'pat-1',
-      patientName: user.name || 'Ada Okonkwo',
-      patientAgeGender: `${user.gender || 'Female'}, ${user.age || 28} Yrs`,
+      patientId: user.id || 'PAT-User',
+      patientName: user.name || 'Patient',
+      patientAgeGender: `${user.gender || 'Not specified'}, ${user.age || 'Age undisclosed'}`,
       doctorName: 'Dr. Sarah Johnson',
       doctorSpecialty: 'Pediatrician & Family Health Specialist',
       doctorLicense: 'MDCN/2019/88492',

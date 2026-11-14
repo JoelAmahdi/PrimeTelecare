@@ -74,7 +74,15 @@ export const primeApi = {
           ? currentUserAdmin
           : payload.role === 'doctor'
           ? currentUserDoctor
-          : currentUserPatient;
+          : {
+              ...currentUserPatient,
+              id: `user-${Date.now()}`,
+              name: payload.email ? payload.email.split('@')[0] : 'Patient',
+              email: payload.email || '',
+              role: 'patient' as const,
+              onboarded: false,
+              hasCompletedOnboarding: false,
+            };
       return { user, token: 'offline-token' };
     }
   },
@@ -110,7 +118,10 @@ export const primeApi = {
         id: `user-${Date.now()}`,
         name: payload.name || payload.email.split('@')[0],
         email: payload.email,
+        role: (payload.role as any) || 'patient',
         avatarUrl: payload.avatarUrl || currentUserPatient.avatarUrl,
+        onboarded: false,
+        hasCompletedOnboarding: false,
       };
       return { user: fallbackUser, token: 'offline-google-token' };
     }

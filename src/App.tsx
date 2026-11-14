@@ -165,8 +165,15 @@ export default function App() {
     } catch {}
     return false;
   });
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('doc-anya');
-  const [currentBookingSummary, setCurrentBookingSummary] = useState<BookingSummary | undefined>(undefined);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+  const [currentBookingSummary, setCurrentBookingSummary] = useState<BookingSummary | undefined>(() => {
+    try {
+      const saved = localStorage.getItem('prime_telecare_current_booking_summary');
+      return saved ? JSON.parse(saved) : undefined;
+    } catch {
+      return undefined;
+    }
+  });
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [showQuickLoginSetup, setShowQuickLoginSetup] = useState<boolean>(false);
   const [isNetworkIssue, setIsNetworkIssue] = useState<boolean>(false);
@@ -691,10 +698,9 @@ export default function App() {
             {currentScreen === 'post-consultation-journey' && (
               <PostConsultationJourneyScreen
                 onNavigate={navigateTo}
-                doctorId={currentBookingSummary?.doctorId || selectedDoctorId}
+                doctorId={currentBookingSummary?.doctorId || selectedDoctorId || 'doc-attending'}
                 doctorName={
                   currentBookingSummary?.doctorName ||
-                  mockDoctors.find((d) => d.id === (currentBookingSummary?.doctorId || selectedDoctorId))?.name ||
                   'Attending Physician'
                 }
                 patientName={activeUser.name}
@@ -742,7 +748,6 @@ export default function App() {
                 user={activeUser}
                 doctorName={
                   currentBookingSummary?.doctorName ||
-                  mockDoctors.find((d) => d.id === (currentBookingSummary?.doctorId || selectedDoctorId))?.name ||
                   'Attending Physician'
                 }
               />

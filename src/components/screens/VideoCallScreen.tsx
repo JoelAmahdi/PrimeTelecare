@@ -1228,7 +1228,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         isOpen={isPrescriptionModalOpen}
         onClose={() => setIsPrescriptionModalOpen(false)}
         patientInfo={{
-          name: activeProfile.displayName || 'Ada Okonkwo',
+          name: activeProfile.displayName || user?.name || 'Patient',
           allergies: ['Penicillin', 'Sulfa drugs'],
         }}
         consultationType="Video"

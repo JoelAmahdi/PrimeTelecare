@@ -129,8 +129,8 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [complaintsList, setComplaintsList] = useState<PatientComplaint[]>([
     {
       id: 'cmp-101',
-      patientName: 'Ada Okonkwo',
-      patientEmail: 'ada.o@example.com',
+      patientName: 'Amaka Obi',
+      patientEmail: 'amaka.obi@example.com',
       doctorName: 'Dr. Anya Sharma',
       consultationId: 'CNS-2026-9482',
       category: 'technical',
@@ -312,9 +312,9 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
   const [patientsList, setPatientsList] = useState<AdminPatient[]>([
     {
       id: 'pat-1',
-      name: 'Ada Okonkwo',
+      name: 'Amaka Obi',
       healthId: 'PRM-8821',
-      email: 'ada.okonkwo@email.com',
+      email: 'amaka.obi@example.com',
       phone: '+234 801 234 5678',
       age: 28,
       gender: 'Female',
@@ -443,7 +443,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
       id: 'sess-8821',
       doctorName: 'Dr. Anya Sharma',
       doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-      patientName: 'Ada Okonkwo',
+      patientName: 'Amaka Obi',
       patientAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
       modality: 'Video',
       topic: 'Pediatric Fever & Dehydration Triage',
@@ -1409,7 +1409,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
                       {[
                         {
                           id: 'TX-9901',
-                          patient: 'Ada Okonkwo',
+                          patient: 'Amaka Obi',
                           doctor: 'Dr. Anya Sharma',
                           gross: 12500,
                           fee: 1875,

@@ -222,6 +222,10 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
 
     const summary: BookingSummary = {
       doctorId: currentDoctor.id,
+      doctorName: currentDoctor.fullNameWithTitle || currentDoctor.name,
+      doctorSpecialty: currentDoctor.specialty,
+      doctorAvatar: currentDoctor.avatarUrl,
+      doctorLicense: currentDoctor.verification?.licenseNumber,
       consultationType,
       bookingMode,
       vitals: patientVitals,
@@ -243,6 +247,10 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
       cancellationPolicy: 'Free cancellation & 100% full refund up to 2 hours prior to scheduled start.',
       reschedulePolicy: 'Free 1-click rescheduling available from dashboard.',
     };
+
+    try {
+      localStorage.setItem('prime_telecare_current_booking_summary', JSON.stringify(summary));
+    } catch {}
 
     if (onSaveBookingSummary) {
       onSaveBookingSummary(summary);

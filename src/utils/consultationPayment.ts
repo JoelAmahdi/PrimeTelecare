@@ -79,10 +79,10 @@ export function processJoinOrPayConsultation(opts: JoinConsultationOptions) {
   const {
     id,
     type,
-    doctorId = 'doc-anya',
-    doctorName = 'Dr. Anya Sharma',
-    doctorSpecialty = 'Pediatrician',
-    doctorAvatar = 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
+    doctorId = 'doc-attending',
+    doctorName = 'Attending Physician',
+    doctorSpecialty = 'General Practice',
+    doctorAvatar = 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
     price = 10000,
     onNavigate,
     onSaveBookingSummary,
@@ -102,24 +102,33 @@ export function processJoinOrPayConsultation(opts: JoinConsultationOptions) {
     triggerHaptic('medium');
     const normType = (type === 'Text' ? 'Chat' : type === 'Audio' ? 'Voice' : type) as 'Video' | 'Voice' | 'Chat';
     
+    const summary: BookingSummary = {
+      doctorId,
+      doctorName,
+      doctorSpecialty,
+      doctorAvatar,
+      consultationType: normType,
+      date: 'Today',
+      timeSlot: '10:30 AM',
+      duration: '30 Minutes',
+      baseFee: price,
+      serviceFee: 500,
+      totalFee: price + 500,
+      connectionMethod: normType === 'Video' ? 'Encrypted HD Video Call' : normType === 'Voice' ? 'Encrypted Audio Call' : 'Secured Chat',
+      uploadedFiles: [],
+      reminderPreferences: { sms: true, email: true, push: true, whatsapp: false },
+      timeZone: 'WAT (GMT+1)',
+      cancellationPolicy: '100% full refund up to 2 hours before start.',
+      reschedulePolicy: 'Free instant reschedule.',
+      consultationId: id,
+    };
+
+    try {
+      localStorage.setItem('prime_telecare_current_booking_summary', JSON.stringify(summary));
+    } catch {}
+
     if (onSaveBookingSummary) {
-      onSaveBookingSummary({
-        doctorId,
-        consultationType: normType,
-        date: 'Today',
-        timeSlot: '10:30 AM',
-        duration: '30 Minutes',
-        baseFee: price,
-        serviceFee: 500,
-        totalFee: price + 500,
-        connectionMethod: 'Encrypted In-App Stream',
-        uploadedFiles: [],
-        reminderPreferences: { sms: true, email: true, push: true, whatsapp: false },
-        timeZone: 'WAT (GMT+1)',
-        cancellationPolicy: '100% full refund up to 2 hours before start.',
-        reschedulePolicy: 'Free instant reschedule.',
-        consultationId: id,
-      });
+      onSaveBookingSummary(summary);
     }
 
     onNavigate('payment');

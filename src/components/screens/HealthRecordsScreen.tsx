@@ -195,9 +195,9 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
     return {
       id: session.consultationId,
       consultationId: session.consultationId,
-      patientId: user.id || 'pat-1',
-      patientName: user.name || 'Ada Okonkwo',
-      patientAgeGender: `${user.gender || 'Female'}, ${user.age || 28} Yrs`,
+      patientId: user.id || 'PAT-User',
+      patientName: user.name || 'Patient',
+      patientAgeGender: `${user.gender || 'Not specified'}, ${user.age || 'Age undisclosed'}`,
       doctorName: session.doctorName,
       doctorSpecialty: session.doctorSpecialty,
       doctorLicense: session.doctorLicense,
@@ -308,7 +308,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
               </h2>
             </div>
             <p className="text-xs text-slate-500 font-nunito mt-0.5">
-              Patient: <strong className="text-slate-800">{user.name || 'Ada Okonkwo'}</strong> • ID: <span className="font-mono">{user.id || 'PAT-88219401'}</span>
+              Patient: <strong className="text-slate-800">{user.name || 'Patient'}</strong> • ID: <span className="font-mono">{user.id || 'PAT-User'}</span>
             </p>
           </div>
 

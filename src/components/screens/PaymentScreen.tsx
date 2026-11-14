@@ -28,7 +28,6 @@ import { ScreenId, User, BookingSummary } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { requestExportPermission } from '../../utils/healthRecordPermissions';
 import { bookNewConsultation } from '../../utils/appointmentNotifications';
-import { mockDoctors } from '../../data/mockData';
 import { markConsultationAsPaid } from '../../utils/consultationPayment';
 import { showToast } from '../../utils/toast';
 import { GoogleCalendarSyncModal } from '../common/GoogleCalendarSyncModal';
@@ -66,16 +65,52 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
   const [simulatedDeclineMode, setSimulatedDeclineMode] = useState(false);
   const [isLiveGatewayOpen, setIsLiveGatewayOpen] = useState(false);
 
-  // Fallbacks if user lands on PaymentScreen directly
-  const doctor = mockDoctors.find((d) => d.id === bookingSummary?.doctorId) || mockDoctors[0] || null;
-  const consultationType = bookingSummary?.consultationType || 'Video';
-  const date = bookingSummary?.date || 'Today, Oct 24, 2026';
-  const timeSlot = bookingSummary?.timeSlot || '10:30 AM';
-  const duration = bookingSummary?.duration || '30 Minutes';
+  // Dynamic Doctor Resolution: Strictly prioritize the doctor selected in bookingSummary
+  const activeSummary = bookingSummary || (() => {
+    try {
+      const saved = localStorage.getItem('prime_telecare_current_booking_summary');
+      return saved ? JSON.parse(saved) : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  const resolvedDoctorName = activeSummary?.doctorName || 'Attending Physician';
+  const resolvedSpecialty = activeSummary?.doctorSpecialty || 'General Practice';
+  const resolvedAvatar =
+    activeSummary?.doctorAvatar ||
+    'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400';
+  const resolvedLicense = activeSummary?.doctorLicense || 'MDCN Verified';
+  const resolvedId = activeSummary?.doctorId || 'doc-attending';
+
+  const doctor = {
+    id: resolvedId,
+    name: resolvedDoctorName,
+    fullNameWithTitle: resolvedDoctorName,
+    specialty: resolvedSpecialty,
+    avatarUrl: resolvedAvatar,
+    verification: {
+      licenseNumber: resolvedLicense,
+      isVerified: true,
+      boardName: 'Medical and Dental Council of Nigeria (MDCN)',
+      verifiedBadgeText: 'Verified MDCN License',
+    },
+    prices: {
+      video: activeSummary?.baseFee || 10000,
+      voice: Math.round((activeSummary?.baseFee || 10000) * 0.7),
+      chat: Math.round((activeSummary?.baseFee || 10000) * 0.5),
+    },
+  };
+
+  const patientDisplayName = user?.name?.trim() || 'Patient';
+  const consultationType = activeSummary?.consultationType || 'Video';
+  const date = activeSummary?.date || 'Today, Oct 24, 2026';
+  const timeSlot = activeSummary?.timeSlot || '10:30 AM';
+  const duration = activeSummary?.duration || '30 Minutes';
 
   // Itemized Pricing Calculation (Consultation Fee, Platform Charge, Taxes)
-  const consultationFee = bookingSummary?.baseFee || doctor?.prices?.video || 10000;
-  const platformCharge = bookingSummary?.serviceFee || 500;
+  const consultationFee = activeSummary?.baseFee || doctor?.prices?.video || 10000;
+  const platformCharge = activeSummary?.serviceFee || 500;
   const vatTaxFee = Math.round(consultationFee * 0.075); // 7.5% Statutory VAT
   const totalAmount = consultationFee + platformCharge + vatTaxFee;
 
@@ -111,7 +146,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       doctorName: doctor.fullNameWithTitle || doctor.name,
       doctorSpecialty: doctor.specialty,
       doctorAvatar: doctor.avatarUrl,
-      patientName: user.name || 'Ada Okonkwo',
+      patientName: patientDisplayName,
       scheduledTime: timeSlot,
       scheduledDate: date,
       type: consultationType,
@@ -121,7 +156,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
 
     requestExportPermission({
       sessionId: consultId,
-      patientName: user.name || 'Patient User',
+      patientName: patientDisplayName,
       doctorName: doctor.fullNameWithTitle || doctor.name,
       doctorLicense: doctor.verification?.licenseNumber || 'MDCN/2019/88492',
       purpose: bookingSummary?.exportAuthorization?.purpose || 'Second Medical Opinion & Care Continuity',
@@ -133,7 +168,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
 
     primeApi.createAppointment({
       doctorId: doctor.id,
-      patientName: user.name || 'Ada Okonkwo',
+      patientName: patientDisplayName,
       scheduledDate: date,
       timeSlot,
       type: consultationType,
@@ -146,7 +181,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       const docAlert = {
         id: consultId,
         doctorId: doctor.id,
-        patientName: user.name || 'Ada Okonkwo',
+        patientName: patientDisplayName,
         doctorName: doctor.fullNameWithTitle || doctor.name,
         type: consultationType,
         timeSlot,
@@ -180,7 +215,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       addConsultationToGoogleCalendar({
         doctorName: doctor.fullNameWithTitle || doctor.name,
         doctorSpecialty: doctor.specialty,
-        patientName: user.name || 'Ada Okonkwo',
+        patientName: patientDisplayName,
         consultationType,
         dateStr: date,
         timeSlot,
@@ -701,7 +736,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         pendingAppointment={{
           doctorName: doctor.fullNameWithTitle || doctor.name,
           doctorSpecialty: doctor.specialty,
-          patientName: user.name || 'Ada Okonkwo',
+          patientName: patientDisplayName,
           consultationType,
           dateStr: date,
           timeSlot,
@@ -717,9 +752,9 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         amount={totalAmount}
         doctorName={doctor.fullNameWithTitle || doctor.name}
         consultationType={consultationType}
-        patientName={user.name || 'Ada Okonkwo'}
+        patientName={patientDisplayName}
         consultationId={bookingSummary?.consultationId}
-        walletBalance={user.walletBalance || 25000}
+        walletBalance={user.walletBalance || 0}
       />
     </div>
   );

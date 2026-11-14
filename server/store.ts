@@ -87,36 +87,7 @@ const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
 const STORE_FILE = path.join(DATA_DIR, 'store.json');
 
 // Initial seed appointments
-const seedAppointments: Appointment[] = [
-  {
-    id: 'apt-seed-1',
-    doctorId: 'doc-anya',
-    doctorName: 'Dr. Anya Sharma',
-    doctorSpecialty: 'Pediatrician & Childhood Immunology',
-    doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400',
-    patientName: 'Ada Okonkwo',
-    scheduledDate: 'Today',
-    timeSlot: '02:30 PM - 03:00 PM',
-    type: 'Video',
-    status: 'upcoming',
-    notes: 'Follow up on mild asthma flare-up and review allergy action plan.',
-    price: 10000,
-  },
-  {
-    id: 'apt-seed-2',
-    doctorId: 'doc-chike',
-    doctorName: 'Dr. Chike Obi',
-    doctorSpecialty: 'General Practice & Internal Medicine',
-    doctorAvatar: 'https://images.unsplash.com/photo-1612349317150-e410f624c427?auto=format&fit=crop&w=400',
-    patientName: 'Ada Okonkwo',
-    scheduledDate: 'October 15, 2026',
-    timeSlot: '11:00 AM',
-    type: 'Video',
-    status: 'completed',
-    notes: 'Routine blood pressure assessment & lifestyle review.',
-    price: 15000,
-  },
-];
+const seedAppointments: Appointment[] = [];
 
 // Initial seed dependents
 const seedDependents: DependentProfile[] = [
@@ -162,7 +133,7 @@ class MemoryStore {
 
   private getDefaultState(): ServerState {
     return {
-      users: [currentUserPatient, currentUserDoctor, currentUserAdmin],
+      users: [currentUserDoctor, currentUserAdmin],
       doctors: [],
       appointments: seedAppointments,
       prescriptions: mockPrescriptions,
@@ -171,7 +142,7 @@ class MemoryStore {
       payments: [],
       chatMessages: {},
       dependents: {
-        'pat-1': seedDependents,
+        
       },
       exportAuthorizations: {},
     };
@@ -186,8 +157,14 @@ class MemoryStore {
         if (!parsed.doctors) {
           parsed.doctors = [];
         }
-        if (!parsed.appointments || parsed.appointments.length === 0) {
-          parsed.appointments = seedAppointments;
+        if (!parsed.appointments) {
+          parsed.appointments = [];
+        }
+        if (parsed.users) {
+          parsed.users = parsed.users.filter((u) => u.id !== 'pat-1' && u.name !== 'Ada Okonkwo' && u.email !== 'ada.okonkwo@email.com');
+        }
+        if (parsed.appointments) {
+          parsed.appointments = parsed.appointments.filter((a) => a.patientName !== 'Ada Okonkwo' && a.doctorId !== 'doc-anya');
         }
         return parsed;
       }

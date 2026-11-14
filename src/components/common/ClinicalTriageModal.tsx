@@ -32,6 +32,7 @@ interface ClinicalTriageModalProps {
   onClose: () => void;
   onTriageComplete: (result: TriageResult) => void;
   doctorName?: string;
+  patientName?: string;
   initialVitals?: VitalsData;
 }
 
@@ -40,6 +41,7 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
   onClose,
   onTriageComplete,
   doctorName = 'your clinician',
+  patientName = 'Patient',
   initialVitals,
 }) => {
   if (!isOpen) return null;
@@ -119,9 +121,7 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
 
     // Asynchronously log to core clinical backend
     primeApi.evaluateTriage({
-      patientName: 'Ada Okonkwo',
-      patientAge: 28,
-      gender: 'Female',
+      patientName: patientName || 'Patient',
       vitals: { temp, hr, spo2, systolicBp },
       redFlags: {},
     }).catch(() => {});

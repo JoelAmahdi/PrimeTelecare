@@ -18,7 +18,7 @@ export const initialMockDependents: DependentProfile[] = [
     bloodGroup: 'O+',
     isMinor: true,
     guardianConsent: true,
-    notes: 'Pediatric patient under parent Ada Okonkwo guardianship',
+    notes: 'Pediatric dependent under verified parental guardianship',
   },
   {
     id: 'dep-mama',
@@ -33,7 +33,7 @@ export const initialMockDependents: DependentProfile[] = [
     bloodGroup: 'B+',
     isMinor: false,
     guardianConsent: true,
-    notes: 'Elderly dependent managed by daughter Ada Okonkwo',
+    notes: 'Elderly dependent managed by designated family caregiver',
   },
 ];
 

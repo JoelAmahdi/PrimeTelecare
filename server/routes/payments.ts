@@ -6,7 +6,7 @@ export const paymentsRouter = Router();
 
 // POST /api/payments/initialize
 paymentsRouter.post('/initialize', (req: Request, res: Response) => {
-  const { userId = 'pat-1', patientName = 'Ada Okonkwo', amount, purpose, method, consultationId } = req.body;
+  const { userId = 'pat-guest', patientName = 'Patient', amount, purpose, method, consultationId } = req.body;
 
   if (!amount || amount <= 0) {
     return res.status(400).json({ success: false, error: 'Valid amount is required' });
@@ -85,7 +85,7 @@ paymentsRouter.post('/topup', (req: Request, res: Response) => {
   const payment = store.createPayment({
     reference,
     userId,
-    patientName: user?.name || 'Ada Okonkwo',
+    patientName: user?.name || 'Patient',
     amount: Number(amount),
     purpose: 'wallet_topup',
     method,

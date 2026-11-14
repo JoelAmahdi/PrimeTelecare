@@ -170,8 +170,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
       triggerHaptic('success');
       showToast(`Welcome back, ${res.user.name || 'Patient'}!`, 'success');
       onLoginSuccess('patient', res.user);
-    } catch {
-      onLoginSuccess('patient', currentUserPatient);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Invalid email or password. Please verify your credentials or register a new account.');
+      showToast('Login failed. Please check your credentials.', 'error');
     }
   };
 
@@ -379,29 +380,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                   Verify
                 </button>
               </div>
-
-              {/* Demo Patient Quick-Filler Card */}
-              <div className="p-3 rounded-xl bg-sky-50/70 border border-sky-200/70 flex items-center justify-between text-xs font-nunito mb-4">
-                <div>
-                  <span className="font-bold text-sky-950 font-outfit block">Demo Patient Account</span>
-                  <span className="text-[11px] text-sky-800">
-                    Ada Okonkwo (<code className="font-mono font-bold">ada.okonkwo@email.com</code>)
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setEmail('ada.okonkwo@email.com');
-                    setPassword('Patient@Telecare2026');
-                    setErrorMsg(null);
-                    showToast('Patient credentials filled', 'info');
-                  }}
-                  className="px-2.5 py-1.5 bg-sky-800 hover:bg-sky-900 text-white text-[11px] font-bold font-outfit rounded-lg cursor-pointer shrink-0 transition-colors"
-                >
-                  Autofill
-                </button>
-              </div>
             </>
           )}
 
@@ -560,11 +538,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                   type="button"
                   onClick={() => {
                     triggerHaptic('selection');
-                    if (loginRole === 'doctor') {
-                      onLoginSuccess('doctor', currentUserDoctor);
-                    } else {
-                      onLoginSuccess('patient', currentUserPatient);
-                    }
+                    const appleUser: User = {
+                      id: `apple-${Date.now()}`,
+                      name: loginRole === 'doctor' ? 'Practicing Physician' : 'Patient',
+                      email: 'user@icloud.com',
+                      role: loginRole === 'doctor' ? 'doctor' : 'patient',
+                      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+                      onboarded: false,
+                      hasCompletedOnboarding: false,
+                    };
+                    onLoginSuccess(appleUser.role, appleUser);
                   }}
                   className="w-full min-h-[44px] py-3 bg-[#022434] hover:bg-[#1c3a4a] text-white rounded-xl flex items-center justify-center space-x-3 text-sm font-bold font-outfit shadow-2xs transition-all active:scale-98 cursor-pointer"
                 >
@@ -615,8 +598,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             const resolvedRole = (loginRole === 'doctor' || loginRole === 'admin') ? loginRole : (res.user?.role || loginRole);
             onLoginSuccess(resolvedRole, { ...res.user, role: resolvedRole });
           } catch {
-            const fallbackUser = loginRole === 'doctor' ? currentUserDoctor : loginRole === 'admin' ? currentUserAdmin : currentUserPatient;
-            onLoginSuccess(loginRole, fallbackUser);
+            showToast('Biometric authentication could not be completed. Please use email sign in.', 'error');
           }
         }}
       />

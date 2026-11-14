@@ -29,7 +29,7 @@ recordsRouter.get('/export-status', (req: Request, res: Response) => {
 
 // POST /api/records/export-request
 recordsRouter.post('/export-request', (req: Request, res: Response) => {
-  const { sessionId = 'app-1', purpose, patientName = 'Ada Okonkwo' } = req.body;
+  const { sessionId = 'app-1', purpose, patientName = 'Patient' } = req.body;
 
   const auth = store.saveExportAuthorization(sessionId, {
     status: 'pending_doctor_approval',

@@ -238,7 +238,7 @@ export async function addConsultationToGoogleCalendar(
     description: [
       `Prime Telecare Telehealth Consultation`,
       `• Doctor: Dr. ${payload.doctorName} (${payload.doctorSpecialty || 'General Practice'})`,
-      `• Patient: ${payload.patientName || 'Ada Okonkwo'}`,
+      `• Patient: ${payload.patientName || 'Patient'}`,
       `• Modality: ${payload.consultationType} Teleconsultation`,
       `• Scheduled Slot: ${payload.timeSlot} (${payload.dateStr})`,
       payload.notes ? `• Clinical Notes/Symptoms: ${payload.notes}` : '',

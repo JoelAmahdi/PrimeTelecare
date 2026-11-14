@@ -13,8 +13,8 @@ authRouter.post('/login', (req: Request, res: Response) => {
     const user = role === 'doctor'
       ? (store.getUserById('doc-1') || store.getDoctors()[0])
       : role === 'admin'
-      ? (store.getUserById('admin-1') || store.getUserById('pat-1'))
-      : (store.getUserById('pat-1') || store.getDoctors()[0]);
+      ? store.getUserById('admin-1')
+      : store.getUsers().find((u) => u.role === 'patient');
     return res.json({
       success: true,
       message: 'Biometric authentication successful',
@@ -80,10 +80,11 @@ authRouter.post('/login', (req: Request, res: Response) => {
     });
   }
 
-  // Pre-configured demo accounts
   if (normalizedEmail === 'patient@telecare.com') {
-    const user = store.getUserById('pat-1')!;
-    return res.json({ success: true, token: `jwt-pat-1-${Date.now()}`, user: { ...user, role: 'patient' as UserRole } });
+    const existing = store.getUserByEmail(email);
+    if (existing) {
+      return res.json({ success: true, token: `jwt-${existing.id}-${Date.now()}`, user: { ...existing, role: 'patient' as UserRole } });
+    }
   }
 
   // Check if registered user exists in database

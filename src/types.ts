@@ -150,6 +150,10 @@ export interface RecordExportAuthorization {
 
 export interface BookingSummary {
   doctorId: string;
+  doctorName?: string;
+  doctorSpecialty?: string;
+  doctorAvatar?: string;
+  doctorLicense?: string;
   consultationType: 'Video' | 'Voice' | 'Chat';
   bookingMode?: 'instant' | 'scheduled';
   symptomsDescription?: string;
