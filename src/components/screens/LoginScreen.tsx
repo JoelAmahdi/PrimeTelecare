@@ -308,32 +308,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                 ? 'Doctor Sign In'
                 : 'Patient Sign In'}
             </h1>
-            <p className="text-xs text-slate-500 font-nunito mt-1">
-              {loginRole === 'admin'
-                ? 'Restricted to authorized platform governance personnel only.'
-                : loginRole === 'doctor'
-                ? 'Access your clinical queue, active consultations, and prescriptions.'
-                : 'Access your health records, scheduled visits, and care plans.'}
-            </p>
           </div>
 
           {/* Role-Specific Context Banners & Quick Fillers */}
           {loginRole === 'admin' && (
             <div className="space-y-3 mb-4">
-              <div className="p-3.5 rounded-2xl bg-[#022434] text-white border border-slate-700/80 space-y-1.5 shadow-xs">
+              <div className="p-3.5 rounded-2xl bg-[#022434] text-white border border-slate-700/80 flex items-center justify-between shadow-xs">
                 <div className="flex items-center space-x-2 text-xs font-bold font-outfit text-amber-400">
                   <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>Single Master Administrator Access</span>
                 </div>
-                <p className="text-[11px] text-slate-300 font-nunito leading-relaxed">
-                  Only 1 platform administrator account exists on Prime Telecare. Use your designated administrator username and master password to access the console.
-                </p>
               </div>
 
               {/* Master Admin Credentials Quick-Filler Card */}
               <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-200 flex items-center justify-between text-xs font-nunito">
                 <div>
-                  <span className="font-bold text-amber-950 font-outfit block">Master Administrator Credentials</span>
+                  <span className="font-bold text-amber-950 font-outfit block">Master Administrator</span>
                   <div className="text-[11px] text-amber-900 space-x-1.5 mt-0.5">
                     <span>User: <strong className="font-mono">admin@telecare.ng</strong></span>
                     <span>·</span>
@@ -359,37 +349,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
 
           {loginRole === 'doctor' && (
             <div className="space-y-3 mb-4">
-              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-950 space-y-1">
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-950 flex items-center justify-between">
                 <div className="flex items-center space-x-2 text-xs font-bold font-outfit text-[#006c44]">
                   <Stethoscope className="w-4 h-4 text-[#006c44] shrink-0" />
                   <span>MDCN-Registered Clinical Portal</span>
                 </div>
-                <p className="text-[11px] text-emerald-800 font-nunito">
-                  Verify your clinician credentials or medical license folio to consult with patients on Prime Telecare.
-                </p>
-              </div>
-
-              {/* Demo Doctor Quick-Filler Card */}
-              <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200/70 flex items-center justify-between text-xs font-nunito">
-                <div>
-                  <span className="font-bold text-emerald-950 font-outfit block">Demo Clinician Account</span>
-                  <span className="text-[11px] text-emerald-800">
-                    Dr. Emeka Nnamdi (<code className="font-mono font-bold">dr.emeka@primetelecare.com</code>)
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setEmail('dr.emeka@primetelecare.com');
-                    setPassword('Doctor@Telecare2026');
-                    setErrorMsg(null);
-                    showToast('Doctor credentials filled', 'info');
-                  }}
-                  className="px-2.5 py-1.5 bg-[#006c44] hover:bg-[#005837] text-white text-[11px] font-bold font-outfit rounded-lg cursor-pointer shrink-0 transition-colors"
-                >
-                  Autofill
-                </button>
               </div>
             </div>
           )}

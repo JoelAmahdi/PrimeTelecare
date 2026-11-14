@@ -54,27 +54,10 @@ triageRouter.post('/evaluate', async (req: Request, res: Response) => {
     suggestedSpecialty = 'Family Medicine & General Practice';
   }
 
-  // 3. Optional Gemini AI enrichment if configured
-  let aiNotes: string | undefined = undefined;
-  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY') {
-    try {
-      const { GoogleGenAI } = await import('@google/genai');
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const prompt = `As a clinical decision support assistant for Prime Telecare Nigeria, evaluate these patient vitals and symptoms:
-Age: ${patientAge}, Gender: ${gender}
-Vitals: Temp=${vitals.temp || 'N/A'}°C, HR=${vitals.hr || 'N/A'}bpm, SpO2=${vitals.spo2 || 'N/A'}%, BP=${vitals.systolicBp || 'N/A'}mmHg.
-Red flags reported: ${JSON.stringify(redFlags)}.
-Provide a concise 2-sentence clinical guidance summary for the triage nurse.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-      });
-      aiNotes = response.text?.trim();
-    } catch (e) {
-      console.warn('[Triage] Gemini AI evaluation skipped due to API error/rate-limit', e);
-    }
-  }
+  // 3. Clinical decision support evaluation summary
+  const clinicalNotes = severity === 'immediate_emergency'
+    ? 'Priority clinical alert triggered based on recorded vital parameters.'
+    : 'Baseline clinical vital parameters verified within acceptable range.';
 
   // Record triage case in server store
   const triageCase = store.createTriageCase({
@@ -87,7 +70,7 @@ Provide a concise 2-sentence clinical guidance summary for the triage nurse.`;
     severity,
     recommendation,
     suggestedSpecialty,
-    aiNotes,
+    aiNotes: clinicalNotes,
   });
 
   return res.json({

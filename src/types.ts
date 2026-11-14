@@ -93,6 +93,10 @@ export interface User {
   // Dependents & Family Profile Management
   dependents?: DependentProfile[];
   activeDependentId?: string | null;
+
+  // Onboarding Status
+  onboarded?: boolean;
+  hasCompletedOnboarding?: boolean;
 }
 
 export interface HealthRecordAuditLog {
@@ -388,6 +392,7 @@ export type ScreenId =
   | 'terms'
   | 'login'
   | 'signup'
+  | 'onboarding'
   | 'patient-home'
   | 'doctor-home'
   | 'book-consultation'

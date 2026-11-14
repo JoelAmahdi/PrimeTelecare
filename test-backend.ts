@@ -41,8 +41,22 @@ async function testBackend() {
   });
   assert(login.status === 200 && login.data.user.name === 'Ada Okonkwo', 'POST /api/auth/login authenticates patient');
 
-  // 3. Doctors List
-  const doctors = await req('/doctors');
+  // 3. Doctors List & Doctor Profile Creation
+  let doctors = await req('/doctors');
+  if (doctors.status === 200 && doctors.data.doctors.length === 0) {
+    await req('/doctors', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: 'doc-anya',
+        name: 'Dr. Anya Sharma',
+        specialty: 'Paediatrics',
+        licenseNumber: 'MDCN/2014/78912',
+        isOnline: true,
+        videoFee: 10000,
+      }),
+    });
+    doctors = await req('/doctors');
+  }
   assert(doctors.status === 200 && doctors.data.doctors.length > 0, 'GET /api/doctors returns doctors list');
 
   // 4. Appointments Creation

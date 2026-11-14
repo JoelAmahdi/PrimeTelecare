@@ -53,9 +53,24 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
 
   const loadDoctors = () => {
     primeApi.getDoctors().then((docs) => {
-      setDoctors(docs || []);
+      let finalDocs = docs || [];
+      try {
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        if (custom.length > 0) {
+          const ids = new Set(finalDocs.map((d: any) => d.id));
+          for (const cd of custom) {
+            if (!ids.has(cd.id)) finalDocs.push(cd);
+          }
+        }
+      } catch {}
+      setDoctors(finalDocs);
     }).catch(() => {
-      setDoctors([]);
+      try {
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        setDoctors(custom);
+      } catch {
+        setDoctors([]);
+      }
     });
   };
 

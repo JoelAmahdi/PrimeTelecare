@@ -35,8 +35,8 @@ import {
 } from '../../utils/appointmentNotifications';
 import { processJoinOrPayConsultation } from '../../utils/consultationPayment';
 import { showToast } from '../../utils/toast';
-import { mockDoctors } from '../../data/mockData';
 import { primeApi } from '../../services/apiClient';
+import { AddDoctorModal } from '../common/AddDoctorModal';
 
 interface PatientHomeDashboardProps {
   user: User;
@@ -68,16 +68,37 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    primeApi.getDoctors({ onlineOnly: true }).then((docs) => {
-      if (docs && docs.length > 0) {
-        setOnlineDoctors(docs);
-      } else {
-        setOnlineDoctors(mockDoctors.filter((d) => d.isOnline));
-      }
+  const [allRegisteredDoctors, setAllRegisteredDoctors] = useState<Doctor[]>([]);
+  const [isAddDoctorModalOpen, setIsAddDoctorModalOpen] = useState(false);
+
+  const loadDoctors = () => {
+    primeApi.getDoctors().then((docs) => {
+      let finalDocs = docs || [];
+      try {
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        if (custom.length > 0) {
+          const ids = new Set(finalDocs.map((d: any) => d.id));
+          for (const cd of custom) {
+            if (!ids.has(cd.id)) finalDocs.push(cd);
+          }
+        }
+      } catch {}
+      setAllRegisteredDoctors(finalDocs);
+      setOnlineDoctors(finalDocs.filter((d) => d.isOnline));
     }).catch(() => {
-      setOnlineDoctors(mockDoctors.filter((d) => d.isOnline));
+      try {
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        setAllRegisteredDoctors(custom);
+        setOnlineDoctors(custom.filter((d: any) => d.isOnline));
+      } catch {
+        setAllRegisteredDoctors([]);
+        setOnlineDoctors([]);
+      }
     });
+  };
+
+  useEffect(() => {
+    loadDoctors();
   }, []);
 
   useEffect(() => {
@@ -207,7 +228,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
               </div>
               <div>
                 <span className="font-extrabold font-outfit text-amber-900 block text-sm">Offline Mode</span>
-                <span className="text-xs text-amber-800">Your health records and appointments remain accessible.</span>
               </div>
             </div>
           </div>
@@ -230,7 +250,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             </span>
             <span className="text-[11px] text-[#006c44] font-semibold flex items-center space-x-1 mt-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{onlineDoctors.length || 6} Online Now</span>
+              <span>{onlineDoctors.length} Online Now</span>
             </span>
           </button>
 
@@ -406,9 +426,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                     <h4 className="text-base sm:text-lg font-bold font-outfit text-[#022434]">
                       No active or scheduled consultations
                     </h4>
-                    <p className="text-xs sm:text-sm text-slate-500 font-nunito leading-relaxed">
-                      Connect with licensed medical specialists for virtual exams, clinical second opinions, and verified e-prescriptions.
-                    </p>
                   </div>
                   <button
                     onClick={() => {
@@ -437,9 +454,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                   <h4 className="font-extrabold font-outfit text-lg sm:text-xl text-white">
                     Clinical Data Encryption & Patient Rights
                   </h4>
-                  <p className="text-xs text-slate-300 font-nunito max-w-xl">
-                    All audio/video consultation feeds, clinical documentation, and laboratory attachments are end-to-end encrypted with zero doctor-bypass export guards.
-                  </p>
                 </div>
                 <button
                   onClick={() => onNavigate('health-records')}
@@ -654,77 +668,105 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
 
             {/* List of Online Doctors */}
             <div className="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              <p className="text-xs text-slate-600">
-                Select an available physician to start an immediate Video, Voice, or Chat consultation (wait time: <strong>~2–5 mins</strong>).
-              </p>
-
-              <div className="space-y-3">
-                {(onlineDoctors.length > 0 ? onlineDoctors : mockDoctors.filter((d) => d.isOnline)).map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="p-4 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-300 rounded-2xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-                  >
-                    <div className="flex items-center space-x-3.5 min-w-0">
-                      <div className="relative shrink-0">
-                        <img
-                          src={doc.avatarUrl}
-                          alt={doc.name}
-                          className="w-13 h-13 rounded-2xl object-cover border border-slate-200"
-                        />
-                        <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center">
-                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center space-x-1.5">
-                          <h4 className="font-bold font-outfit text-sm text-[#022434] truncate">
-                            {doc.name}
-                          </h4>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-[#006c44]">
-                            MDCN
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#006c44] font-semibold truncate font-outfit mt-0.5">
-                          {doc.specialty}
-                        </p>
-                        <div className="flex items-center space-x-2 text-[11px] text-slate-500 mt-1">
-                          <span className="flex items-center text-amber-600 font-bold">
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-400 mr-0.5" />
-                            {doc.rating || 4.9}
-                          </span>
-                          <span>•</span>
-                          <span>Wait: 2-5 min</span>
-                          <span>•</span>
-                          <span className="font-mono font-bold text-[#006c44]">
-                            ₦{doc.prices?.video?.toLocaleString() || '10,000'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        triggerHaptic('selection');
-                        onSelectDoctor(doc.id);
-                        try {
-                          localStorage.setItem('prime_telecare_booking_mode', 'instant');
-                        } catch {}
-                        setIsInstantModalOpen(false);
-                        onNavigate('book-consultation');
-                      }}
-                      className="px-4 py-2.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer"
+              {onlineDoctors.length > 0 ? (
+                <div className="space-y-3">
+                  {onlineDoctors.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="p-4 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-300 rounded-2xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                     >
-                      <Zap className="w-3.5 h-3.5 fill-emerald-300 text-emerald-300" />
-                      <span>Select & Connect</span>
-                    </button>
+                      <div className="flex items-center space-x-3.5 min-w-0">
+                        <div className="relative shrink-0">
+                          <img
+                            src={doc.avatarUrl}
+                            alt={doc.name}
+                            className="w-13 h-13 rounded-2xl object-cover border border-slate-200"
+                          />
+                          <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center">
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center space-x-1.5">
+                            <h4 className="font-bold font-outfit text-sm text-[#022434] truncate">
+                              {doc.name}
+                            </h4>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-[#006c44]">
+                              MDCN
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#006c44] font-semibold truncate font-outfit mt-0.5">
+                            {doc.specialty}
+                          </p>
+                          <div className="flex items-center space-x-2 text-[11px] text-slate-500 mt-1">
+                            <span className="flex items-center text-amber-600 font-bold">
+                              <Star className="w-3 h-3 fill-amber-400 text-amber-400 mr-0.5" />
+                              {doc.rating || 5.0}
+                            </span>
+                            <span>•</span>
+                            <span className="font-mono font-bold text-[#006c44]">
+                              ₦{doc.prices?.video?.toLocaleString() || '10,000'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          onSelectDoctor(doc.id);
+                          try {
+                            localStorage.setItem('prime_telecare_booking_mode', 'instant');
+                          } catch {}
+                          setIsInstantModalOpen(false);
+                          onNavigate('book-consultation');
+                        }}
+                        className="px-4 py-2.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5 fill-emerald-300 text-emerald-300" />
+                        <span>Select & Connect</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 px-4 text-center space-y-3">
+                  <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-[#006c44] mx-auto border border-emerald-100">
+                    <Stethoscope className="w-6 h-6" />
                   </div>
-                ))}
-              </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold font-outfit text-sm text-[#022434]">No Doctors Currently Online</h4>
+                    <p className="text-xs text-slate-500">
+                      Create or register a doctor profile to enable instant consultations.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsInstantModalOpen(false);
+                      setIsAddDoctorModalOpen(true);
+                    }}
+                    className="px-4 py-2.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                  >
+                    + Register Doctor Profile
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Add / Register Doctor Modal */}
+      <AddDoctorModal
+        isOpen={isAddDoctorModalOpen}
+        onClose={() => setIsAddDoctorModalOpen(false)}
+        onDoctorAdded={(newDoc) => {
+          loadDoctors();
+          showToast(`Doctor profile created for ${newDoc.name}`, 'success');
+        }}
+      />
     </div>
   );
 };

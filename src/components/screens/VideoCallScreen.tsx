@@ -812,7 +812,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               className="w-full py-3 bg-[#77daa4] hover:bg-emerald-300 text-[#022434] font-extrabold font-outfit text-xs rounded-xl shadow-lg flex items-center justify-center space-x-1.5"
             >
               <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Open Connection Recovery Assistant</span>
+              <span>Reconnect Call Feed</span>
             </button>
             <div className="flex gap-2">
               <button

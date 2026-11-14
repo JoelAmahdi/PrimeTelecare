@@ -24,10 +24,11 @@ import {
 } from 'lucide-react';
 import { ScreenId, Doctor, UserRole, BookingSummary } from '../../types';
 import { primeApi } from '../../services/apiClient';
-import { mockDoctors, currentUserPatient } from '../../data/mockData';
+import { currentUserPatient } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';
 import { DependentSwitcher } from '../common/DependentSwitcher';
 import { NotificationsDrawer } from '../common/NotificationsDrawer';
+import { AddDoctorModal } from '../common/AddDoctorModal';
 
 interface BookConsultationScreenProps {
   selectedDoctorId?: string;
@@ -59,6 +60,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   const [doctorsList, setDoctorsList] = useState<Doctor[]>([]);
   const [chosenDoctorId, setChosenDoctorId] = useState<string>(selectedDoctorId || '');
   const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
+  const [isAddDoctorModalOpen, setIsAddDoctorModalOpen] = useState(false);
   const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
 
   // Pre-consultation vitals state (symptoms removed per clinical requirements)
@@ -70,16 +72,37 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
     diastolicBp: '80',
   });
 
-  useEffect(() => {
+  const loadDoctors = () => {
     primeApi.getDoctors().then((docs) => {
-      const list = docs || [];
+      let list = docs || [];
+      try {
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        if (custom.length > 0) {
+          const ids = new Set(list.map((d: any) => d.id));
+          for (const cd of custom) {
+            if (!ids.has(cd.id)) list.push(cd);
+          }
+        }
+      } catch {}
       setDoctorsList(list);
       if (!chosenDoctorId && list.length > 0) {
         setChosenDoctorId(list[0].id);
       }
     }).catch(() => {
-      setDoctorsList([]);
+      try {
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        setDoctorsList(custom);
+        if (custom.length > 0 && !chosenDoctorId) {
+          setChosenDoctorId(custom[0].id);
+        }
+      } catch {
+        setDoctorsList([]);
+      }
     });
+  };
+
+  useEffect(() => {
+    loadDoctors();
   }, []);
 
   useEffect(() => {
@@ -380,9 +403,6 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
                   Wait: ~2–5 mins
                 </span>
               </div>
-              <p className="text-xs text-emerald-800/90 leading-relaxed font-nunito">
-                Select an online doctor below. Your consultation starts immediately upon payment confirmation.
-              </p>
             </div>
 
             {/* Doctors Online Selection Rail */}
@@ -392,9 +412,18 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                   <span>Doctors Online Now (Tap to Select)</span>
                 </label>
-                <span className="text-[11px] font-bold text-[#006c44] font-mono">
-                  {(doctorsList.filter((d) => d.isOnline).length || 6)} Online
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-bold text-[#006c44] font-mono">
+                    {doctorsList.filter((d) => d.isOnline).length} Online
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddDoctorModalOpen(true)}
+                    className="text-[10px] text-[#006c44] font-bold underline hover:text-[#022434]"
+                  >
+                    + Add Doctor
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -739,7 +768,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
               </button>
               <p className="text-[11px] text-center text-emerald-700 font-semibold pt-2">
                 {bookingMode === 'instant'
-                  ? '⚡ Live triage in ~2–5 mins · Priority Queue'
+                  ? '⚡ Instant Consultation · Priority Queue'
                   : `📅 Scheduled for ${availableDates[selectedDateIndex].date} at ${selectedTimeSlot}`}
               </p>
             </div>
@@ -842,6 +871,15 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
             setIsTriageModalOpen(false);
             proceedToCheckout();
           }
+        }}
+      />
+
+      <AddDoctorModal
+        isOpen={isAddDoctorModalOpen}
+        onClose={() => setIsAddDoctorModalOpen(false)}
+        onDoctorAdded={(doc) => {
+          loadDoctors();
+          setChosenDoctorId(doc.id);
         }}
       />
     </div>

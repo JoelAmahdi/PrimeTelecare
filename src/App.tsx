@@ -9,6 +9,7 @@ import { WelcomeScreen } from './components/screens/WelcomeScreen';
 import { TermsScreen } from './components/screens/TermsScreen';
 import { LoginScreen } from './components/screens/LoginScreen';
 import { CreateAccountScreen } from './components/screens/CreateAccountScreen';
+import { OnboardingScreen } from './components/screens/OnboardingScreen';
 import { PatientHomeDashboard } from './components/screens/PatientHomeDashboard';
 import { DoctorHomeDashboard } from './components/screens/DoctorHomeDashboard';
 import { BookConsultationScreen } from './components/screens/BookConsultationScreen';
@@ -58,6 +59,7 @@ import {
 // Each account created strictly and solely accesses the dashboard and features intended for its role
 const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
   patient: [
+    'onboarding',
     'patient-home',
     'book-consultation',
     'doctor-discovery',
@@ -75,6 +77,7 @@ const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
     'post-consultation-journey',
   ],
   doctor: [
+    'onboarding',
     'doctor-home',
     'active-chat',
     'video-call',
@@ -98,6 +101,16 @@ const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
     'account-details',
     'service-router',
   ],
+};
+
+export const isUserOnboarded = (u: User | null | undefined, userRole: UserRole): boolean => {
+  if (!u) return false;
+  if (userRole === 'admin') return true;
+  if (u.onboarded === true || u.hasCompletedOnboarding === true) return true;
+  if (userRole === 'doctor') {
+    return Boolean(u.doctorLicenseNo && u.doctorSpecialty && u.onboarded);
+  }
+  return Boolean(u.phone && u.dob && u.gender && u.onboarded);
 };
 
 const getDefaultDashboardForRole = (r: UserRole): ScreenId => {
@@ -222,13 +235,21 @@ export default function App() {
         setRole(resolvedRole);
         localStorage.setItem('prime_telecare_user', JSON.stringify(resolvedUser));
         localStorage.setItem('prime_telecare_role', resolvedRole);
-        const homeScreen: ScreenId = getDefaultDashboardForRole(resolvedRole);
-        localStorage.setItem('prime_telecare_screen', homeScreen);
-        setCurrentScreen(homeScreen);
+
+        const targetScreen: ScreenId = !isUserOnboarded(resolvedUser, resolvedRole)
+          ? 'onboarding'
+          : getDefaultDashboardForRole(resolvedRole);
+        localStorage.setItem('prime_telecare_screen', targetScreen);
+        setCurrentScreen(targetScreen);
         setSessionLocked(false);
         setIsLocked(false);
         recordAppActivity();
-        showToast(`Welcome back, ${resolvedUser.name}!`, 'success');
+        showToast(
+          targetScreen === 'onboarding'
+            ? `Welcome! Please complete your registration details.`
+            : `Welcome back, ${resolvedUser.name}!`,
+          'success'
+        );
         if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
           setShowQuickLoginSetup(true);
         }
@@ -256,13 +277,21 @@ export default function App() {
               setRole(resolvedRole);
               localStorage.setItem('prime_telecare_user', JSON.stringify(resolvedUser));
               localStorage.setItem('prime_telecare_role', resolvedRole);
-              const homeScreen: ScreenId = getDefaultDashboardForRole(resolvedRole);
-              localStorage.setItem('prime_telecare_screen', homeScreen);
-              setCurrentScreen(homeScreen);
+
+              const targetScreen: ScreenId = !isUserOnboarded(resolvedUser, resolvedRole)
+                ? 'onboarding'
+                : getDefaultDashboardForRole(resolvedRole);
+              localStorage.setItem('prime_telecare_screen', targetScreen);
+              setCurrentScreen(targetScreen);
               setSessionLocked(false);
               setIsLocked(false);
               recordAppActivity();
-              showToast(`Welcome, ${resolvedUser.name}!`, 'success');
+              showToast(
+                targetScreen === 'onboarding'
+                  ? `Welcome! Please complete your registration details.`
+                  : `Welcome, ${resolvedUser.name}!`,
+                'success'
+              );
               if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
                 setShowQuickLoginSetup(true);
               }
@@ -337,7 +366,7 @@ export default function App() {
 
   const navigateTo = (nextScreen: ScreenId) => {
     // Unauthenticated / Auth screens
-    if (['welcome', 'terms', 'login', 'signup'].includes(nextScreen)) {
+    if (['welcome', 'terms', 'login', 'signup', 'onboarding'].includes(nextScreen)) {
       if (nextScreen !== 'active-chat') {
         setIsChatSessionActive(false);
       }
@@ -399,7 +428,7 @@ export default function App() {
 
   // Continuous RBAC Guard: Ensure active screen matches authenticated user's role permissions
   useEffect(() => {
-    if (['welcome', 'terms', 'login', 'signup'].includes(currentScreen)) return;
+    if (['welcome', 'terms', 'login', 'signup', 'onboarding'].includes(currentScreen)) return;
     const allowed = ROLE_ALLOWED_SCREENS[effectiveRole] || ROLE_ALLOWED_SCREENS.patient;
     if (!allowed.includes(currentScreen)) {
       const fallback = getDefaultDashboardForRole(effectiveRole);
@@ -429,6 +458,16 @@ export default function App() {
     setSessionLocked(false);
     setIsLocked(false);
     recordAppActivity();
+
+    // Check if user requires first-time onboarding
+    const needsOnboard = !isUserOnboarded(resolvedUser, finalRole);
+    if (needsOnboard) {
+      try {
+        localStorage.setItem('prime_telecare_screen', 'onboarding');
+      } catch {}
+      setCurrentScreen('onboarding');
+      return;
+    }
 
     const homeScreen = getDefaultDashboardForRole(finalRole);
 
@@ -583,6 +622,24 @@ export default function App() {
               <CreateAccountScreen
                 onNavigate={navigateTo}
                 onSignupSuccess={handleLoginSuccess}
+              />
+            )}
+
+            {currentScreen === 'onboarding' && (
+              <OnboardingScreen
+                user={activeUser}
+                role={effectiveRole}
+                onComplete={(updatedUser) => {
+                  setCurrentUser(updatedUser);
+                  setRole(updatedUser.role);
+                  try {
+                    localStorage.setItem('prime_telecare_user', JSON.stringify(updatedUser));
+                    localStorage.setItem('prime_telecare_role', updatedUser.role);
+                  } catch {}
+                  const nextDashboard = getDefaultDashboardForRole(updatedUser.role);
+                  navigateTo(nextDashboard);
+                }}
+                onLogout={handleLogoutConfirm}
               />
             )}
 

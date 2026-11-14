@@ -163,7 +163,7 @@ class MemoryStore {
   private getDefaultState(): ServerState {
     return {
       users: [currentUserPatient, currentUserDoctor, currentUserAdmin],
-      doctors: mockDoctors,
+      doctors: [],
       appointments: seedAppointments,
       prescriptions: mockPrescriptions,
       auditLogs: mockHealthRecordAuditLogs,
@@ -183,8 +183,8 @@ class MemoryStore {
         const raw = fs.readFileSync(STORE_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         console.log('[Store] Loaded state from disk (' + Object.keys(parsed).length + ' collections)');
-        if (!parsed.doctors || parsed.doctors.length === 0) {
-          parsed.doctors = mockDoctors;
+        if (!parsed.doctors) {
+          parsed.doctors = [];
         }
         if (!parsed.appointments || parsed.appointments.length === 0) {
           parsed.appointments = seedAppointments;

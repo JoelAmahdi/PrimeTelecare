@@ -350,11 +350,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                             ₦{currentDoctorEarnings.toLocaleString()}
                           </h3>
                         </div>
-                        <p className="text-xs text-slate-300 font-nunito mt-1.5">
-                          {currentDoctorEarnings > 0
-                            ? 'Available balance credited from patient consultation payments'
-                            : 'Starts with ₦0. Balance updates automatically once patients make consultation payments.'}
-                        </p>
                       </>
                     );
                   })()}
@@ -581,12 +576,9 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                   <div className="w-12 h-12 bg-emerald-50 text-[#006c44] rounded-2xl flex items-center justify-center mx-auto mb-3">
                     <Users className="w-6 h-6" />
                   </div>
-                  <h4 className="font-bold font-outfit text-sm sm:text-base text-[#022434] mb-1">
+                  <h4 className="font-bold font-outfit text-sm sm:text-base text-[#022434]">
                     No Patients Currently in Queue
                   </h4>
-                  <p className="text-xs text-slate-500 font-nunito max-w-sm mx-auto px-4">
-                    Your clinical queue is clear. When patients book video, voice, or chat consultations, they will appear here live in real-time.
-                  </p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -714,12 +706,8 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                     <h4 className="font-extrabold font-outfit text-sm text-[#022434]">
                       EHR Release Sign-Off
                     </h4>
-                    <span className="text-[11px] text-slate-500 font-nunito">NDPA & MDCN Compliance</span>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 font-nunito leading-relaxed">
-                  All clinical release requests from patients undergo verified cryptographic signing before PDF dossier generation.
-                </p>
               </div>
             )}
 
@@ -754,9 +742,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                 <Lock className="w-4 h-4 text-[#006c44]" />
                 <span>Encrypted Telehealth Room</span>
               </div>
-              <p className="leading-relaxed text-slate-500">
-                End-to-end encrypted consultations compliant with NDPA 2023, HIPAA, and MDCN Telemedicine Regulations.
-              </p>
             </div>
           </div>
         </div>

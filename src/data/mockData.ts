@@ -42,6 +42,8 @@ export const currentUserPatient: User = {
     marketingConsent: false,
     anonymizedResearchConsent: true,
   },
+  onboarded: true,
+  hasCompletedOnboarding: true,
 };
 
 export const currentUserDoctor: User = {
@@ -53,6 +55,8 @@ export const currentUserDoctor: User = {
   phone: '+234 802 345 6789',
   doctorLicenseNo: 'MDCN/2018/74920',
   doctorSpecialty: 'General Practitioner & Telemedicine Specialist',
+  onboarded: true,
+  hasCompletedOnboarding: true,
 };
 
 
@@ -63,9 +67,13 @@ export const currentUserAdmin: User = {
   role: 'admin',
   avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300',
   phone: '+234 809 999 0000',
+  onboarded: true,
+  hasCompletedOnboarding: true,
 };
 
-export const mockDoctors: Doctor[] = [
+export const mockDoctors: Doctor[] = [];
+
+export const disabledMockDoctors: Doctor[] = [
   {
     id: 'doc-anya',
     name: 'Dr. Anya Sharma',
