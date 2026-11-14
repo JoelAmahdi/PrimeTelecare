@@ -127,15 +127,39 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       purpose: bookingSummary?.exportAuthorization?.purpose || 'Second Medical Opinion & Care Continuity',
     });
 
+    const vitalsStr = bookingSummary?.vitals
+      ? `Vitals: Temp ${bookingSummary.vitals.temp || '36.8'}°C, HR ${bookingSummary.vitals.hr || '72'} BPM, SpO2 ${bookingSummary.vitals.spo2 || '99'}%, BP ${bookingSummary.vitals.systolicBp || '120'}/${bookingSummary.vitals.diastolicBp || '80'} mmHg`
+      : 'Routine Telehealth Consultation';
+
     primeApi.createAppointment({
       doctorId: doctor.id,
       patientName: user.name || 'Ada Okonkwo',
       scheduledDate: date,
       timeSlot,
       type: consultationType,
-      notes: bookingSummary?.symptomsDescription,
+      notes: vitalsStr,
       price: details.amount,
     }).catch(() => {});
+
+    // Save notification alert for doctor
+    try {
+      const docAlert = {
+        id: consultId,
+        doctorId: doctor.id,
+        patientName: user.name || 'Ada Okonkwo',
+        doctorName: doctor.fullNameWithTitle || doctor.name,
+        type: consultationType,
+        timeSlot,
+        scheduledDate: date,
+        price: details.amount,
+        vitals: bookingSummary?.vitals,
+        timestamp: Date.now(),
+        unread: true,
+      };
+      localStorage.setItem('prime_telecare_new_consultation_alert', JSON.stringify(docAlert));
+      window.dispatchEvent(new CustomEvent('new-consultation-booked', { detail: docAlert }));
+      window.dispatchEvent(new Event('appointment-alerts-updated'));
+    } catch {}
 
     // Credit doctor's account balance with consultation earnings
     try {

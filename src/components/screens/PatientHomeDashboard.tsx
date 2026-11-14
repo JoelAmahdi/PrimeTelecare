@@ -20,10 +20,12 @@ import {
   ChevronRight,
   ShieldCheck,
   Activity,
+  Star,
+  Zap,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
-import { ScreenId, User, BookingSummary } from '../../types';
+import { ScreenId, User, BookingSummary, Doctor } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { useOfflineStatus } from '../../utils/useOfflineStatus';
 import {
@@ -33,6 +35,8 @@ import {
 } from '../../utils/appointmentNotifications';
 import { processJoinOrPayConsultation } from '../../utils/consultationPayment';
 import { showToast } from '../../utils/toast';
+import { mockDoctors } from '../../data/mockData';
+import { primeApi } from '../../services/apiClient';
 
 interface PatientHomeDashboardProps {
   user: User;
@@ -45,10 +49,13 @@ interface PatientHomeDashboardProps {
 export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
   user,
   onNavigate,
+  onSelectDoctor,
   onSaveBookingSummary,
   isOfflineMode = false,
 }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isInstantModalOpen, setIsInstantModalOpen] = useState(false);
+  const [onlineDoctors, setOnlineDoctors] = useState<Doctor[]>([]);
   const [consultations, setConsultations] = useState<AppointmentAlert[]>([]);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [chartView, setChartView] = useState<'weekly' | 'monthly'>('weekly');
@@ -59,6 +66,18 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    primeApi.getDoctors({ onlineOnly: true }).then((docs) => {
+      if (docs && docs.length > 0) {
+        setOnlineDoctors(docs);
+      } else {
+        setOnlineDoctors(mockDoctors.filter((d) => d.isOnline));
+      }
+    }).catch(() => {
+      setOnlineDoctors(mockDoctors.filter((d) => d.isOnline));
+    });
   }, []);
 
   useEffect(() => {
@@ -199,7 +218,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
           <button
             onClick={() => {
               triggerHaptic('selection');
-              onNavigate('book-consultation');
+              setIsInstantModalOpen(true);
             }}
             className="p-4 sm:p-5 bg-white hover:bg-emerald-50/40 rounded-2xl border border-slate-200/90 hover:border-emerald-300 shadow-xs transition-all text-left group cursor-pointer"
           >
@@ -208,6 +227,10 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             </div>
             <span className="font-bold font-outfit text-sm sm:text-base text-[#022434] block">
               Instant Doctor
+            </span>
+            <span className="text-[11px] text-[#006c44] font-semibold flex items-center space-x-1 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{onlineDoctors.length || 6} Online Now</span>
             </span>
           </button>
 
@@ -591,6 +614,114 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             >
               Close Notifications
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Online Doctors Instant Consultation Modal */}
+      {isInstantModalOpen && (
+        <div className="fixed inset-0 z-50 bg-[#022434]/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in zoom-in-95 duration-200 font-nunito">
+            {/* Header */}
+            <div className="bg-linear-to-r from-[#022434] to-[#1c3a4a] text-white p-5 flex items-center justify-between border-b border-slate-700">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-emerald-500/20 rounded-2xl border border-emerald-500/40 text-emerald-300">
+                  <Stethoscope className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                      Doctors Online Now
+                    </span>
+                  </div>
+                  <h3 className="font-extrabold font-outfit text-lg leading-tight text-white mt-0.5">
+                    Choose Clinician for Instant Care
+                  </h3>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('light');
+                  setIsInstantModalOpen(false);
+                }}
+                className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* List of Online Doctors */}
+            <div className="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              <p className="text-xs text-slate-600">
+                Select an available physician to start an immediate Video, Voice, or Chat consultation (wait time: <strong>~2–5 mins</strong>).
+              </p>
+
+              <div className="space-y-3">
+                {(onlineDoctors.length > 0 ? onlineDoctors : mockDoctors.filter((d) => d.isOnline)).map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="p-4 bg-slate-50 hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-300 rounded-2xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                  >
+                    <div className="flex items-center space-x-3.5 min-w-0">
+                      <div className="relative shrink-0">
+                        <img
+                          src={doc.avatarUrl}
+                          alt={doc.name}
+                          className="w-13 h-13 rounded-2xl object-cover border border-slate-200"
+                        />
+                        <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center">
+                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center space-x-1.5">
+                          <h4 className="font-bold font-outfit text-sm text-[#022434] truncate">
+                            {doc.name}
+                          </h4>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-[#006c44]">
+                            MDCN
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#006c44] font-semibold truncate font-outfit mt-0.5">
+                          {doc.specialty}
+                        </p>
+                        <div className="flex items-center space-x-2 text-[11px] text-slate-500 mt-1">
+                          <span className="flex items-center text-amber-600 font-bold">
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400 mr-0.5" />
+                            {doc.rating || 4.9}
+                          </span>
+                          <span>•</span>
+                          <span>Wait: 2-5 min</span>
+                          <span>•</span>
+                          <span className="font-mono font-bold text-[#006c44]">
+                            ₦{doc.prices?.video?.toLocaleString() || '10,000'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        onSelectDoctor(doc.id);
+                        try {
+                          localStorage.setItem('prime_telecare_booking_mode', 'instant');
+                        } catch {}
+                        setIsInstantModalOpen(false);
+                        onNavigate('book-consultation');
+                      }}
+                      className="px-4 py-2.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all active:scale-95 flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer"
+                    >
+                      <Zap className="w-3.5 h-3.5 fill-emerald-300 text-emerald-300" />
+                      <span>Select & Connect</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

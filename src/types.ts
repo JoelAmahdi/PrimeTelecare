@@ -149,6 +149,14 @@ export interface BookingSummary {
   consultationType: 'Video' | 'Voice' | 'Chat';
   bookingMode?: 'instant' | 'scheduled';
   symptomsDescription?: string;
+  vitals?: {
+    temp?: string;
+    hr?: string;
+    spo2?: string;
+    bp?: string;
+    systolicBp?: string;
+    diastolicBp?: string;
+  };
   date: string;
   timeSlot: string;
   duration: string;

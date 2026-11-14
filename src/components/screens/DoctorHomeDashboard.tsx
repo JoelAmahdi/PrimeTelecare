@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check } from 'lucide-react';
+import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle } from 'lucide-react';
 import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
@@ -69,6 +69,14 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
   }
 
   const [todaysPatients, setTodaysPatients] = useState<PatientQueueItem[]>([]);
+  const [liveConsultationAlert, setLiveConsultationAlert] = useState<any>(() => {
+    try {
+      const raw = localStorage.getItem('prime_telecare_new_consultation_alert');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -87,16 +95,17 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
 
       try {
         const res = await primeApi.getAppointments();
-        if (isMounted && res.success && Array.isArray(res.data) && res.data.length > 0) {
-          const apiItems = res.data.map((a: any) => ({
+        const apiAppointments: any[] = Array.isArray(res) ? res : (res as any)?.appointments || (res as any)?.data || [];
+        if (isMounted && apiAppointments.length > 0) {
+          const apiItems = apiAppointments.map((a: any) => ({
             id: a.id,
             name: a.patientName || 'Patient',
             time: a.timeSlot || 'Scheduled',
             type: a.type || 'Video',
             symptom: a.notes || 'Telehealth Consultation',
-            status: a.status || 'Booked',
+            status: a.status === 'upcoming' ? 'Paid & Upcoming' : (a.status || 'Booked'),
             avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
-            tag: 'Live Booking',
+            tag: (a.timeSlot?.includes('Immediate') || a.scheduledDate?.includes('Instant')) ? 'Instant Care' : 'Live Booking',
             tagColor: 'bg-emerald-100 text-[#006c44] border-emerald-200',
           }));
           const ids = new Set(local.map((l) => l.id));
@@ -118,10 +127,23 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
     };
 
     loadQueue();
+
+    const handleNewBooking = (e: any) => {
+      const detail = e.detail;
+      if (detail) {
+        setLiveConsultationAlert(detail);
+        triggerHaptic('heavy');
+        showToast(`🔔 New Consultation Alert: ${detail.patientName} booked an instant consultation with you!`, 'success');
+      }
+      loadQueue();
+    };
+
     window.addEventListener('appointment-alerts-updated', loadQueue);
+    window.addEventListener('new-consultation-booked', handleNewBooking);
     return () => {
       isMounted = false;
       window.removeEventListener('appointment-alerts-updated', loadQueue);
+      window.removeEventListener('new-consultation-booked', handleNewBooking);
     };
   }, []);
 
@@ -210,6 +232,78 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
               <div>
                 <span className="font-extrabold font-outfit text-amber-900 text-sm block">Offline Mode</span>
                 <span className="text-xs text-amber-800">Practice records saved locally. Will sync when reconnected.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Live Incoming Consultation Alert Banner */}
+        {liveConsultationAlert && (
+          <div className="bg-linear-to-r from-emerald-600 via-[#006c44] to-teal-800 text-white rounded-3xl p-5 sm:p-6 shadow-xl border-2 border-emerald-400/40 animate-in slide-in-from-top-3 duration-300">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start sm:items-center space-x-4">
+                <div className="w-13 h-13 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 shadow-inner">
+                  <Video className="w-6 h-6 text-white animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-ping" />
+                    <span className="text-[11px] font-extrabold font-outfit uppercase tracking-wider text-emerald-200 bg-black/20 px-2.5 py-0.5 rounded-full">
+                      New Consultation Alert
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-xl font-extrabold font-outfit text-white mt-1">
+                    {liveConsultationAlert.patientName} • {liveConsultationAlert.type} Consultation
+                  </h3>
+                  <p className="text-xs text-emerald-100 font-nunito mt-0.5">
+                    {liveConsultationAlert.timeSlot} • Fee: ₦{(liveConsultationAlert.price || 10000).toLocaleString()} Credited
+                  </p>
+                  {liveConsultationAlert.vitals && (
+                    <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] font-mono text-emerald-200 bg-black/20 px-3 py-1.5 rounded-xl border border-white/10">
+                      <span>🌡️ {liveConsultationAlert.vitals.temp || '36.8'}°C</span>
+                      <span>•</span>
+                      <span>💓 {liveConsultationAlert.vitals.hr || '72'} BPM</span>
+                      <span>•</span>
+                      <span>🫁 {liveConsultationAlert.vitals.spo2 || '99'}%</span>
+                      <span>•</span>
+                      <span>🩺 {liveConsultationAlert.vitals.systolicBp || '120'}/{liveConsultationAlert.vitals.diastolicBp || '80'} mmHg</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 sm:self-center">
+                <button
+                  onClick={() => {
+                    triggerHaptic('heavy');
+                    setLiveConsultationAlert(null);
+                    try {
+                      localStorage.removeItem('prime_telecare_new_consultation_alert');
+                    } catch {}
+                    if (liveConsultationAlert.type === 'Chat') {
+                      onNavigate('active-chat');
+                    } else {
+                      onNavigate('video-call');
+                    }
+                  }}
+                  className="px-5 py-3 bg-white hover:bg-emerald-50 text-[#006c44] font-extrabold font-outfit text-xs sm:text-sm rounded-xl shadow-md transition-all active:scale-95 flex items-center space-x-2 cursor-pointer"
+                >
+                  <Video className="w-4 h-4 text-[#006c44]" />
+                  <span>Start Consultation Now</span>
+                </button>
+                <button
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setLiveConsultationAlert(null);
+                    try {
+                      localStorage.removeItem('prime_telecare_new_consultation_alert');
+                    } catch {}
+                  }}
+                  className="p-2.5 text-white/70 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Dismiss Alert"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>

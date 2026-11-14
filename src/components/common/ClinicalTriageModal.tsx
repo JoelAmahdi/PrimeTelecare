@@ -1,26 +1,29 @@
 import React, { useState } from 'react';
 import {
-  AlertTriangle,
-  ShieldAlert,
-  PhoneCall,
-  MapPin,
-  CheckCircle2,
-  X,
   HeartPulse,
   Thermometer,
   Activity,
   ArrowRight,
   ShieldCheck,
-  Phone,
-  HelpCircle,
+  X,
+  AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 import { triggerHaptic } from '../../utils/haptics';
 import { primeApi } from '../../services/apiClient';
 
-interface TriageResult {
+export interface VitalsData {
+  temp?: string;
+  hr?: string;
+  spo2?: string;
+  systolicBp?: string;
+  diastolicBp?: string;
+}
+
+export interface TriageResult {
   isEmergency: boolean;
-  flaggedSymptoms: string[];
   vitalWarnings: string[];
+  vitals: VitalsData;
   cleared: boolean;
 }
 
@@ -29,6 +32,7 @@ interface ClinicalTriageModalProps {
   onClose: () => void;
   onTriageComplete: (result: TriageResult) => void;
   doctorName?: string;
+  initialVitals?: VitalsData;
 }
 
 export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
@@ -36,82 +40,49 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
   onClose,
   onTriageComplete,
   doctorName = 'your clinician',
+  initialVitals,
 }) => {
   if (!isOpen) return null;
 
-  // Red-flag emergency questions state
-  const [answers, setAnswers] = useState<{ [key: string]: boolean }>({
-    chestPain: false,
-    breathingDiff: false,
-    strokeSymptoms: false,
-    heavyBleeding: false,
-    anaphylaxis: false,
-    severeTrauma: false,
-  });
-
-  // Optional Vitals input
-  const [temp, setTemp] = useState('');
-  const [hr, setHr] = useState('');
-  const [spo2, setSpo2] = useState('');
-  const [systolicBp, setSystolicBp] = useState('');
+  // Pre-consultation Vitals Input (Symptoms removed per clinical instructions)
+  const [temp, setTemp] = useState(initialVitals?.temp || '');
+  const [hr, setHr] = useState(initialVitals?.hr || '');
+  const [spo2, setSpo2] = useState(initialVitals?.spo2 || '');
+  const [systolicBp, setSystolicBp] = useState(initialVitals?.systolicBp || '');
+  const [diastolicBp, setDiastolicBp] = useState(initialVitals?.diastolicBp || '');
 
   const [triageEvaluated, setTriageEvaluated] = useState(false);
   const [evalResult, setEvalResult] = useState<TriageResult | null>(null);
 
-  const emergencyQuestions = [
-    {
-      id: 'chestPain',
-      label: 'Severe Chest Pain / Pressure',
-      desc: 'Crushing chest tightness radiating to left arm, neck, or jaw',
-    },
-    {
-      id: 'breathingDiff',
-      label: 'Severe Shortness of Breath',
-      desc: 'Inability to speak in full sentences or blue/pale lips at rest',
-    },
-    {
-      id: 'strokeSymptoms',
-      label: 'Sudden Weakness / Numbness (FAST)',
-      desc: 'Facial drooping, arm weakness, or sudden slurred speech',
-    },
-    {
-      id: 'heavyBleeding',
-      label: 'Uncontrolled Bleeding or Confusion',
-      desc: 'Heavy arterial bleeding, sudden loss of consciousness, or severe disorientation',
-    },
-    {
-      id: 'anaphylaxis',
-      label: 'Severe Allergic Reaction',
-      desc: 'Swelling of throat, tongue, or lips with wheezing after exposure',
-    },
-  ];
-
-  const handleToggleQuestion = (id: string) => {
+  const applyNormalBaseline = () => {
     triggerHaptic('selection');
-    setAnswers((prev) => ({ ...prev, [id]: !prev[id] }));
+    setTemp('36.8');
+    setHr('72');
+    setSpo2('99');
+    setSystolicBp('120');
+    setDiastolicBp('80');
   };
 
-  const evaluateTriage = () => {
-    triggerHaptic('heavy');
-    const flaggedSymptoms: string[] = [];
+  const evaluateVitals = () => {
+    triggerHaptic('medium');
     const vitalWarnings: string[] = [];
 
-    // Check emergency questions
-    emergencyQuestions.forEach((q) => {
-      if (answers[q.id]) {
-        flaggedSymptoms.push(q.label);
-      }
-    });
-
-    // Evaluate Vitals if provided
     const tempNum = parseFloat(temp);
-    if (!isNaN(tempNum) && (tempNum >= 40 || tempNum <= 35)) {
-      vitalWarnings.push(`Critical Temperature (${tempNum}°C)`);
+    if (!isNaN(tempNum)) {
+      if (tempNum >= 39.5) {
+        vitalWarnings.push(`High Fever (${tempNum}°C)`);
+      } else if (tempNum <= 35.0) {
+        vitalWarnings.push(`Hypothermia Risk (${tempNum}°C)`);
+      }
     }
 
     const hrNum = parseInt(hr, 10);
-    if (!isNaN(hrNum) && (hrNum >= 130 || hrNum <= 45)) {
-      vitalWarnings.push(`Critical Heart Rate (${hrNum} BPM)`);
+    if (!isNaN(hrNum)) {
+      if (hrNum >= 130) {
+        vitalWarnings.push(`Elevated Heart Rate / Tachycardia (${hrNum} BPM)`);
+      } else if (hrNum <= 45) {
+        vitalWarnings.push(`Low Heart Rate / Bradycardia (${hrNum} BPM)`);
+      }
     }
 
     const spo2Num = parseInt(spo2, 10);
@@ -119,35 +90,45 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
       vitalWarnings.push(`Low Blood Oxygen Saturation (${spo2Num}%)`);
     }
 
-    const bpNum = parseInt(systolicBp, 10);
-    if (!isNaN(bpNum) && (bpNum >= 180 || bpNum <= 80)) {
-      vitalWarnings.push(`Critical Blood Pressure (${bpNum} mmHg)`);
+    const sysNum = parseInt(systolicBp, 10);
+    if (!isNaN(sysNum)) {
+      if (sysNum >= 180) {
+        vitalWarnings.push(`Severely Elevated Blood Pressure (${sysNum} mmHg)`);
+      } else if (sysNum <= 80) {
+        vitalWarnings.push(`Hypotension / Low Blood Pressure (${sysNum} mmHg)`);
+      }
     }
 
-    const isEmergency = flaggedSymptoms.length > 0 || vitalWarnings.length > 0;
+    const isCritical = !isNaN(spo2Num) && spo2Num < 88;
 
     const result: TriageResult = {
-      isEmergency,
-      flaggedSymptoms,
+      isEmergency: isCritical,
       vitalWarnings,
-      cleared: !isEmergency,
+      vitals: {
+        temp: temp || '36.8',
+        hr: hr || '72',
+        spo2: spo2 || '98',
+        systolicBp: systolicBp || '120',
+        diastolicBp: diastolicBp || '80',
+      },
+      cleared: true,
     };
 
     setEvalResult(result);
     setTriageEvaluated(true);
 
-    // Asynchronously log & evaluate with core triage backend
+    // Asynchronously log to core clinical backend
     primeApi.evaluateTriage({
       patientName: 'Ada Okonkwo',
       patientAge: 28,
       gender: 'Female',
       vitals: { temp, hr, spo2, systolicBp },
-      redFlags: answers,
+      redFlags: {},
     }).catch(() => {});
   };
 
-  const handleProceedIfCleared = () => {
-    if (evalResult && !evalResult.isEmergency) {
+  const handleConfirmAndProceed = () => {
+    if (evalResult) {
       triggerHaptic('success');
       onTriageComplete(evalResult);
       onClose();
@@ -156,19 +137,19 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-[#022434]/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200 font-nunito">
         {/* Header Bar */}
         <div className="bg-gradient-to-r from-[#022434] to-[#1c3a4a] text-white p-5 flex items-center justify-between border-b border-slate-700">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-rose-500/20 rounded-2xl border border-rose-500/40 text-rose-300">
+            <div className="p-2.5 bg-emerald-500/20 rounded-2xl border border-emerald-500/40 text-emerald-300">
               <HeartPulse className="w-6 h-6 animate-pulse" />
             </div>
             <div>
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full inline-block mb-0.5">
-                Mandatory Safety Protocol
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full inline-block mb-0.5">
+                Pre-Consultation Clinical Intake
               </span>
               <h3 className="font-extrabold font-outfit text-lg leading-tight text-white">
-                Pre-Consultation Emergency Triage
+                Patient Vital Signs
               </h3>
             </div>
           </div>
@@ -178,7 +159,7 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
               triggerHaptic('light');
               onClose();
             }}
-            className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -188,277 +169,190 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
         <div className="p-5 sm:p-6 space-y-5 max-h-[80vh] overflow-y-auto">
           {!triageEvaluated ? (
             <>
-              {/* Emergency Statement Banner */}
-              <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl space-y-2 text-amber-950 font-nunito text-xs shadow-2xs">
-                <div className="flex items-start space-x-2 font-bold font-outfit text-sm text-amber-950">
-                  <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <span>Are you experiencing a medical emergency?</span>
+              {/* Clinical Context Banner */}
+              <div className="bg-emerald-50/80 border border-emerald-200 p-4 rounded-2xl space-y-1 text-emerald-950 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold font-outfit text-sm text-[#006c44] flex items-center space-x-1.5">
+                    <Activity className="w-4 h-4 text-[#006c44]" />
+                    <span>Clinical Vitals Check</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={applyNormalBaseline}
+                    className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-[#006c44] border border-emerald-300 rounded-lg text-[11px] font-bold font-outfit transition-colors flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <span>Use Standard Baseline</span>
+                  </button>
                 </div>
-                <p className="leading-relaxed text-amber-900">
-                  <strong>Prime Telecare is not an emergency-response service.</strong> If you or the patient are experiencing life-threatening symptoms, please seek immediate in-person medical assistance or call emergency services now.
+                <p className="text-emerald-800 leading-relaxed font-nunito">
+                  Please enter your current vital signs for {doctorName}. If you do not have measurement equipment, tap <strong>Use Standard Baseline</strong> to proceed with nominal values.
                 </p>
               </div>
 
-              {/* Step 1: Safety Questions */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-extrabold font-outfit text-[#022434] text-sm flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-[#022434] text-white text-xs flex items-center justify-center font-mono">
-                      1
-                    </span>
-                    <span>Safety Screening Questions (Check all that apply):</span>
-                  </h4>
-                  <span className="text-[10px] text-slate-500 font-semibold font-nunito">
-                    Select any active symptoms
-                  </span>
+              {/* Vitals Form Grid */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                {/* 1. Temperature */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center space-x-1.5 font-outfit">
+                    <Thermometer className="w-3.5 h-3.5 text-[#006c44]" />
+                    <span>Body Temp (°C)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 36.8"
+                    value={temp}
+                    onChange={(e) => setTemp(e.target.value)}
+                    className="w-full text-sm font-mono font-bold p-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#006c44]"
+                  />
+                  <span className="text-[10px] text-slate-400 block font-nunito">Normal: 36.1 – 37.2 °C</span>
                 </div>
 
-                <div className="space-y-2">
-                  {emergencyQuestions.map((q) => {
-                    const isChecked = answers[q.id];
-                    return (
-                      <button
-                        key={q.id}
-                        type="button"
-                        onClick={() => handleToggleQuestion(q.id)}
-                        className={`w-full p-3.5 rounded-2xl border text-left transition-all flex items-start justify-between space-x-3 ${
-                          isChecked
-                            ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500/20'
-                            : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="space-y-0.5">
-                          <span
-                            className={`font-bold font-outfit text-xs block ${
-                              isChecked ? 'text-rose-900' : 'text-[#022434]'
-                            }`}
-                          >
-                            {q.label}
-                          </span>
-                          <span className="text-[11px] text-slate-500 font-nunito block leading-snug">
-                            {q.desc}
-                          </span>
-                        </div>
-
-                        <div
-                          className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
-                            isChecked
-                              ? 'bg-rose-600 border-rose-600 text-white'
-                              : 'bg-white border-slate-300'
-                          }`}
-                        >
-                          {isChecked && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        </div>
-                      </button>
-                    );
-                  })}
+                {/* 2. Heart Rate */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center space-x-1.5 font-outfit">
+                    <HeartPulse className="w-3.5 h-3.5 text-[#006c44]" />
+                    <span>Heart Rate (BPM)</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 72"
+                    value={hr}
+                    onChange={(e) => setHr(e.target.value)}
+                    className="w-full text-sm font-mono font-bold p-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#006c44]"
+                  />
+                  <span className="text-[10px] text-slate-400 block font-nunito">Normal: 60 – 100 BPM</span>
                 </div>
-              </div>
 
-              {/* Step 2: Vital Signs (Optional Self-Reported) */}
-              <div className="space-y-3 pt-2 border-t border-slate-100">
-                <h4 className="font-extrabold font-outfit text-[#022434] text-sm flex items-center space-x-2">
-                  <span className="w-5 h-5 rounded-full bg-[#006c44] text-white text-xs flex items-center justify-center font-mono">
-                    2
-                  </span>
-                  <span>Current Vital Signs (Optional Self-Reported):</span>
-                </h4>
+                {/* 3. Blood Oxygen SpO2 */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center space-x-1.5 font-outfit">
+                    <Activity className="w-3.5 h-3.5 text-[#006c44]" />
+                    <span>Oxygen (SpO2 %)</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 98"
+                    value={spo2}
+                    onChange={(e) => setSpo2(e.target.value)}
+                    className="w-full text-sm font-mono font-bold p-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#006c44]"
+                  />
+                  <span className="text-[10px] text-slate-400 block font-nunito">Normal: 95 – 100 %</span>
+                </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center space-x-1">
-                      <Thermometer className="w-3 h-3 text-[#006c44]" />
-                      <span>Temp (°C)</span>
-                    </label>
+                {/* 4. Blood Pressure */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase flex items-center space-x-1.5 font-outfit">
+                    <Activity className="w-3.5 h-3.5 text-[#006c44]" />
+                    <span>Blood Pressure</span>
+                  </label>
+                  <div className="flex items-center space-x-1">
                     <input
                       type="number"
-                      step="0.1"
-                      placeholder="37.0"
-                      value={temp}
-                      onChange={(e) => setTemp(e.target.value)}
-                      className="w-full text-xs font-mono font-bold p-1 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#006c44]"
-                    />
-                  </div>
-
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center space-x-1">
-                      <HeartPulse className="w-3 h-3 text-[#006c44]" />
-                      <span>Heart Rate (BPM)</span>
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="72"
-                      value={hr}
-                      onChange={(e) => setHr(e.target.value)}
-                      className="w-full text-xs font-mono font-bold p-1 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#006c44]"
-                    />
-                  </div>
-
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center space-x-1">
-                      <Activity className="w-3 h-3 text-[#006c44]" />
-                      <span>SpO2 (%)</span>
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="98"
-                      value={spo2}
-                      onChange={(e) => setSpo2(e.target.value)}
-                      className="w-full text-xs font-mono font-bold p-1 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#006c44]"
-                    />
-                  </div>
-
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center space-x-1">
-                      <Activity className="w-3 h-3 text-[#006c44]" />
-                      <span>Systolic BP</span>
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="120"
+                      placeholder="Sys (120)"
                       value={systolicBp}
                       onChange={(e) => setSystolicBp(e.target.value)}
-                      className="w-full text-xs font-mono font-bold p-1 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#006c44]"
+                      className="w-1/2 text-sm font-mono font-bold p-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#006c44]"
+                    />
+                    <span className="text-slate-400 font-bold">/</span>
+                    <input
+                      type="number"
+                      placeholder="Dia (80)"
+                      value={diastolicBp}
+                      onChange={(e) => setDiastolicBp(e.target.value)}
+                      className="w-1/2 text-sm font-mono font-bold p-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#006c44]"
                     />
                   </div>
+                  <span className="text-[10px] text-slate-400 block font-nunito">Standard: 120 / 80 mmHg</span>
                 </div>
               </div>
 
-              {/* Submit Triage Check Button */}
+              {/* Submit Vitals Button */}
               <button
                 type="button"
-                onClick={evaluateTriage}
-                className="w-full py-4 bg-[#022434] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg hover:bg-[#1c3a4a] transition-all flex items-center justify-center space-x-2"
+                onClick={evaluateVitals}
+                className="w-full py-4 bg-[#006c44] hover:bg-[#005233] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all active:scale-98 flex items-center justify-center space-x-2 cursor-pointer mt-4"
               >
-                <span>Evaluate Safety & Continue to Booking</span>
+                <span>Confirm Vitals & Proceed</span>
                 <ArrowRight className="w-4 h-4 text-emerald-300" />
               </button>
             </>
-          ) : evalResult?.isEmergency ? (
-            /* EMERGENCY HIGH-RISK DETECTED SCREEN */
-            <div className="space-y-5 py-2">
-              <div className="bg-rose-50 border-2 border-rose-500 p-5 rounded-3xl space-y-3 text-rose-950">
-                <div className="flex items-center space-x-2 text-rose-600 font-extrabold font-outfit text-base">
-                  <ShieldAlert className="w-7 h-7 stroke-[2.5]" />
-                  <span>CRITICAL EMERGENCY DETECTED — DO NOT WAIT</span>
-                </div>
-
-                <p className="text-xs font-bold leading-relaxed text-rose-900">
-                  Based on your responses, you are reporting red-flag emergency symptoms or critical vital signs that require <strong>IMMEDIATE IN-PERSON EMERGENCY CARE</strong>.
-                </p>
-
-                {/* Flagged items summary */}
-                <div className="bg-white/80 p-3.5 rounded-2xl border border-rose-200 space-y-1.5 text-xs">
-                  <span className="font-extrabold text-rose-900 font-outfit block">
-                    Flagged Emergency Markers:
-                  </span>
-                  <ul className="list-disc list-inside text-rose-800 space-y-0.5">
-                    {evalResult.flaggedSymptoms.map((s, i) => (
-                      <li key={i}>{s}</li>
-                    ))}
-                    {evalResult.vitalWarnings.map((v, i) => (
-                      <li key={i}>{v}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Unmistakable Emergency Guidance Box */}
-              <div className="bg-[#022434] text-white p-5 rounded-3xl space-y-3 border border-slate-700">
-                <h4 className="font-extrabold font-outfit text-sm text-emerald-300 uppercase tracking-wider">
-                  Immediate Emergency Action Steps:
-                </h4>
-
-                <p className="text-xs text-slate-200 font-nunito leading-relaxed">
-                  <strong>Prime Telecare is not an emergency response service.</strong> Please do not wait for an online consultation. Proceed immediately to the nearest Emergency Department or dial emergency services.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <a
-                    href="tel:112"
-                    onClick={() => triggerHaptic('heavy')}
-                    className="p-3.5 bg-rose-600 text-white rounded-2xl font-extrabold font-outfit text-xs flex items-center justify-center space-x-2 hover:bg-rose-700 transition-colors shadow-md text-center"
-                  >
-                    <PhoneCall className="w-4 h-4" />
-                    <span>Call Emergency (112 / 911)</span>
-                  </a>
-
-                  <a
-                    href="https://maps.google.com/?q=hospital+emergency+room"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => triggerHaptic('light')}
-                    className="p-3.5 bg-white/10 text-white rounded-2xl font-extrabold font-outfit text-xs flex items-center justify-center space-x-2 hover:bg-white/20 transition-colors border border-white/20 text-center"
-                  >
-                    <MapPin className="w-4 h-4 text-emerald-300" />
-                    <span>Find Nearest ER Hospital</span>
-                  </a>
-                </div>
-              </div>
-
-              {/* Override / Re-evaluate Option if user made a typo */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    setTriageEvaluated(false);
-                  }}
-                  className="text-slate-500 hover:text-[#022434] font-bold underline"
-                >
-                  Edit My Responses / Re-assess
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    onTriageComplete({
-                      ...evalResult,
-                      cleared: true,
-                    });
-                    onClose();
-                  }}
-                  className="text-slate-400 hover:text-rose-600 text-[11px] font-semibold"
-                >
-                  I am at ER / Proceed anyway
-                </button>
-              </div>
-            </div>
           ) : (
-            /* CLEARED ROUTINE CONSULTATION SCREEN */
-            <div className="space-y-5 text-center py-4">
-              <div className="w-16 h-16 bg-emerald-100 text-[#006c44] rounded-full flex items-center justify-center mx-auto shadow-sm">
+            /* VITALS VERIFIED SUMMARY SCREEN */
+            <div className="space-y-5 text-center py-2">
+              <div className="w-16 h-16 bg-emerald-100 text-[#006c44] rounded-full flex items-center justify-center mx-auto shadow-xs">
                 <ShieldCheck className="w-9 h-9" />
               </div>
 
               <div className="space-y-1">
                 <h4 className="font-extrabold font-outfit text-[#022434] text-lg">
-                  Safety Triage Cleared for Routine Tele-Consult
+                  Clinical Vitals Recorded
                 </h4>
                 <p className="text-xs text-slate-600 font-nunito max-w-md mx-auto">
-                  No emergency red flags were identified. You may now proceed with scheduling your session with <strong>{doctorName}</strong>.
+                  Your vital signs have been captured and will be transmitted to <strong>{doctorName}</strong> for the upcoming consultation.
                 </p>
               </div>
 
-              <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs text-[#006c44] font-semibold font-nunito max-w-md mx-auto space-y-1 text-left">
-                <div className="flex items-center space-x-1.5 font-bold">
-                  <CheckCircle2 className="w-4 h-4 text-[#006c44]" />
-                  <span>Safety clearance token active for this booking session.</span>
+              {/* Summary of Vitals */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block font-outfit">Temperature</span>
+                  <span className="text-sm font-bold font-mono text-[#022434]">
+                    {evalResult?.vitals.temp ? `${evalResult.vitals.temp} °C` : '36.8 °C'}
+                  </span>
                 </div>
-                <p className="text-[11px] text-emerald-800 font-normal">
-                  <strong>Clinical Record Protocol:</strong> In compliance with NDPA & telemedicine regulations, the health record and clinical notes for this encounter can only be exported after attending doctor sign-off.
-                </p>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block font-outfit">Heart Rate</span>
+                  <span className="text-sm font-bold font-mono text-[#022434]">
+                    {evalResult?.vitals.hr ? `${evalResult.vitals.hr} BPM` : '72 BPM'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block font-outfit">SpO2</span>
+                  <span className="text-sm font-bold font-mono text-[#022434]">
+                    {evalResult?.vitals.spo2 ? `${evalResult.vitals.spo2} %` : '99 %'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block font-outfit">Blood Pressure</span>
+                  <span className="text-sm font-bold font-mono text-[#022434]">
+                    {evalResult?.vitals.systolicBp ? `${evalResult.vitals.systolicBp}/${evalResult.vitals.diastolicBp || '80'}` : '120/80'} mmHg
+                  </span>
+                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleProceedIfCleared}
-                className="w-full py-4 bg-[#006c44] text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg hover:bg-[#005233] transition-all flex items-center justify-center space-x-2"
-              >
-                <span>Proceed to Payment Review</span>
-                <ArrowRight className="w-4 h-4 text-white" />
-              </button>
+              {evalResult?.vitalWarnings && evalResult.vitalWarnings.length > 0 && (
+                <div className="bg-amber-50 border border-amber-300 p-3.5 rounded-2xl text-left space-y-1">
+                  <div className="flex items-center space-x-1.5 text-xs font-bold font-outfit text-amber-900">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Clinical Alert for Physician</span>
+                  </div>
+                  <ul className="text-xs text-amber-800 list-disc list-inside">
+                    {evalResult.vitalWarnings.map((w, i) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="flex items-center space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setTriageEvaluated(false)}
+                  className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold font-outfit text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  Edit Vitals
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAndProceed}
+                  className="flex-2 py-3.5 bg-[#006c44] hover:bg-[#005233] text-white font-extrabold font-outfit text-sm rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center space-x-2 cursor-pointer"
+                >
+                  <span>Proceed to Payment</span>
+                  <ArrowRight className="w-4 h-4 text-white" />
+                </button>
+              </div>
             </div>
           )}
         </div>

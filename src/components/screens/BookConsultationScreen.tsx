@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { ClinicalTriageModal } from '../common/ClinicalTriageModal';
+import { ClinicalTriageModal, VitalsData } from '../common/ClinicalTriageModal';
 import {
   Zap,
   Calendar,
@@ -18,6 +18,9 @@ import {
   Star,
   Info,
   ChevronDown,
+  Activity,
+  HeartPulse,
+  Thermometer,
 } from 'lucide-react';
 import { ScreenId, Doctor, UserRole, BookingSummary } from '../../types';
 import { primeApi } from '../../services/apiClient';
@@ -44,13 +47,28 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   user,
 }) => {
   // Two distinct paths: 'instant' vs 'scheduled'
-  const [bookingMode, setBookingMode] = useState<'instant' | 'scheduled'>('instant');
+  const [bookingMode, setBookingMode] = useState<'instant' | 'scheduled'>(() => {
+    try {
+      return (localStorage.getItem('prime_telecare_booking_mode') as 'instant' | 'scheduled') || 'instant';
+    } catch {
+      return 'instant';
+    }
+  });
 
   // Physician selection
   const [doctorsList, setDoctorsList] = useState<Doctor[]>([]);
   const [chosenDoctorId, setChosenDoctorId] = useState<string>(selectedDoctorId || '');
   const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
   const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
+
+  // Pre-consultation vitals state (symptoms removed per clinical requirements)
+  const [patientVitals, setPatientVitals] = useState<VitalsData>({
+    temp: '36.8',
+    hr: '72',
+    spo2: '99',
+    systolicBp: '120',
+    diastolicBp: '80',
+  });
 
   useEffect(() => {
     primeApi.getDoctors().then((docs) => {
@@ -183,7 +201,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
       doctorId: currentDoctor.id,
       consultationType,
       bookingMode,
-      symptomsDescription: symptomsInput.trim() || undefined,
+      vitals: patientVitals,
       date: chosenDateStr,
       timeSlot: chosenTimeStr,
       duration: consultationDuration,
@@ -348,22 +366,74 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
 
         {/* 3. PATH-SPECIFIC AVAILABILITY SECTION */}
         {bookingMode === 'instant' ? (
-          /* Instant Consultation Availability Banner */
-          <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <h4 className="font-outfit font-bold text-sm text-emerald-950">
-                  Doctor On Call · Immediate Queue
-                </h4>
+          <div className="space-y-3">
+            {/* Instant Consultation Availability Banner */}
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  <h4 className="font-outfit font-bold text-sm text-emerald-950">
+                    Instant Care · Immediate Doctor Queue
+                  </h4>
+                </div>
+                <span className="text-xs font-mono font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200">
+                  Wait: ~2–5 mins
+                </span>
               </div>
-              <span className="text-xs font-mono font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-md border border-emerald-200">
-                Wait: ~2–5 mins
-              </span>
+              <p className="text-xs text-emerald-800/90 leading-relaxed font-nunito">
+                Select an online doctor below. Your consultation starts immediately upon payment confirmation.
+              </p>
             </div>
-            <p className="text-xs text-emerald-800/90 leading-relaxed">
-              Your consultation starts immediately upon payment confirmation. You will enter the secured video/audio room directly.
-            </p>
+
+            {/* Doctors Online Selection Rail */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold font-outfit text-slate-700 flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span>Doctors Online Now (Tap to Select)</span>
+                </label>
+                <span className="text-[11px] font-bold text-[#006c44] font-mono">
+                  {(doctorsList.filter((d) => d.isOnline).length || 6)} Online
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {(doctorsList.filter((d) => d.isOnline).length > 0 ? doctorsList.filter((d) => d.isOnline) : doctorsList).map((doc) => {
+                  const isSelected = doc.id === chosenDoctorId;
+                  return (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        setChosenDoctorId(doc.id);
+                        onSelectDoctor(doc.id);
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-50/90 border-[#006c44] ring-2 ring-[#006c44]/30 shadow-xs'
+                          : 'bg-slate-50/80 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5 mb-2">
+                        <div className="relative shrink-0">
+                          <img src={doc.avatarUrl} alt={doc.name} className="w-9 h-9 rounded-xl object-cover" />
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border border-white rounded-full" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-xs text-[#022434] block truncate font-outfit">{doc.name}</span>
+                          <span className="text-[10px] text-slate-500 block truncate">{doc.specialty}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono font-bold text-[#006c44] pt-1 border-t border-slate-200/60">
+                        <span>₦{doc.prices?.video?.toLocaleString() || '10,000'}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[#006c44]" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         ) : (
           /* Scheduled Appointment Date & Time Selection */
@@ -528,55 +598,53 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
           </div>
         </div>
 
-        {/* 5. BRIEF SYMPTOM / REASON NOTE (CLEAN 1-ROW OPTIONAL) */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
+        {/* 5. PRE-CONSULTATION CLINICAL VITALS (SYMPTOMS REMOVED) */}
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-bold font-outfit text-slate-700">
-              Reason for Visit (Optional)
-            </label>
-            <label className="inline-flex items-center space-x-1 text-xs text-[#006c44] hover:underline cursor-pointer font-semibold">
-              <Paperclip className="w-3.5 h-3.5" />
-              <span>{isUploading ? 'Attaching...' : 'Attach File'}</span>
-              <input
-                type="file"
-                onChange={handleFileUpload}
-                className="hidden"
-                accept="image/*,.pdf,.doc"
-              />
-            </label>
+            <div className="flex items-center space-x-2">
+              <Activity className="w-4 h-4 text-[#006c44]" />
+              <label className="text-xs font-bold font-outfit text-slate-700">
+                Pre-Consultation Clinical Vitals
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('light');
+                setIsTriageModalOpen(true);
+              }}
+              className="text-xs font-bold font-outfit text-[#006c44] hover:text-[#022434] border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/60 px-3 py-1 rounded-lg transition-colors cursor-pointer"
+            >
+              Update Vitals
+            </button>
           </div>
 
-          <input
-            type="text"
-            placeholder="e.g. Persistent fever, rash review, medication refill"
-            value={symptomsInput}
-            onChange={(e) => setSymptomsInput(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#006c44]"
-          />
-
-          {uploadedFiles.length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              {uploadedFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="flex items-center justify-between px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200 text-xs"
-                >
-                  <div className="flex items-center space-x-2 truncate">
-                    <FileText className="w-3.5 h-3.5 text-[#006c44] shrink-0" />
-                    <span className="truncate font-semibold text-slate-700">{file.name}</span>
-                    <span className="text-[10px] text-slate-400">({file.size})</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveFile(file.id)}
-                    className="p-1 text-slate-400 hover:text-rose-500"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+            <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-left">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block font-outfit">Temperature</span>
+              <span className="text-xs font-bold font-mono text-[#022434]">
+                {patientVitals.temp ? `${patientVitals.temp} °C` : '36.8 °C'}
+              </span>
             </div>
-          )}
+            <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-left">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block font-outfit">Heart Rate</span>
+              <span className="text-xs font-bold font-mono text-[#022434]">
+                {patientVitals.hr ? `${patientVitals.hr} BPM` : '72 BPM'}
+              </span>
+            </div>
+            <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-left">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block font-outfit">Blood Oxygen (SpO2)</span>
+              <span className="text-xs font-bold font-mono text-[#022434]">
+                {patientVitals.spo2 ? `${patientVitals.spo2} %` : '99 %'}
+              </span>
+            </div>
+            <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-left">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block font-outfit">Blood Pressure</span>
+              <span className="text-xs font-bold font-mono text-[#022434]">
+                {patientVitals.systolicBp ? `${patientVitals.systolicBp}/${patientVitals.diastolicBp || '80'}` : '120/80'} mmHg
+              </span>
+            </div>
+          </div>
         </div>
 
         </div>
@@ -759,14 +827,18 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
         </div>
       )}
 
-      {/* MANDATORY PRE-CONSULTATION CLINICAL TRIAGE MODAL */}
+      {/* PRE-CONSULTATION CLINICAL VITALS MODAL */}
       <ClinicalTriageModal
         isOpen={isTriageModalOpen}
         onClose={() => setIsTriageModalOpen(false)}
         doctorName={fullName}
+        initialVitals={patientVitals}
         onTriageComplete={(result) => {
           if (result.cleared) {
             setIsTriageCleared(true);
+            if (result.vitals) {
+              setPatientVitals(result.vitals);
+            }
             setIsTriageModalOpen(false);
             proceedToCheckout();
           }
