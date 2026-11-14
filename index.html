@@ -21,7 +21,21 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Nunito+Sans:ital,opsz,wght@0,6..12,300..800;1,6..12,300..800&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600..900;1,600..900&display=swap" rel="stylesheet">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #022434; color: white; font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 24px;">
+        <div style="width: 56px; height: 56px; border-radius: 16px; background: rgba(119, 218, 164, 0.15); border: 1.5px solid rgba(119, 218, 164, 0.4); display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#77daa4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+          </svg>
+        </div>
+        <h1 style="font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px 0; color: #ffffff;">Prime Telecare</h1>
+        <p style="font-size: 13px; color: #94a3b8; margin: 0 0 24px 0;">Digital Clinical & Telehealth Portal</p>
+        <div style="width: 32px; height: 32px; border: 3px solid rgba(119, 218, 164, 0.2); border-top-color: #77daa4; border-radius: 50%; animation: prime-spin 0.8s linear infinite;"></div>
+        <style>
+          @keyframes prime-spin { to { transform: rotate(360deg); } }
+        </style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

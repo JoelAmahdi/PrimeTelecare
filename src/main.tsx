@@ -5,6 +5,7 @@ import './index.css';
 import './firebase';
 import { registerServiceWorker } from './serviceWorkerRegistration';
 import { initializeOfflineStorage } from './utils/offlineDb';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 // Register Service Worker for offline PWA capabilities
 if ('serviceWorker' in navigator) {
@@ -28,7 +29,9 @@ initializeOfflineStorage().catch((err) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );
 

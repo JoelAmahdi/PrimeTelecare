@@ -79,9 +79,10 @@ app.use(express.static(distPath));
 
 // Fallback route for Single Page Application
 app.get('*', (req: Request, res: Response) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ success: false, error: `Endpoint ${req.path} not found` });
+  if (req.path.startsWith('/api/') || req.path.startsWith('/assets/')) {
+    return res.status(404).type('text/plain').send('Asset not found');
   }
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   const indexPath = path.join(distPath, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {

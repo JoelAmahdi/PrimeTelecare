@@ -1,5 +1,5 @@
 // Prime Telecare Service Worker for Offline Resilience
-const CACHE_NAME = 'prime-telecare-cache-v3';
+const CACHE_NAME = 'prime-telecare-cache-v5';
 
 const STATIC_ASSETS = [
   '/',
@@ -19,7 +19,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate Event - Clean up outdated caches
+// Activate Event - Clean up all outdated caches immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -39,6 +39,11 @@ self.addEventListener('fetch', (event) => {
 
   // Ignore non-GET requests or browser extension schemes
   if (request.method !== 'GET' || !request.url.startsWith('http')) {
+    return;
+  }
+
+  // Bypass API calls completely - NEVER cache API responses in Service Worker
+  if (url.pathname.startsWith('/api/')) {
     return;
   }
 
@@ -78,7 +83,7 @@ self.addEventListener('fetch', (event) => {
             return fallback;
           }
           return new Response(
-            '<html><body><h1>Offline</h1><p>Prime Telecare offline mode active.</p></body></html>',
+            '<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Offline - Prime Telecare</title></head><body style="background:#022434;color:white;font-family:sans-serif;padding:32px;text-align:center;"><h2>You are currently offline</h2><p>Please check your internet connection.</p><button onclick="window.location.reload()" style="background:#77daa4;color:#022434;padding:12px 24px;border:none;border-radius:12px;font-weight:bold;margin-top:16px;cursor:pointer;">Retry Connection</button></body></html>',
             { headers: { 'Content-Type': 'text/html' } }
           );
         })
@@ -107,14 +112,18 @@ self.addEventListener('fetch', (event) => {
           fetch(request)
             .then((networkResponse) => {
               if (networkResponse && networkResponse.status === 200) {
+                // Do not cache HTML responses returned for missing JS/CSS assets
+                const contentType = networkResponse.headers.get('content-type') || '';
+                if ((url.pathname.endsWith('.js') && !contentType.includes('javascript')) ||
+                    (url.pathname.endsWith('.css') && !contentType.includes('css'))) {
+                  return;
+                }
                 caches.open(CACHE_NAME).then((cache) => {
                   cache.put(request, networkResponse);
                 });
               }
             })
-            .catch(() => {
-              // Network failed, already served cached
-            });
+            .catch(() => {});
           return cachedResponse;
         }
 
@@ -122,6 +131,11 @@ self.addEventListener('fetch', (event) => {
         return fetch(request)
           .then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
+              const contentType = networkResponse.headers.get('content-type') || '';
+              if ((url.pathname.endsWith('.js') && !contentType.includes('javascript')) ||
+                  (url.pathname.endsWith('.css') && !contentType.includes('css'))) {
+                return networkResponse;
+              }
               const responseClone = networkResponse.clone();
               caches.open(CACHE_NAME).then((cache) => {
                 cache.put(request, responseClone);
@@ -130,7 +144,6 @@ self.addEventListener('fetch', (event) => {
             return networkResponse;
           })
           .catch(() => {
-            // Asset fetch failed and not cached
             return new Response('', { status: 408, statusText: 'Offline Asset Unavailable' });
           });
       })

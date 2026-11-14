@@ -145,9 +145,9 @@ export default function App() {
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     try {
       const hasSavedUser = !!localStorage.getItem('prime_telecare_user');
-      if (hasSavedUser) {
-        // App was closed or reloaded or left idle -> require quick unlock
-        return isSessionLocked() || isIdleOver15Minutes() || true;
+      const hasConfiguredPin = localStorage.getItem('prime_telecare_quick_pin') || localStorage.getItem('prime_biometrics_settings');
+      if (hasSavedUser && hasConfiguredPin) {
+        return isSessionLocked() || isIdleOver15Minutes();
       }
     } catch {}
     return false;
