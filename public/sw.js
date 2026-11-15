@@ -1,5 +1,5 @@
 // Prime Telecare Service Worker for Offline Resilience
-const CACHE_NAME = 'prime-telecare-cache-v5';
+const CACHE_NAME = 'prime-telecare-cache-v6';
 
 const STATIC_ASSETS = [
   '/',

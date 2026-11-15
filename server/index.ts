@@ -75,7 +75,15 @@ app.use('/api/admin', adminRouter);
 
 // Serve static build files in production if dist/ exists
 const distPath = path.resolve(process.cwd(), 'dist');
-app.use(express.static(distPath));
+app.use(express.static(distPath, {
+  setHeaders: (res: Response, filePath: string) => {
+    if (filePath.endsWith('index.html') || filePath.endsWith('sw.js') || filePath.endsWith('manifest.json')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  },
+}));
 
 // Fallback route for Single Page Application
 app.get('*', (req: Request, res: Response) => {

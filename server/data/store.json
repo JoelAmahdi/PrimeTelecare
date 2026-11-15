@@ -19,7 +19,7 @@
       "phone": "+234 809 999 0000"
     },
     {
-      "id": "user-1794700883750",
+      "id": "user-1794702600839",
       "name": "Ada Okonkwo",
       "email": "ada.okonkwo@email.com",
       "role": "patient",
@@ -28,7 +28,7 @@
       "walletBalance": 10000,
       "stateOfResidence": "Lagos State",
       "ndpaConsent": {
-        "acceptedAt": "2026-11-15T00:01:23.750Z",
+        "acceptedAt": "2026-11-15T00:30:00.839Z",
         "telehealthConsentGiven": true
       }
     }
@@ -109,10 +109,38 @@
       "status": "upcoming",
       "notes": "",
       "price": 10000,
-      "id": "apt-1794700883757-465"
+      "id": "apt-1794702600844-708"
     }
   ],
   "prescriptions": [
+    {
+      "referenceNo": "RX-363785",
+      "date": "November 15, 2026",
+      "patientName": "Ada Okonkwo",
+      "doctorName": "Dr. Sarah Johnson",
+      "doctorLicense": "MDCN/2019/88492",
+      "doctorSpecialty": "Consultant Telehealth Physician",
+      "doctorClinic": "Prime Telecare Digital Medical Center",
+      "doctorSignature": "Dr. Sarah Johnson",
+      "status": "active",
+      "isVerified": true,
+      "chiefComplaint": "Mild Seasonal Bronchospasm",
+      "diagnosis": "Allergic Rhinitis",
+      "medications": [
+        {
+          "id": "m-1",
+          "drugName": "Cetirizine Hydrochloride",
+          "strength": "10mg",
+          "dosage": "1 tablet",
+          "frequency": "Once daily at bedtime",
+          "duration": "10 days"
+        }
+      ],
+      "doctorNotes": "Adhere strictly to prescribed dosage instructions.",
+      "id": "rx-1794702600878",
+      "authSealToken": "MDCN-SEAL-B3EFC71C762338A57F1DFCE4",
+      "authVerificationDate": "Nov 15, 2026, 12:30 AM"
+    },
     {
       "referenceNo": "RX-367361",
       "date": "November 15, 2026",
@@ -395,6 +423,54 @@
     }
   ],
   "auditLogs": [
+    {
+      "accessedBy": "Dr. Sarah Johnson",
+      "accessorRole": "Doctor",
+      "accessorLicenseOrDept": "MDCN/2019/88492",
+      "recordAccessed": "Patient Health Record Release (#app-test-1)",
+      "accessReason": "Doctor formal sign-off: Health record export release APPROVED",
+      "actionType": "Exported",
+      "ipAddress": "127.0.0.1",
+      "accessLocation": "Doctor Clinical Documentation Suite",
+      "id": "audit-1794702600889",
+      "timestamp": "Nov 15, 2026, 12:30 AM"
+    },
+    {
+      "accessedBy": "Patient",
+      "accessorRole": "Doctor",
+      "recordAccessed": "Full Health Record Archive (#app-test-1)",
+      "accessReason": "Patient initiated export authorization request: Second Opinion",
+      "actionType": "Viewed",
+      "ipAddress": "127.0.0.1",
+      "accessLocation": "Health Records Module",
+      "id": "audit-1794702600884",
+      "timestamp": "Nov 15, 2026, 12:30 AM"
+    },
+    {
+      "accessedBy": "Dr. Sarah Johnson",
+      "accessorRole": "Doctor",
+      "accessorLicenseOrDept": "MDCN/2019/88492",
+      "recordAccessed": "E-Prescription #RX-363785",
+      "accessReason": "Authorized e-prescription issued with cryptographic seal: MDCN-SEAL-B3EFC71C762338A57F1DFCE4",
+      "actionType": "Updated",
+      "ipAddress": "127.0.0.1",
+      "accessLocation": "Clinical E-Prescribing System",
+      "id": "audit-1794702600879",
+      "timestamp": "Nov 15, 2026, 12:30 AM"
+    },
+    {
+      "accessedBy": "Ada Okonkwo",
+      "accessorRole": "Doctor",
+      "accessorTitle": "Consultant in Paediatrics",
+      "accessorLicenseOrDept": "MDCN/2014/78912",
+      "recordAccessed": "Appointment Record (#apt-1794702600844-708)",
+      "accessReason": "Telehealth consultation booked for Tomorrow at 10:00 AM",
+      "actionType": "Updated",
+      "ipAddress": "127.0.0.1",
+      "accessLocation": "Online Booking Gateway",
+      "id": "audit-1794702600845",
+      "timestamp": "Nov 15, 2026, 12:30 AM"
+    },
     {
       "accessedBy": "Dr. Sarah Johnson",
       "accessorRole": "Doctor",
@@ -793,6 +869,42 @@
       "recommendation": "Standard telehealth consultation is appropriate. Your vitals are within normal range for routine remote clinical review.",
       "suggestedSpecialty": "Family Medicine & General Practice",
       "aiNotes": "Baseline clinical vital parameters verified within acceptable range.",
+      "id": "triage-1794702600873",
+      "createdAt": "2026-11-15T00:30:00.873Z"
+    },
+    {
+      "patientId": "pat-guest",
+      "patientName": "Ada Okonkwo",
+      "vitals": {
+        "temp": "37.0",
+        "hr": "80",
+        "spo2": "89",
+        "systolicBp": "120"
+      },
+      "redFlags": {
+        "chestPain": true
+      },
+      "severity": "immediate_emergency",
+      "recommendation": "Immediate in-person emergency care required. Please visit the nearest hospital emergency department or dial national emergency services (112 / 199 in Nigeria). Telehealth consultation is unsafe for critical emergencies.",
+      "suggestedSpecialty": "Emergency Medicine & Critical Care",
+      "aiNotes": "Priority clinical alert triggered based on recorded vital parameters.",
+      "id": "triage-1794702600870",
+      "createdAt": "2026-11-15T00:30:00.870Z"
+    },
+    {
+      "patientId": "pat-guest",
+      "patientName": "Ada Okonkwo",
+      "vitals": {
+        "temp": "36.8",
+        "hr": "72",
+        "spo2": "99",
+        "systolicBp": "120"
+      },
+      "redFlags": {},
+      "severity": "routine_care",
+      "recommendation": "Standard telehealth consultation is appropriate. Your vitals are within normal range for routine remote clinical review.",
+      "suggestedSpecialty": "Family Medicine & General Practice",
+      "aiNotes": "Baseline clinical vital parameters verified within acceptable range.",
       "id": "triage-1794700883789",
       "createdAt": "2026-11-15T00:01:23.789Z"
     },
@@ -1137,6 +1249,17 @@
   ],
   "payments": [
     {
+      "reference": "PRIME-PAY-1794702600892-A34611",
+      "userId": "pat-guest",
+      "patientName": "Patient",
+      "amount": 10000,
+      "purpose": "consultation",
+      "method": "paystack",
+      "status": "successful",
+      "id": "pay-1794702600892",
+      "createdAt": "2026-11-15T00:30:00.892Z"
+    },
+    {
       "reference": "PRIME-PAY-1794700883810-A529C2",
       "userId": "pat-guest",
       "patientName": "Patient",
@@ -1257,10 +1380,10 @@
       "status": "granted",
       "purpose": "Second Opinion",
       "patientName": "Patient",
-      "requestedAt": "Nov 15, 2026, 12:01 AM",
+      "requestedAt": "Nov 15, 2026, 12:30 AM",
       "doctorName": "Dr. Sarah Johnson",
       "doctorLicense": "MDCN/2019/88492",
-      "grantedAt": "Nov 15, 2026, 12:01 AM"
+      "grantedAt": "Nov 15, 2026, 12:30 AM"
     },
     "apt-1794528259436-961": {
       "status": "granted",

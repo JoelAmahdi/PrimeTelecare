@@ -381,65 +381,14 @@ export default function App() {
   // Authenticated Role of the current user (strictly locked to account details)
   const effectiveRole: UserRole = (currentUser?.role as UserRole) || role;
 
-  const handleSwitchRole = (newRole: UserRole) => {
-    triggerHaptic('medium');
-    setRole(newRole);
-    if (currentUser) {
-      const updatedUser: User = { ...currentUser, role: newRole };
-      setCurrentUser(updatedUser);
-      try {
-        localStorage.setItem('prime_telecare_user', JSON.stringify(updatedUser));
-        localStorage.setItem('prime_telecare_role', newRole);
-      } catch {}
-    }
-    const target = getDefaultDashboardForRole(newRole);
-    navigateTo(target);
-    showToast(`Switched to ${newRole === 'doctor' ? 'Doctor Clinical' : 'Patient Care'} Portal`, 'info');
-  };
-
-  // Real-time Incoming Telehealth Call Listener & Poller for Doctors
-  useEffect(() => {
-    const checkIncomingCalls = async () => {
-      if (effectiveRole !== 'doctor') return;
-      try {
-        const call = await primeApi.getActiveCall(activeUser.id);
-        if (call && call.status === 'ringing') {
-          setIncomingCall(call);
-        } else if (call && call.status !== 'ringing') {
-          setIncomingCall(null);
-        }
-      } catch {}
-    };
-
-    const handleLocalIncomingCall = (e: any) => {
-      if (e?.detail) {
-        setIncomingCall(e.detail);
-      }
-    };
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'prime_telecare_incoming_call' && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          if (parsed && parsed.status === 'ringing') {
-            setIncomingCall(parsed);
-          }
-        } catch {}
-      }
-    };
-
-    if (effectiveRole === 'doctor') {
-      checkIncomingCalls();
-      const interval = setInterval(checkIncomingCalls, 3000);
-      window.addEventListener('incoming-doctor-call', handleLocalIncomingCall);
-      window.addEventListener('storage', handleStorageChange);
-      return () => {
-        clearInterval(interval);
-        window.removeEventListener('incoming-doctor-call', handleLocalIncomingCall);
-        window.removeEventListener('storage', handleStorageChange);
-      };
-    }
-  }, [effectiveRole, activeUser.id]);
+  // Active user data: If logged in, strictly use the authenticated user (no mock doctor overwrite)
+  const activeUser: User =
+    currentUser ||
+    (effectiveRole === 'admin'
+      ? currentUserAdmin
+      : effectiveRole === 'doctor'
+      ? currentUserDoctor
+      : currentUserPatient);
 
   const navigateTo = (nextScreen: ScreenId) => {
     // Unauthenticated / Auth screens
@@ -479,14 +428,65 @@ export default function App() {
     setCurrentScreen(targetScreen);
   };
 
-  // Active user data: If logged in, strictly use the authenticated user (no mock doctor overwrite)
-  const activeUser: User =
-    currentUser ||
-    (effectiveRole === 'admin'
-      ? currentUserAdmin
-      : effectiveRole === 'doctor'
-      ? currentUserDoctor
-      : currentUserPatient);
+  const handleSwitchRole = (newRole: UserRole) => {
+    triggerHaptic('medium');
+    setRole(newRole);
+    if (currentUser) {
+      const updatedUser: User = { ...currentUser, role: newRole };
+      setCurrentUser(updatedUser);
+      try {
+        localStorage.setItem('prime_telecare_user', JSON.stringify(updatedUser));
+        localStorage.setItem('prime_telecare_role', newRole);
+      } catch {}
+    }
+    const target = getDefaultDashboardForRole(newRole);
+    navigateTo(target);
+    showToast(`Switched to ${newRole === 'doctor' ? 'Doctor Clinical' : 'Patient Care'} Portal`, 'info');
+  };
+
+  // Real-time Incoming Telehealth Call Listener & Poller for Doctors
+  useEffect(() => {
+    const checkIncomingCalls = async () => {
+      if (effectiveRole !== 'doctor') return;
+      try {
+        const call = await primeApi.getActiveCall(activeUser?.id);
+        if (call && call.status === 'ringing') {
+          setIncomingCall(call);
+        } else if (call && call.status !== 'ringing') {
+          setIncomingCall(null);
+        }
+      } catch {}
+    };
+
+    const handleLocalIncomingCall = (e: any) => {
+      if (e?.detail) {
+        setIncomingCall(e.detail);
+      }
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'prime_telecare_incoming_call' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && parsed.status === 'ringing') {
+            setIncomingCall(parsed);
+          }
+        } catch {}
+      }
+    };
+
+    if (effectiveRole === 'doctor') {
+      checkIncomingCalls();
+      const interval = setInterval(checkIncomingCalls, 3000);
+      window.addEventListener('incoming-doctor-call', handleLocalIncomingCall);
+      window.addEventListener('storage', handleStorageChange);
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('incoming-doctor-call', handleLocalIncomingCall);
+        window.removeEventListener('storage', handleStorageChange);
+      };
+    }
+  }, [effectiveRole, activeUser?.id]);
 
   // Continuous RBAC Guard: Ensure active screen matches authenticated user's role permissions
   useEffect(() => {
