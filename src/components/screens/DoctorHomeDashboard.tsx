@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle } from 'lucide-react';
+import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle, CheckSquare } from 'lucide-react';
 import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { NextAppointmentBanner } from '../common/NextAppointmentBanner';
 import { ClinicalDocumentationModal } from '../common/ClinicalDocumentationModal';
+import { CareJourneyPlanModal } from '../common/CareJourneyPlanModal';
 import { useOfflineStatus } from '../../utils/useOfflineStatus';
 import { getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
 import { primeApi } from '../../services/apiClient';
@@ -24,6 +25,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
   const effectiveOffline = isOfflineMode ?? isOffline;
   const [selectedPatientForDoc, setSelectedPatientForDoc] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isCareJourneyModalOpen, setIsCareJourneyModalOpen] = useState(false);
 
   const handleShareBookingLink = async () => {
     triggerHaptic('selection');
@@ -220,6 +222,18 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
               <span className={`w-2.5 h-2.5 rounded-full ${effectiveOffline ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`} />
               <span>{effectiveOffline ? 'Offline (Cached Mode)' : 'Online & Accepting Patients'}</span>
             </span>
+
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                setIsCareJourneyModalOpen(true);
+              }}
+              className="px-4 py-2.5 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-[#006c44] font-bold font-outfit text-xs sm:text-sm rounded-xl shadow-xs transition-all active:scale-95 flex items-center space-x-2 cursor-pointer"
+              title="Review and decide patient recovery care plan"
+            >
+              <CheckSquare className="w-4 h-4 text-[#006c44]" />
+              <span>Care Journey Plan</span>
+            </button>
 
             {onSwitchRole && (
               <button
@@ -771,6 +785,14 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
           onClose={() => setSelectedPatientForDoc(null)}
         />
       )}
+
+      {/* Doctor Care Journey Plan Decision Modal */}
+      <CareJourneyPlanModal
+        isOpen={isCareJourneyModalOpen}
+        onClose={() => setIsCareJourneyModalOpen(false)}
+        doctorName={user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`}
+        patientName={selectedPatientForDoc || 'Ada Okonkwo'}
+      />
     </div>
   );
 };

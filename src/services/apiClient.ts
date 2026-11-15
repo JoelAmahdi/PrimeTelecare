@@ -462,6 +462,27 @@ export const primeApi = {
     }
   },
 
+  async getCareJourneyPlan(patientId: string = 'pat-1'): Promise<any> {
+    try {
+      const res = await request<{ success: boolean; plan: any }>(`/records/care-journey?patientId=${patientId}`);
+      return res.plan;
+    } catch {
+      return null;
+    }
+  },
+
+  async saveCareJourneyPlan(plan: any): Promise<any> {
+    try {
+      const res = await request<{ success: boolean; plan: any }>('/records/care-journey', {
+        method: 'POST',
+        body: JSON.stringify(plan),
+      });
+      return res.plan;
+    } catch {
+      return plan;
+    }
+  },
+
   async authorizeExportRelease(sessionId: string = 'app-1', action: 'grant' | 'reject', doctorName?: string) {
     try {
       const res = await request<{ success: boolean; exportAuthorization: any }>('/records/export-authorize', {

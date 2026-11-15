@@ -404,6 +404,28 @@ export interface ActiveCall {
   startedAt: number;
 }
 
+export interface CareJourneyItem {
+  id: string;
+  title: string;
+  description?: string;
+  category: 'medication' | 'vitals' | 'diagnostic' | 'lifestyle' | 'followup';
+  checkedByDoctor: boolean;
+  completedByPatient: boolean;
+  requiredDate?: string;
+}
+
+export interface CareJourneyPlan {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  status: 'draft_pending_doctor' | 'approved_by_doctor';
+  approvedAt?: string;
+  items: CareJourneyItem[];
+  doctorNotes?: string;
+}
+
 export type ScreenId = 
   | 'welcome'
   | 'terms'

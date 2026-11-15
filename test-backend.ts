@@ -218,6 +218,26 @@ async function testBackend() {
   });
   assert(respondCall.status === 200 && respondCall.data.call.status === 'accepted', 'POST /api/appointments/respond-call marks call accepted');
 
+  // 14. Care Journey Plan Endpoints
+  const savePlan = await req('/records/care-journey', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: 'cjp-test-1',
+      patientId: 'patient-test',
+      patientName: 'Ada Okonkwo',
+      doctorId: 'doc-test',
+      doctorName: 'Dr. Test Attending',
+      status: 'approved_by_doctor',
+      items: [
+        { id: 'i-1', title: 'Take antibiotics', category: 'medication', checkedByDoctor: true, completedByPatient: false }
+      ],
+    }),
+  });
+  assert(savePlan.status === 200 && savePlan.data.success && savePlan.data.plan.status === 'approved_by_doctor', 'POST /api/records/care-journey saves doctor approved plan');
+
+  const getPlan = await req('/records/care-journey?patientId=patient-test');
+  assert(getPlan.status === 200 && getPlan.data.plan && getPlan.data.plan.id === 'cjp-test-1', 'GET /api/records/care-journey retrieves care journey plan');
+
   console.log(`\n--- Test Results: ${passed} Passed, ${failed} Failed ---`);
   server.close(() => {
     process.exit(failed > 0 ? 1 : 0);

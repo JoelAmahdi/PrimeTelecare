@@ -74,6 +74,28 @@ export interface ActiveCall {
   startedAt: number;
 }
 
+export interface CareJourneyItem {
+  id: string;
+  title: string;
+  description?: string;
+  category: 'medication' | 'vitals' | 'diagnostic' | 'lifestyle' | 'followup';
+  checkedByDoctor: boolean;
+  completedByPatient: boolean;
+  requiredDate?: string;
+}
+
+export interface CareJourneyPlan {
+  id: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  status: 'draft_pending_doctor' | 'approved_by_doctor';
+  approvedAt?: string;
+  items: CareJourneyItem[];
+  doctorNotes?: string;
+}
+
 export interface ServerState {
   users: User[];
   doctors: Doctor[];
@@ -95,6 +117,7 @@ export interface ServerState {
     paymentAmount: number;
   }>;
   activeCalls: Record<string, ActiveCall>;
+  careJourneyPlans: Record<string, CareJourneyPlan>;
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
@@ -160,6 +183,7 @@ class MemoryStore {
       },
       exportAuthorizations: {},
       activeCalls: {},
+      careJourneyPlans: {},
     };
   }
 
@@ -513,6 +537,22 @@ class MemoryStore {
       return call;
     }
     return undefined;
+  }
+
+  // --- Care Journey Plans ---
+  getCareJourneyPlan(patientId: string): CareJourneyPlan | null {
+    if (!this.state.careJourneyPlans) return null;
+    return this.state.careJourneyPlans[patientId] || this.state.careJourneyPlans['default'] || null;
+  }
+
+  saveCareJourneyPlan(plan: CareJourneyPlan): CareJourneyPlan {
+    if (!this.state.careJourneyPlans) {
+      this.state.careJourneyPlans = {};
+    }
+    const key = plan.patientId || 'default';
+    this.state.careJourneyPlans[key] = plan;
+    this.saveToDisk();
+    return plan;
   }
 }
 

@@ -29,6 +29,7 @@ import {
   Pill,
   Copy,
   Check,
+  CheckSquare,
 } from 'lucide-react';
 import { ScreenId, User as UserType } from '../../types';
 import { StatusBar } from '../common/StatusBar';
@@ -38,6 +39,7 @@ import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { ConnectionRecoveryModal } from '../common/ConnectionRecoveryModal';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
+import { CareJourneyPlanModal } from '../common/CareJourneyPlanModal';
 import { primeApi } from '../../services/apiClient';
 import { playRingingTone, playConnectedTone, playHangupTone } from '../../utils/audioTones';
 import { requestUserMedia, setupAudioAnalyser, startScreenShare, createDoctorCanvasStream } from '../../utils/liveMedia';
@@ -97,29 +99,90 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
   // In-Call Messaging Drawer State
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [isCareJourneyModalOpen, setIsCareJourneyModalOpen] = useState(false);
 
   useEffect(() => {
     primeApi.getVideoToken('c-1', 'patient').catch(() => {});
   }, []);
-  const [messages, setMessages] = useState<InCallMessage[]>([
-    {
-      id: 'm-1',
-      sender: 'doctor',
-      senderName: 'Dr. Sarah Johnson',
-      text: 'Hello! I am reviewing the pediatric history notes. How is the fever progressing?',
-      timestamp: '10:52 AM',
-    },
-    {
-      id: 'm-2',
-      sender: 'patient',
-      senderName: activeProfile.displayName,
-      text: 'Good morning Doctor. Temperature peaked at 38.8°C earlier today after paracetamol.',
-      timestamp: '10:53 AM',
-    },
-  ]);
+
+  const [messages, setMessages] = useState<InCallMessage[]>([]);
   const [newMessageText, setNewMessageText] = useState('');
   const [attachedFile, setAttachedFile] = useState<{ name: string; url: string; type: 'image' | 'document' } | null>(null);
+
+  // Real-time two-way synchronization of in-call messages between doctor and patient
+  useEffect(() => {
+    let isMounted = true;
+    const roomChatSession = 'consultation-live-room';
+
+    const syncMessages = async () => {
+      try {
+        const serverMsgs = await primeApi.getChatMessages(roomChatSession);
+        if (serverMsgs && serverMsgs.length > 0 && isMounted) {
+          const mapped: InCallMessage[] = serverMsgs.map((m) => ({
+            id: m.id,
+            sender: m.sender,
+            senderName: m.senderName,
+            text: m.text || '',
+            timestamp: m.timestamp,
+            attachment: m.imageUrl ? { name: 'Attachment', type: 'image', url: m.imageUrl } : undefined,
+          }));
+
+          setMessages((prev) => {
+            if (prev.length === 0) return mapped;
+            const existingIds = new Set(prev.map((p) => p.id));
+            const newOnes = mapped.filter((m) => !existingIds.has(m.id));
+            if (newOnes.length > 0) {
+              return [...prev, ...newOnes];
+            }
+            return prev;
+          });
+        }
+      } catch {}
+    };
+
+    syncMessages();
+    const pollTimer = setInterval(syncMessages, 2000);
+
+    // Cross-tab / cross-window instant broadcast listener
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('prime_consultation_chat');
+      channel.onmessage = (event) => {
+        if (event.data && isMounted) {
+          const incoming = event.data as InCallMessage;
+          setMessages((prev) => {
+            if (prev.some((p) => p.id === incoming.id)) return prev;
+            return [...prev, incoming];
+          });
+        }
+      };
+    } catch {}
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'prime_consultation_last_chat' && e.newValue && isMounted) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && parsed.msg) {
+            const incoming = parsed.msg as InCallMessage;
+            setMessages((prev) => {
+              if (prev.some((p) => p.id === incoming.id)) return prev;
+              return [...prev, incoming];
+            });
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollTimer);
+      if (channel) channel.close();
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
 
   // Support Drawer & End Consultation Modal
   const [isSupportDrawerOpen, setIsSupportDrawerOpen] = useState(false);
@@ -454,15 +517,21 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     setReconnectAttempt((prev) => (prev % 3) + 1);
   };
 
-  // Handle Sending In-Call Message
-  const handleSendMessage = () => {
+  // Handle Sending In-Call Message with Real 2-Way Synchronization
+  const handleSendMessage = async () => {
     if (!newMessageText.trim() && !attachedFile) return;
     triggerHaptic('light');
 
+    const isDoctor = user?.role === 'doctor';
+    const senderRole: 'doctor' | 'patient' = isDoctor ? 'doctor' : 'patient';
+    const mySenderName = isDoctor
+      ? (user?.name || doctorName)
+      : (activeProfile.displayName || user?.name || 'Patient');
+
     const msg: InCallMessage = {
-      id: `m-${Date.now()}`,
-      sender: 'patient',
-      senderName: activeProfile.displayName,
+      id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      sender: senderRole,
+      senderName: mySenderName,
       text: newMessageText.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       attachment: attachedFile ? { ...attachedFile } : undefined,
@@ -472,19 +541,29 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     setNewMessageText('');
     setAttachedFile(null);
 
-    // Auto Doctor Response simulation
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `m-doc-${Date.now()}`,
-          sender: 'doctor',
-          senderName: 'Dr. Sarah Johnson',
-          text: 'Thank you for sharing that information. I am noting it down in the electronic medical prescription record.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    }, 2000);
+    // 1. Send to server via API for remote cross-device peer
+    try {
+      await primeApi.sendChatMessage(sessionId, {
+        sender: senderRole,
+        senderName: mySenderName,
+        text: msg.text,
+        imageUrl: msg.attachment?.url,
+      });
+    } catch {}
+
+    // 2. Broadcast via BroadcastChannel and localStorage for instant same-browser cross-tab reflection
+    try {
+      const channel = new BroadcastChannel('prime_consultation_chat');
+      channel.postMessage(msg);
+      channel.close();
+    } catch {}
+
+    try {
+      localStorage.setItem(
+        'prime_consultation_last_chat',
+        JSON.stringify({ sessionId, msg, timestamp: Date.now() })
+      );
+    } catch {}
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -915,72 +994,82 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           </div>
         )}
 
-        <div className="bg-white/95 backdrop-blur-xl rounded-full p-2 sm:p-2.5 shadow-2xl flex items-center justify-between sm:justify-around border border-white/40 max-w-md mx-auto px-2.5 sm:px-4 gap-1 sm:gap-2">
-          {/* Audio Fallback / Low Bandwidth Voice Mode Toggle Button */}
-          <button
-            onClick={() => {
-              triggerHaptic('medium');
-              setIsAudioOnlyMode(!isAudioOnlyMode);
-            }}
-            className={`p-2.5 sm:p-3.5 rounded-full border transition-all ${
-              isAudioOnlyMode
-                ? 'bg-emerald-500 text-[#022434] border-emerald-400 font-bold'
-                : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
-            }`}
-            title="Switch Low Bandwidth / HD Video Mode"
-          >
-            {isAudioOnlyMode ? <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" />}
-          </button>
-
-          {/* Camera Mute Toggle */}
-          <button
-            disabled={isAudioOnlyMode}
-            onClick={handleToggleVideo}
-            className={`p-2.5 sm:p-3.5 rounded-full border transition-all ${
-              isVideoOff || isAudioOnlyMode
-                ? 'bg-red-500/20 text-red-400 border-red-500/40'
-                : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
-            }`}
-            title="Toggle Live Camera"
-          >
-            {isVideoOff || isAudioOnlyMode ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
-          </button>
-
-          {/* Switch Front / Back Camera (Mobile Devices) */}
-          <button
-            disabled={isAudioOnlyMode || isVideoOff}
-            onClick={handleSwitchCamera}
-            className="p-2.5 sm:p-3.5 rounded-full border bg-white text-[#022434] border-slate-300 hover:bg-slate-100 transition-all shrink-0 cursor-pointer"
-            title="Switch Front / Rear Camera"
-          >
-            <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
-
+        <div className="bg-white/95 backdrop-blur-xl rounded-full p-2.5 sm:p-3 shadow-2xl flex items-center justify-center border border-white/50 max-w-sm sm:max-w-md mx-auto px-4 sm:px-6 gap-3 sm:gap-4">
           {/* Microphone Mute Toggle */}
           <button
             onClick={handleToggleMute}
-            className={`p-2.5 sm:p-3.5 rounded-full border transition-all relative ${
+            className={`p-3 sm:p-3.5 rounded-full border transition-all cursor-pointer ${
               isMuted
-                ? 'bg-red-600 text-white border-red-600 ring-2 ring-red-400/50'
+                ? 'bg-rose-600 text-white border-rose-600 ring-2 ring-rose-400/50'
                 : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
             }`}
-            title="Toggle Live Mic"
+            title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
           >
-            {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
+            {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5 text-slate-700" />}
           </button>
 
-          {/* Screen Share Button */}
+          {/* Camera Video Toggle */}
           <button
-            onClick={handleToggleScreenShare}
-            className={`p-2.5 sm:p-3.5 rounded-full border transition-all ${
-              isScreenSharing
-                ? 'bg-blue-600 text-white border-blue-400 shadow-xs'
+            onClick={handleToggleVideo}
+            className={`p-3 sm:p-3.5 rounded-full border transition-all cursor-pointer ${
+              isVideoOff
+                ? 'bg-rose-600 text-white border-rose-600 ring-2 ring-rose-400/50'
                 : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
             }`}
-            title="Share Screen"
+            title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
           >
-            <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
+            {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5 text-slate-700" />}
           </button>
+
+          {/* In-Call Text Chat Toggle */}
+          <button
+            onClick={() => {
+              triggerHaptic('light');
+              setIsChatOpen(!isChatOpen);
+              setUnreadChatCount(0);
+            }}
+            className={`p-3 sm:p-3.5 rounded-full border transition-all relative cursor-pointer ${
+              isChatOpen
+                ? 'bg-[#006c44] text-white border-[#006c44]'
+                : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
+            }`}
+            title="In-Call Clinical Chat"
+          >
+            <MessageSquare className="w-5 h-5" />
+            {unreadChatCount > 0 && !isChatOpen && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                {unreadChatCount}
+              </span>
+            )}
+          </button>
+
+          {/* Doctor Only: Care Journey Plan To-Do List Decision */}
+          {user?.role === 'doctor' && (
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                setIsCareJourneyModalOpen(true);
+              }}
+              className="p-3 sm:p-3.5 rounded-full bg-teal-50 border border-teal-300 text-teal-800 hover:bg-teal-100 transition-all cursor-pointer"
+              title="Decide Patient Care Journey Plan"
+            >
+              <CheckSquare className="w-5 h-5 text-teal-700" />
+            </button>
+          )}
+
+          {/* Doctor Only: Issue E-Prescription */}
+          {user?.role === 'doctor' && (
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                setIsPrescriptionModalOpen(true);
+              }}
+              className="p-3 sm:p-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500 shadow-sm transition-all cursor-pointer"
+              title="Issue Clinical Prescription"
+            >
+              <Pill className="w-5 h-5" />
+            </button>
+          )}
 
           {/* End Consultation Button */}
           <button
@@ -988,48 +1077,10 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               triggerHaptic('heavy');
               setShowEndConsultationModal(true);
             }}
-            className="p-3 sm:p-4 rounded-full bg-red-600 text-white shadow-lg hover:bg-red-700 transition-all transform active:scale-95 border-2 border-red-400 shrink-0"
+            className="p-3 sm:p-3.5 rounded-full bg-rose-600 text-white shadow-lg hover:bg-rose-700 transition-all transform active:scale-95 border-2 border-rose-400 shrink-0 cursor-pointer"
             title="End Consultation"
           >
-            <PhoneOff className="w-5 h-5 sm:w-6 sm:h-6" />
-          </button>
-
-          {/* In-Call Secure Chat Toggle */}
-          <button
-            onClick={() => {
-              triggerHaptic('light');
-              setIsChatOpen(!isChatOpen);
-            }}
-            className={`p-2.5 sm:p-3.5 rounded-full border transition-all relative ${
-              isChatOpen
-                ? 'bg-[#022434] text-white border-[#022434]'
-                : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
-            }`}
-            title="Open Clinical Chat"
-          >
-            <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-400 rounded-full border border-white" />
-          </button>
-
-          {/* Issue E-Prescription in Consultation */}
-          <button
-            onClick={() => {
-              triggerHaptic('medium');
-              setIsPrescriptionModalOpen(true);
-            }}
-            className="p-2.5 sm:p-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500 shadow-md transition-all cursor-pointer flex items-center justify-center shrink-0"
-            title="Issue Clinical Prescription"
-          >
-            <Pill className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
-
-          {/* Upload Document / Image Button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2.5 sm:p-3.5 rounded-full bg-white text-[#022434] border border-slate-300 hover:bg-slate-100 transition-all shrink-0"
-            title="Upload Document or Photo"
-          >
-            <Paperclip className="w-4 h-4 sm:w-5 sm:h-5" />
+            <PhoneOff className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -1295,6 +1346,26 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               sender: 'doctor',
               senderName: doctorName,
               text: `📄 Official E-Prescription #${rx.referenceNo} issued for ${rx.diagnosis}.\nMedications: ${rx.medications.map((m) => `${m.drugName} (${m.dosage}, ${m.frequency})`).join('; ')}. Instructions: ${rx.doctorNotes || 'Follow regimen.'}`,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+          ]);
+        }}
+      />
+
+      {/* Doctor In-Consultation Care Journey Plan Modal */}
+      <CareJourneyPlanModal
+        isOpen={isCareJourneyModalOpen}
+        onClose={() => setIsCareJourneyModalOpen(false)}
+        doctorName={doctorName}
+        patientName={activeProfile.displayName || user?.name || 'Patient'}
+        onPlanPublished={(plan) => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `plan-${Date.now()}`,
+              sender: 'doctor',
+              senderName: doctorName,
+              text: `🩺 Care Journey Plan approved! ${plan.items.filter((i) => i.checkedByDoctor).length} recovery tasks have been published to your patient care dashboard.`,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             },
           ]);

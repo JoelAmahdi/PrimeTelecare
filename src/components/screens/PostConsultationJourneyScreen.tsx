@@ -18,10 +18,17 @@ import {
   Sparkles,
   Send,
   ThumbsUp,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
-import { ScreenId } from '../../types';
+import { ScreenId, CareJourneyPlan } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
+import {
+  getStoredCareJourneyPlan,
+  toggleStoredCareJourneyTask,
+} from '../../utils/careJourney';
+import { CareJourneyPlanModal } from '../common/CareJourneyPlanModal';
 
 interface PostConsultationJourneyScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -45,7 +52,38 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
   doctorId = 'doc-attending',
   patientName = 'Patient',
 }) => {
-  const [currentStage, setCurrentStage] = useState<JourneyStage>('consultation-completed');
+  const [plan, setPlan] = useState<CareJourneyPlan | null>(() => getStoredCareJourneyPlan());
+  const [isDoctorPlanModalOpen, setIsDoctorPlanModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleUpdate = (e: any) => {
+      if (e?.detail) setPlan(e.detail);
+      else setPlan(getStoredCareJourneyPlan());
+    };
+    window.addEventListener('care-journey-updated', handleUpdate);
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'prime_telecare_care_journey_plan') {
+        setPlan(getStoredCareJourneyPlan());
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('care-journey-updated', handleUpdate);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  const handleToggleTask = (itemId: string) => {
+    triggerHaptic('medium');
+    const updated = toggleStoredCareJourneyTask(itemId);
+    if (updated) {
+      setPlan(updated);
+      const target = updated.items.find((i) => i.id === itemId);
+      if (target?.completedByPatient) {
+        showToast('Recovery task marked as complete!', 'success');
+      }
+    }
+  };
 
   // 5-Star Rating and Quality Comment State
   const [rating, setRating] = useState<number>(0);
@@ -253,63 +291,153 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
           </div>
         </div>
 
-        {/* Vertical Timeline */}
-        <div className="relative pl-4 space-y-6">
-          {/* Vertical connecting line */}
-          <div className="absolute top-8 bottom-8 left-[35px] w-0.5 bg-slate-200"></div>
-          
-          <div className="absolute top-8 left-[35px] w-0.5 bg-emerald-500 transition-all duration-700 ease-in-out" 
-               style={{ height: `${(currentStageIndex / (stages.length - 1)) * 100}%` }}></div>
+        {/* Care Journey Recovery To-Do List */}
+        {!plan || plan.status !== 'approved_by_doctor' ? (
+          <div className="bg-white rounded-3xl p-6 border border-amber-200/80 shadow-xs space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200 shrink-0">
+                <Clock className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
+                  Care Journey Plan: Pending Doctor Decision
+                </h3>
+                <span className="text-xs font-bold text-amber-700 uppercase tracking-wider block">
+                  Physician Review in Progress
+                </span>
+              </div>
+            </div>
 
-          {stages.map((stage, index) => {
-            const isCompleted = index < currentStageIndex;
-            const isCurrent = index === currentStageIndex;
-            const isUpcoming = index > currentStageIndex;
-            const Icon = stage.icon;
+            <p className="text-xs text-slate-600 leading-relaxed font-nunito">
+              Your attending physician ({doctorName}) is evaluating your consultation notes and selecting the recovery to-do tasks and milestones that apply to you. Once your doctor checks and approves the plan, your personalized recovery checklist will appear here and on your dashboard.
+            </p>
 
-            return (
-              <div key={stage.id} className={`relative flex items-start space-x-5 transition-all duration-500 ${isUpcoming ? 'opacity-40 grayscale' : 'opacity-100'}`}>
-                
-                {/* Timeline Node */}
-                <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-4 border-[#f4f8fb] transition-colors duration-500 ${
-                  isCompleted ? 'bg-emerald-500' : isCurrent ? 'bg-[#022434] animate-pulse' : 'bg-slate-300'
-                }`}>
-                  {isCompleted ? (
-                    <CheckCircle2 className="w-5 h-5 text-white" />
-                  ) : (
-                    <Clock className={`w-5 h-5 ${isCurrent ? 'text-emerald-400' : 'text-slate-500'}`} />
-                  )}
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                setIsDoctorPlanModalOpen(true);
+              }}
+              className="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#006c44] font-extrabold font-outfit text-xs sm:text-sm rounded-2xl shadow-2xs transition-all flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <CheckSquare className="w-4 h-4" />
+              <span>Decide & Approve Care Plan (Doctor Sign-off)</span>
+            </button>
+          </div>
+        ) : (
+          /* Doctor has approved the plan */
+          <div className="bg-white rounded-3xl p-6 border border-emerald-200/90 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-[#006c44] flex items-center justify-center shrink-0 shadow-2xs">
+                  <CheckSquare className="w-6 h-6" />
                 </div>
-
-                {/* Content Card */}
-                <div className={`flex-1 bg-white p-4 rounded-2xl border transition-all duration-500 ${
-                  isCurrent ? 'border-[#022434] shadow-md transform scale-[1.02]' : 'border-slate-200 shadow-sm'
-                }`}>
-                  <div className="flex items-center space-x-3 mb-1">
-                    <div className={`p-1.5 rounded-lg ${stage.bg}`}>
-                      <Icon className={`w-4 h-4 ${stage.color}`} />
-                    </div>
-                    <h3 className={`font-bold font-outfit text-sm ${isCurrent ? 'text-[#022434]' : 'text-slate-700'}`}>
-                      {stage.title}
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
+                      Personalized Care Journey
                     </h3>
+                    <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#006c44] text-[10px] font-extrabold border border-emerald-300">
+                      <ShieldCheck className="w-3 h-3" />
+                      <span>Doctor Approved</span>
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-500 pl-[38px]">
-                    {stage.desc}
+                  <p className="text-xs text-slate-500 font-nunito mt-0.5">
+                    Decided by <span className="font-bold text-slate-800">{plan.doctorName}</span> • Patient Recovery Checklist
                   </p>
-                  
-                  {isCurrent && stage.id === 'care-journey-packing' && (
-                    <div className="mt-3 pl-[38px]">
-                      <div className="inline-flex items-center space-x-1.5 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
-                        <Clock className="w-3 h-3 text-emerald-600" />
-                        <span>Packing from Care Journey • Estimated: 2 hrs</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
-            );
-          })}
-        </div>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  setIsDoctorPlanModalOpen(true);
+                }}
+                className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold font-outfit rounded-xl transition-all self-start sm:self-center cursor-pointer"
+              >
+                Modify Plan (Doctor)
+              </button>
+            </div>
+
+            {/* Completion Progress Bar */}
+            {(() => {
+              const activeItems = plan.items.filter((i) => i.checkedByDoctor);
+              const completedCount = activeItems.filter((i) => i.completedByPatient).length;
+              const percent = activeItems.length > 0 ? Math.round((completedCount / activeItems.length) * 100) : 0;
+              return (
+                <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-[#022434] font-outfit">Recovery Tasks Progress</span>
+                    <span className="text-[#006c44] font-mono">
+                      {completedCount} of {activeItems.length} completed ({percent}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-[#006c44] h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Checklist */}
+            <div className="space-y-2.5">
+              {plan.items
+                .filter((item) => item.checkedByDoctor)
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => handleToggleTask(item.id)}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3.5 ${
+                      item.completedByPatient
+                        ? 'bg-slate-50/80 border-slate-200 opacity-70'
+                        : 'bg-white hover:bg-emerald-50/30 border-slate-200/90 shadow-2xs'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="mt-0.5 text-[#006c44] shrink-0"
+                      aria-label={item.completedByPatient ? 'Mark task as incomplete' : 'Mark task as complete'}
+                    >
+                      {item.completedByPatient ? (
+                        <CheckSquare className="w-5 h-5 text-emerald-600" />
+                      ) : (
+                        <Square className="w-5 h-5 text-slate-400" />
+                      )}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={`text-xs sm:text-sm font-bold font-outfit ${
+                          item.completedByPatient ? 'line-through text-slate-400' : 'text-[#022434]'
+                        }`}
+                      >
+                        {item.title}
+                      </p>
+                      {item.description && (
+                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                    {item.completedByPatient && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0 self-center">
+                        Done
+                      </span>
+                    )}
+                  </div>
+                ))}
+            </div>
+
+            {/* Doctor Note */}
+            {plan.doctorNotes && (
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 space-y-1">
+                <span className="font-bold text-[#022434] block">Attending Doctor's Advice:</span>
+                <p className="italic">{plan.doctorNotes}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 5-STAR RATING & SERVICE QUALITY COMMENT COMPONENT */}
         <div className="pt-2">
@@ -508,7 +636,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
       <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] bg-white/95 backdrop-blur-md border-t border-slate-200 z-20">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <div className="hidden sm:block text-xs font-nunito text-slate-500 truncate">
-            {currentStage === 'follow-up' ? 'All recovery steps activated' : 'Live journey in progress'}
+            {plan?.status === 'approved_by_doctor' ? 'Recovery plan active & approved by clinician' : 'Awaiting clinician sign-off'}
           </div>
           <button
             onClick={() => {
@@ -522,6 +650,15 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
           </button>
         </div>
       </div>
+
+      {/* Doctor Care Journey Plan Decision Modal */}
+      <CareJourneyPlanModal
+        isOpen={isDoctorPlanModalOpen}
+        onClose={() => setIsDoctorPlanModalOpen(false)}
+        doctorName={doctorName}
+        patientName={patientName}
+        onPlanPublished={(newPlan) => setPlan(newPlan)}
+      />
     </div>
   );
 };

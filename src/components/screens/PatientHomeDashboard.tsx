@@ -37,6 +37,7 @@ import { processJoinOrPayConsultation } from '../../utils/consultationPayment';
 import { showToast } from '../../utils/toast';
 import { primeApi } from '../../services/apiClient';
 import { AddDoctorModal } from '../common/AddDoctorModal';
+import { CareJourneyPatientWidget } from '../common/CareJourneyPatientWidget';
 
 interface PatientHomeDashboardProps {
   user: User;
@@ -321,6 +322,9 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
           {/* Main Column (lg:col-span-7 xl:col-span-8) */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-6 sm:space-y-8">
             
+            {/* Care Journey Tracker (Doctor-decided Recovery To-Do List) */}
+            <CareJourneyPatientWidget onNavigate={onNavigate} patientId={user?.id} />
+
             {/* Upcoming / Active Bookings Section */}
             <div className="space-y-3.5">
               <div className="flex items-center justify-between">

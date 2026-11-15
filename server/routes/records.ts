@@ -97,3 +97,20 @@ recordsRouter.get('/audit-logs', (_req: Request, res: Response) => {
   return res.json({ success: true, count: logs.length, auditLogs: logs });
 });
 
+// GET /api/records/care-journey
+recordsRouter.get('/care-journey', (req: Request, res: Response) => {
+  const patientId = (req.query.patientId as string) || 'pat-1';
+  const plan = store.getCareJourneyPlan(patientId);
+  return res.json({ success: true, plan });
+});
+
+// POST /api/records/care-journey
+recordsRouter.post('/care-journey', (req: Request, res: Response) => {
+  const plan = req.body;
+  if (!plan || !plan.items) {
+    return res.status(400).json({ success: false, error: 'Valid care journey plan required' });
+  }
+  const saved = store.saveCareJourneyPlan(plan);
+  return res.json({ success: true, plan: saved });
+});
+
