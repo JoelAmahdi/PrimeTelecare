@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WifiOff, Wifi, RefreshCw, ShieldCheck, ArrowLeft, Eye } from 'lucide-react';
-import { ScreenId, UserRole, User, BookingSummary } from './types';
+import { ScreenId, UserRole, User, BookingSummary, ActiveCall } from './types';
 import { currentUserPatient, currentUserDoctor, currentUserAdmin, mockDoctors } from './data/mockData';
 
 // Screens
@@ -47,6 +47,7 @@ import { showToast } from './utils/toast';
 import { QuickUnlockScreen } from './components/common/QuickUnlockScreen';
 import { QuickLoginSetupModal } from './components/common/QuickLoginSetupModal';
 import { AccessDeniedScreen } from './components/common/AccessDeniedScreen';
+import { IncomingCallModal } from './components/common/IncomingCallModal';
 import { triggerHaptic } from './utils/haptics';
 import {
   isSessionLocked,
@@ -55,12 +56,12 @@ import {
   isIdleOver15Minutes,
 } from './utils/sessionLock';
 
-// Strict Role-Based Screen Access List
-// Each account created strictly and solely accesses the dashboard and features intended for its role
+// Role-Based Screen Access List with fluid portal accessibility
 const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
   patient: [
     'onboarding',
     'patient-home',
+    'doctor-home',
     'book-consultation',
     'doctor-discovery',
     'doctor-profile',
@@ -79,6 +80,10 @@ const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
   doctor: [
     'onboarding',
     'doctor-home',
+    'patient-home',
+    'book-consultation',
+    'doctor-discovery',
+    'payment',
     'active-chat',
     'video-call',
     'upload-media',
@@ -86,14 +91,18 @@ const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
     'prescription-detail',
     'doctor-profile',
     'withdrawal',
+    'health-records',
     'settings',
     'security-center',
     'account-details',
+    'family-account',
     'service-router',
     'post-consultation-journey',
   ],
   admin: [
     'admin-dashboard',
+    'patient-home',
+    'doctor-home',
     'doctor-discovery',
     'doctor-profile',
     'settings',
@@ -179,6 +188,7 @@ export default function App() {
   const [isNetworkIssue, setIsNetworkIssue] = useState<boolean>(false);
   const [showWireframeFallback, setShowWireframeFallback] = useState<boolean>(false);
   const [isChatSessionActive, setIsChatSessionActive] = useState<boolean>(false);
+  const [incomingCall, setIncomingCall] = useState<ActiveCall | null>(null);
 
   const { isOffline, isSimulatedOffline } = useOfflineStatus();
   const effectiveOffline = isNetworkIssue || isOffline;
@@ -371,6 +381,66 @@ export default function App() {
   // Authenticated Role of the current user (strictly locked to account details)
   const effectiveRole: UserRole = (currentUser?.role as UserRole) || role;
 
+  const handleSwitchRole = (newRole: UserRole) => {
+    triggerHaptic('medium');
+    setRole(newRole);
+    if (currentUser) {
+      const updatedUser: User = { ...currentUser, role: newRole };
+      setCurrentUser(updatedUser);
+      try {
+        localStorage.setItem('prime_telecare_user', JSON.stringify(updatedUser));
+        localStorage.setItem('prime_telecare_role', newRole);
+      } catch {}
+    }
+    const target = getDefaultDashboardForRole(newRole);
+    navigateTo(target);
+    showToast(`Switched to ${newRole === 'doctor' ? 'Doctor Clinical' : 'Patient Care'} Portal`, 'info');
+  };
+
+  // Real-time Incoming Telehealth Call Listener & Poller for Doctors
+  useEffect(() => {
+    const checkIncomingCalls = async () => {
+      if (effectiveRole !== 'doctor') return;
+      try {
+        const call = await primeApi.getActiveCall(activeUser.id);
+        if (call && call.status === 'ringing') {
+          setIncomingCall(call);
+        } else if (call && call.status !== 'ringing') {
+          setIncomingCall(null);
+        }
+      } catch {}
+    };
+
+    const handleLocalIncomingCall = (e: any) => {
+      if (e?.detail) {
+        setIncomingCall(e.detail);
+      }
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'prime_telecare_incoming_call' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && parsed.status === 'ringing') {
+            setIncomingCall(parsed);
+          }
+        } catch {}
+      }
+    };
+
+    if (effectiveRole === 'doctor') {
+      checkIncomingCalls();
+      const interval = setInterval(checkIncomingCalls, 3000);
+      window.addEventListener('incoming-doctor-call', handleLocalIncomingCall);
+      window.addEventListener('storage', handleStorageChange);
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('incoming-doctor-call', handleLocalIncomingCall);
+        window.removeEventListener('storage', handleStorageChange);
+      };
+    }
+  }, [effectiveRole, activeUser.id]);
+
   const navigateTo = (nextScreen: ScreenId) => {
     // Unauthenticated / Auth screens
     if (['welcome', 'terms', 'login', 'signup', 'onboarding'].includes(nextScreen)) {
@@ -386,26 +456,11 @@ export default function App() {
 
     let targetScreen = nextScreen;
 
-    // Resolve generic 'patient-home' navigation requests to user's authorized dashboard
-    if (targetScreen === 'patient-home') {
-      targetScreen = getDefaultDashboardForRole(effectiveRole);
-    }
-
-    // Role-Based Access Control (RBAC): Enforce strict single-role dashboard access
+    // Role-Based Access Control (RBAC): Enforce screen access
     const allowed = ROLE_ALLOWED_SCREENS[effectiveRole] || ROLE_ALLOWED_SCREENS.patient;
     if (!allowed.includes(targetScreen)) {
       const fallbackDashboard = getDefaultDashboardForRole(effectiveRole);
       triggerHaptic('error');
-      const requiredRoleName =
-        targetScreen === 'doctor-home' || targetScreen === 'new-prescription' || targetScreen === 'withdrawal'
-          ? 'Doctor'
-          : targetScreen === 'admin-dashboard'
-          ? 'Administrator'
-          : 'Patient';
-      showToast(
-        `Access Denied: Your ${effectiveRole} account cannot access the ${requiredRoleName} portal. An account only accesses the dashboard it was created for.`,
-        'error'
-      );
       setCurrentScreen(fallbackDashboard);
       try {
         localStorage.setItem('prime_telecare_screen', fallbackDashboard);
@@ -595,6 +650,7 @@ export default function App() {
                 role={effectiveRole}
                 user={activeUser}
                 onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
+                onSwitchRole={handleSwitchRole}
               />
             )}
             <AnimatePresence mode="wait">
@@ -651,41 +707,23 @@ export default function App() {
             )}
 
             {currentScreen === 'patient-home' && (
-              effectiveRole === 'patient' ? (
-                <PatientHomeDashboard
-                  user={activeUser}
-                  onNavigate={navigateTo}
-                  onSelectDoctor={setSelectedDoctorId}
-                  onSaveBookingSummary={setCurrentBookingSummary}
-                  isOfflineMode={effectiveOffline}
-                />
-              ) : (
-                <AccessDeniedScreen
-                  currentRole={effectiveRole}
-                  requiredRole="patient"
-                  targetScreenName="Patient Care Dashboard"
-                  onNavigateHome={() => navigateTo(getDefaultDashboardForRole(effectiveRole))}
-                  onLogout={handleLogoutConfirm}
-                />
-              )
+              <PatientHomeDashboard
+                user={activeUser}
+                onNavigate={navigateTo}
+                onSelectDoctor={setSelectedDoctorId}
+                onSaveBookingSummary={setCurrentBookingSummary}
+                isOfflineMode={effectiveOffline}
+                onSwitchRole={handleSwitchRole}
+              />
             )}
 
             {currentScreen === 'doctor-home' && (
-              effectiveRole === 'doctor' ? (
-                <DoctorHomeDashboard
-                  user={activeUser}
-                  onNavigate={navigateTo}
-                  isOfflineMode={effectiveOffline}
-                />
-              ) : (
-                <AccessDeniedScreen
-                  currentRole={effectiveRole}
-                  requiredRole="doctor"
-                  targetScreenName="Doctor Clinical Dashboard"
-                  onNavigateHome={() => navigateTo(getDefaultDashboardForRole(effectiveRole))}
-                  onLogout={handleLogoutConfirm}
-                />
-              )
+              <DoctorHomeDashboard
+                user={activeUser}
+                onNavigate={navigateTo}
+                isOfflineMode={effectiveOffline}
+                onSwitchRole={handleSwitchRole}
+              />
             )}
 
 
@@ -900,6 +938,33 @@ export default function App() {
           onClose={() => setIsRecoveryModalOpen(false)}
           reminder={selectedRecoveryReminder}
           onNavigate={navigateTo}
+        />
+
+        {/* Real-time Online Incoming Call Modal for Doctor */}
+        <IncomingCallModal
+          call={incomingCall}
+          onAccept={(call) => {
+            setIncomingCall(null);
+            primeApi.respondCall(call.id, 'accepted').catch(() => {});
+            try {
+              localStorage.removeItem('prime_telecare_incoming_call');
+              localStorage.removeItem('prime_telecare_active_call');
+            } catch {}
+            if (call.type === 'Chat') {
+              navigateTo('active-chat');
+            } else {
+              navigateTo('video-call');
+            }
+          }}
+          onDecline={(call) => {
+            setIncomingCall(null);
+            primeApi.respondCall(call.id, 'declined').catch(() => {});
+            try {
+              localStorage.removeItem('prime_telecare_incoming_call');
+              localStorage.removeItem('prime_telecare_active_call');
+            } catch {}
+            showToast('Call declined', 'info');
+          }}
         />
 
         <LogoutModal

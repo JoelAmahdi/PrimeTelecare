@@ -61,6 +61,19 @@ export interface PaymentTransaction {
   createdAt: string;
 }
 
+export interface ActiveCall {
+  id: string;
+  consultationId: string;
+  doctorId: string;
+  doctorName?: string;
+  patientName: string;
+  patientAvatar?: string;
+  type: 'Video' | 'Voice' | 'Chat';
+  vitals?: any;
+  status: 'ringing' | 'accepted' | 'declined' | 'ended';
+  startedAt: number;
+}
+
 export interface ServerState {
   users: User[];
   doctors: Doctor[];
@@ -81,6 +94,7 @@ export interface ServerState {
     isPaid: boolean;
     paymentAmount: number;
   }>;
+  activeCalls: Record<string, ActiveCall>;
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
@@ -145,6 +159,7 @@ class MemoryStore {
         
       },
       exportAuthorizations: {},
+      activeCalls: {},
     };
   }
 
@@ -451,6 +466,53 @@ class MemoryStore {
     };
     this.saveToDisk();
     return this.state.exportAuthorizations[key];
+  }
+
+  // --- Real-time Active Telehealth Calls ---
+  startCall(callData: Omit<ActiveCall, 'id' | 'startedAt' | 'status'> & { id?: string }): ActiveCall {
+    const id = callData.id || `call-${Date.now()}`;
+    const newCall: ActiveCall = {
+      ...callData,
+      id,
+      status: 'ringing',
+      startedAt: Date.now(),
+    };
+    if (!this.state.activeCalls) {
+      this.state.activeCalls = {};
+    }
+    this.state.activeCalls[newCall.doctorId] = newCall;
+    this.state.activeCalls[id] = newCall;
+    this.saveToDisk();
+    return newCall;
+  }
+
+  getActiveCall(doctorId?: string): ActiveCall | undefined {
+    if (!this.state.activeCalls) return undefined;
+    const now = Date.now();
+    // Match specific doctor if provided
+    if (doctorId && this.state.activeCalls[doctorId]) {
+      const c = this.state.activeCalls[doctorId];
+      if (c.status === 'ringing' && now - c.startedAt < 180000) {
+        return c;
+      }
+    }
+    // Return any active ringing call within the last 3 minutes
+    const calls = Object.values(this.state.activeCalls);
+    return calls.find((c) => c.status === 'ringing' && now - c.startedAt < 180000);
+  }
+
+  respondCall(callId: string, status: 'accepted' | 'declined' | 'ended'): ActiveCall | undefined {
+    if (!this.state.activeCalls) return undefined;
+    const call = this.state.activeCalls[callId] || Object.values(this.state.activeCalls).find((c) => c.id === callId);
+    if (call) {
+      call.status = status;
+      if (call.doctorId && this.state.activeCalls[call.doctorId]) {
+        this.state.activeCalls[call.doctorId].status = status;
+      }
+      this.saveToDisk();
+      return call;
+    }
+    return undefined;
   }
 }
 

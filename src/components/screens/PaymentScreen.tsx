@@ -187,7 +187,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         timeSlot,
         scheduledDate: date,
         price: details.amount,
-        vitals: bookingSummary?.vitals,
+        vitals: activeSummary?.vitals,
         timestamp: Date.now(),
         unread: true,
       };
@@ -195,6 +195,28 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       window.dispatchEvent(new CustomEvent('new-consultation-booked', { detail: docAlert }));
       window.dispatchEvent(new Event('appointment-alerts-updated'));
     } catch {}
+
+    // Trigger Real-time Online Call on Doctor's Device
+    const callData = {
+      id: `call-${Date.now()}`,
+      consultationId: consultId,
+      doctorId: doctor.id,
+      doctorName: doctor.fullNameWithTitle || doctor.name,
+      patientName: patientDisplayName,
+      patientAvatar: user?.avatarUrl,
+      type: consultationType,
+      vitals: activeSummary?.vitals,
+      status: 'ringing' as const,
+      startedAt: Date.now(),
+    };
+
+    try {
+      localStorage.setItem('prime_telecare_incoming_call', JSON.stringify(callData));
+      localStorage.setItem('prime_telecare_active_call', JSON.stringify(callData));
+      window.dispatchEvent(new CustomEvent('incoming-doctor-call', { detail: callData }));
+    } catch {}
+
+    primeApi.startCall(callData).catch(() => {});
 
     // Credit doctor's account balance with consultation earnings
     try {

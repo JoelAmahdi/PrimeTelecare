@@ -194,6 +194,30 @@ async function testBackend() {
     'GET /api/admin/metrics returns system health and analytics'
   );
 
+  // 13. Active Online Call Handshake
+  const startCall = await req('/appointments/start-call', {
+    method: 'POST',
+    body: JSON.stringify({
+      appointmentId: 'apt-test-1',
+      patientId: 'patient-test',
+      patientName: 'Ada Okonkwo',
+      doctorId: 'all',
+      doctorName: 'Dr. Test Attending',
+      type: 'Video',
+      vitals: { temp: '36.8', spo2: '99', systolicBp: '120', diastolicBp: '80', hr: '72' },
+    }),
+  });
+  assert(startCall.status === 200 && startCall.data.success && startCall.data.call.status === 'ringing', 'POST /api/appointments/start-call initiates doctor online call');
+
+  const getActiveCall = await req('/appointments/active-call');
+  assert(getActiveCall.status === 200 && getActiveCall.data.call && getActiveCall.data.call.status === 'ringing', 'GET /api/appointments/active-call returns ringing call for doctor');
+
+  const respondCall = await req('/appointments/respond-call', {
+    method: 'POST',
+    body: JSON.stringify({ callId: startCall.data.call.id, status: 'accepted' }),
+  });
+  assert(respondCall.status === 200 && respondCall.data.call.status === 'accepted', 'POST /api/appointments/respond-call marks call accepted');
+
   console.log(`\n--- Test Results: ${passed} Passed, ${failed} Failed ---`);
   server.close(() => {
     process.exit(failed > 0 ? 1 : 0);

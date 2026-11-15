@@ -15,10 +15,11 @@ import { primeApi } from '../../services/apiClient';
 interface DoctorHomeDashboardProps {
   user: User;
   onNavigate: (screen: ScreenId) => void;
+  onSwitchRole?: (role: any) => void;
   isOfflineMode?: boolean;
 }
 
-export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, onNavigate, isOfflineMode }) => {
+export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, onNavigate, onSwitchRole, isOfflineMode }) => {
   const { isOffline, lastSyncTime } = useOfflineStatus();
   const effectiveOffline = isOfflineMode ?? isOffline;
   const [selectedPatientForDoc, setSelectedPatientForDoc] = useState<string | null>(null);
@@ -219,6 +220,20 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
               <span className={`w-2.5 h-2.5 rounded-full ${effectiveOffline ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`} />
               <span>{effectiveOffline ? 'Offline (Cached Mode)' : 'Online & Accepting Patients'}</span>
             </span>
+
+            {onSwitchRole && (
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onSwitchRole('patient');
+                }}
+                className="px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-[#022434] font-bold font-outfit text-xs sm:text-sm rounded-xl shadow-xs transition-all active:scale-95 flex items-center space-x-2 cursor-pointer"
+                title="Switch to Patient View to test consultation booking and video call"
+              >
+                <Users className="w-4 h-4 text-[#006c44]" />
+                <span>Patient Portal</span>
+              </button>
+            )}
 
             <button
               onClick={() => {

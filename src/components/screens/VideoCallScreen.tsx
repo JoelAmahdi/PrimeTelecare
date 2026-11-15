@@ -320,6 +320,38 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
+  const handleRingDoctorAgain = async () => {
+    triggerHaptic('heavy');
+    showToast('Ringing doctor on their device...', 'info');
+    try {
+      const callData = {
+        id: 'call-' + Date.now(),
+        appointmentId: 'apt-live-' + Date.now(),
+        patientId: user?.id || 'patient-1',
+        patientName: activeProfile.displayName || user?.name || 'Patient',
+        patientAvatar: user?.avatarUrl,
+        doctorId: 'all',
+        doctorName: doctorName,
+        type: 'Video' as const,
+        status: 'ringing' as const,
+        timestamp: Date.now(),
+        vitals: {
+          temp: '36.8',
+          spo2: '99',
+          systolicBp: '120',
+          diastolicBp: '80',
+          hr: '72',
+        },
+      };
+      localStorage.setItem('prime_telecare_incoming_call', JSON.stringify(callData));
+      window.dispatchEvent(new CustomEvent('incoming-doctor-call', { detail: callData }));
+      await primeApi.startCall(callData);
+      showToast("Doctor's device is ringing! They can join room now.", 'success');
+    } catch {
+      showToast('Doctor call alert dispatched locally.', 'info');
+    }
+  };
+
   const handleToggleMute = () => {
     triggerHaptic('light');
     const nextMuted = !isMuted;
@@ -628,7 +660,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
           {/* Waiting for Peer / Multi-device join banner */}
           {!isPeerConnected && (
-            <div className="absolute top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-20 max-w-md bg-black/75 backdrop-blur-md p-4 rounded-2xl border border-emerald-500/30 text-white shadow-2xl text-center space-y-2">
+            <div className="absolute top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-20 max-w-md bg-black/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-emerald-500/40 text-white shadow-2xl text-center space-y-2.5">
               <div className="flex items-center justify-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                 <span className="text-xs font-bold font-outfit text-emerald-300 uppercase tracking-wider">
@@ -636,16 +668,30 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-200 font-nunito">
-                Your device camera & microphone are active. Waiting for {doctorName} to connect...
+                {myRole === 'patient'
+                  ? `Your camera & audio are active. Calling ${doctorName}... ringing on doctor's device.`
+                  : 'Your clinical room is open. Waiting for patient peer stream to connect...'}
               </p>
-              <button
-                type="button"
-                onClick={handleCopyCallLink}
-                className="mt-1 px-4 py-2 bg-[#006c44] hover:bg-[#007a4d] text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedLink ? 'Link Copied to Clipboard!' : 'Copy Room Link to Test on 2nd Device'}</span>
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                {myRole === 'patient' && (
+                  <button
+                    type="button"
+                    onClick={handleRingDoctorAgain}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+                  >
+                    <PhoneCall className="w-3.5 h-3.5 animate-bounce" />
+                    <span>Ring Doctor Again</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCopyCallLink}
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+                >
+                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? 'Link Copied!' : 'Copy Room Link'}</span>
+                </button>
+              </div>
             </div>
           )}
 

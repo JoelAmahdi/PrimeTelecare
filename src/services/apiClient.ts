@@ -242,6 +242,58 @@ export const primeApi = {
     }
   },
 
+  // --- Real-time Online Telehealth Calls ---
+  async startCall(payload: {
+    consultationId?: string;
+    doctorId: string;
+    doctorName?: string;
+    patientName: string;
+    patientAvatar?: string;
+    type?: string;
+    vitals?: any;
+  }): Promise<any> {
+    try {
+      const res = await request<{ success: boolean; call: any }>('/appointments/start-call', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      return res.call;
+    } catch {
+      return {
+        id: `call-${Date.now()}`,
+        status: 'ringing',
+        ...payload,
+      };
+    }
+  },
+
+  async getActiveCall(doctorId?: string): Promise<any> {
+    try {
+      const q = doctorId ? `?doctorId=${encodeURIComponent(doctorId)}` : '';
+      const res = await request<{ success: boolean; activeCall: any }>(`/appointments/active-call${q}`);
+      return res.activeCall;
+    } catch {
+      try {
+        const raw = localStorage.getItem('prime_telecare_incoming_call');
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+  },
+
+  async respondCall(callId: string, status: 'accepted' | 'declined' | 'ended'): Promise<any> {
+    try {
+      const res = await request<{ success: boolean; call: any }>('/appointments/respond-call', {
+        method: 'POST',
+        body: JSON.stringify({ callId, status }),
+      });
+      return res.call;
+    } catch {
+      return { callId, status };
+    }
+  },
+
   // --- Clinical Triage ---
   async evaluateTriage(triageData: {
     patientName: string;

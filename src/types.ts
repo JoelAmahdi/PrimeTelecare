@@ -391,6 +391,19 @@ export interface StructuredClinicalRecord {
   };
 }
 
+export interface ActiveCall {
+  id: string;
+  consultationId: string;
+  doctorId: string;
+  doctorName?: string;
+  patientName: string;
+  patientAvatar?: string;
+  type: 'Video' | 'Voice' | 'Chat';
+  vitals?: any;
+  status: 'ringing' | 'accepted' | 'declined' | 'ended';
+  startedAt: number;
+}
+
 export type ScreenId = 
   | 'welcome'
   | 'terms'

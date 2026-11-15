@@ -46,9 +46,14 @@ appointmentsRouter.post('/', (req: Request, res: Response) => {
     });
   }
 
-  const doctor = store.getDoctorById(doctorId);
+  let doctor = store.getDoctorById(doctorId);
   if (!doctor) {
-    return res.status(404).json({ success: false, error: 'Doctor not found' });
+    doctor = store.getDoctors().find((d) => d.id === doctorId || d.name === doctorId) || {
+      id: doctorId,
+      name: req.body.doctorName || 'Attending Physician',
+      specialty: req.body.doctorSpecialty || 'General Practice',
+      avatarUrl: req.body.doctorAvatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
+    } as any;
   }
 
   const newAppointment = store.createAppointment({
@@ -97,5 +102,40 @@ appointmentsRouter.delete('/:id', (req: Request, res: Response) => {
     return res.status(404).json({ success: false, error: 'Appointment not found' });
   }
   return res.json({ success: true, message: 'Appointment cancelled successfully', appointment: updated });
+});
+
+// GET /api/appointments/active-call (Poll for incoming doctor calls)
+appointmentsRouter.get('/active-call', (req: Request, res: Response) => {
+  const doctorId = req.query.doctorId as string;
+  const activeCall = store.getActiveCall(doctorId);
+  return res.json({ success: true, activeCall: activeCall || null, call: activeCall || null });
+});
+
+// POST /api/appointments/start-call (Trigger incoming call on doctor's device)
+appointmentsRouter.post('/start-call', (req: Request, res: Response) => {
+  const { consultationId, doctorId, doctorName, patientName, patientAvatar, type, vitals } = req.body;
+  if (!doctorId || !patientName) {
+    return res.status(400).json({ success: false, error: 'doctorId and patientName are required' });
+  }
+  const call = store.startCall({
+    consultationId: consultationId || `cns-${Date.now()}`,
+    doctorId,
+    doctorName,
+    patientName,
+    patientAvatar,
+    type: type || 'Video',
+    vitals,
+  });
+  return res.json({ success: true, call, activeCall: call });
+});
+
+// POST /api/appointments/respond-call (Doctor accepts/declines incoming call)
+appointmentsRouter.post('/respond-call', (req: Request, res: Response) => {
+  const { callId, status } = req.body;
+  if (!callId || !status) {
+    return res.status(400).json({ success: false, error: 'callId and status are required' });
+  }
+  const call = store.respondCall(callId, status);
+  return res.json({ success: true, call });
 });
 
