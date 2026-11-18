@@ -125,8 +125,27 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
+      const isLoginParam = urlParams.get('login') === 'true';
+      const screenParam = urlParams.get('screen') as ScreenId;
+      const consultIdParam = urlParams.get('consultationId');
       const refDoctor = urlParams.get('refDoctor') || urlParams.get('doctor');
       const savedUser = localStorage.getItem('prime_telecare_user');
+
+      if (consultIdParam) {
+        localStorage.setItem('prime_telecare_active_consultation_id', consultIdParam);
+      }
+      if (screenParam) {
+        localStorage.setItem('prime_telecare_login_redirect_screen', screenParam);
+      }
+
+      // Handle direct Google Calendar login link
+      if (isLoginParam) {
+        if (savedUser) {
+          return screenParam || 'patient-home';
+        } else {
+          return 'login';
+        }
+      }
 
       if (refDoctor) {
         localStorage.setItem('prime_telecare_pending_ref_doctor', refDoctor);
@@ -598,6 +617,20 @@ export default function App() {
       return;
     }
 
+    // If arriving via calendar login link, navigate to requested screen (e.g. patient-home)
+    const pendingRedirect = localStorage.getItem('prime_telecare_login_redirect_screen') as ScreenId;
+    if (pendingRedirect && finalRole === 'patient') {
+      localStorage.removeItem('prime_telecare_login_redirect_screen');
+      try {
+        localStorage.setItem('prime_telecare_screen', pendingRedirect);
+      } catch {}
+      setCurrentScreen(pendingRedirect);
+      if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
+        setShowQuickLoginSetup(true);
+      }
+      return;
+    }
+
     if (finalRole === 'admin' || finalRole === 'doctor' || hasAcceptedTerms) {
       try {
         localStorage.setItem('prime_telecare_screen', homeScreen);
@@ -948,6 +981,7 @@ export default function App() {
                 onNavigate={navigateTo}
                 role={role}
                 onSaveBookingSummary={setCurrentBookingSummary}
+                onSelectDoctor={setSelectedDoctorId}
               />
             )}
 

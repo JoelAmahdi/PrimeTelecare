@@ -41,6 +41,7 @@ import { AddDoctorModal } from '../common/AddDoctorModal';
 import { CareJourneyPatientWidget } from '../common/CareJourneyPatientWidget';
 import { PostConsultationNotificationsWidget } from '../common/PostConsultationNotificationsWidget';
 import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
+import { createGoogleCalendarWebUrl } from '../../services/googleCalendar';
 import {
   getStoredReminders,
   getStoredDrugPurchaseNotifications,
@@ -543,20 +544,45 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                             </div>
                           </div>
 
-                          {/* CTA Button */}
-                          <button
-                            onClick={() => handleJoinConsultation(consult)}
-                            className="w-full py-3.5 px-5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-2xl shadow-xs hover:shadow-sm transition-all active:scale-[0.99] flex items-center justify-center space-x-2 cursor-pointer"
-                          >
-                            {consult.type === 'Chat' ? (
-                              <MessageSquare className="w-4 h-4" />
-                            ) : consult.type === 'Voice' ? (
-                              <Phone className="w-4 h-4" />
-                            ) : (
-                              <Video className="w-4 h-4" />
-                            )}
-                            <span>{isStartingSoon ? 'Join Consultation Room' : 'Enter Consultation'}</span>
-                          </button>
+                          {/* Action Buttons: Join Room & Sync to Google Calendar */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            <button
+                              onClick={() => handleJoinConsultation(consult)}
+                              className="w-full py-3 px-4 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-xs sm:text-sm rounded-2xl shadow-xs hover:shadow-sm transition-all active:scale-[0.99] flex items-center justify-center space-x-2 cursor-pointer"
+                            >
+                              {consult.type === 'Chat' ? (
+                                <MessageSquare className="w-4 h-4" />
+                              ) : consult.type === 'Voice' ? (
+                                <Phone className="w-4 h-4" />
+                              ) : (
+                                <Video className="w-4 h-4" />
+                              )}
+                              <span>{isStartingSoon ? 'Join Room' : 'Enter Consultation'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                triggerHaptic('selection');
+                                const url = createGoogleCalendarWebUrl({
+                                  doctorName: consult.doctorName,
+                                  doctorSpecialty: consult.doctorSpecialty,
+                                  patientName: user.name,
+                                  consultationType: consult.type,
+                                  dateStr: consult.scheduledDate,
+                                  timeSlot: consult.scheduledTime,
+                                  consultationId: consult.id,
+                                  doctorId: consult.doctorId,
+                                });
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                                showToast('Opening Google Calendar...', 'success');
+                              }}
+                              className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-[#022434] border border-slate-200/90 font-bold font-outfit text-xs sm:text-sm rounded-2xl shadow-2xs hover:border-slate-300 transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                            >
+                              <Calendar className="w-4 h-4 text-blue-600" />
+                              <span>Sync to Google Calendar</span>
+                            </button>
+                          </div>
                         </motion.div>
                       );
                     })}

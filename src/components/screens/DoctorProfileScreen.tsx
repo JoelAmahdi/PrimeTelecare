@@ -38,6 +38,7 @@ interface DoctorProfileScreenProps {
   onNavigate: (screen: ScreenId) => void;
   role?: UserRole;
   onSaveBookingSummary?: (summary: BookingSummary) => void;
+  onSelectDoctor?: (doctorId: string) => void;
 }
 
 export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
@@ -45,6 +46,7 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
   onNavigate,
   role = 'patient',
   onSaveBookingSummary,
+  onSelectDoctor,
 }) => {
   const [currentDoctor, setCurrentDoctor] = useState<Doctor | null>(() => {
     try {
@@ -466,10 +468,34 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
             setSelectedDate(d);
             setSelectedSlot(s);
           }}
-          onConfirmBooking={(d, s) => {
+          onConfirmBooking={(d, s, consultType) => {
             setSelectedDate(d);
             setSelectedSlot(s);
-            onNavigate('book-consultation');
+            const typeCapitalized = consultType === 'voice' ? 'Voice' : consultType === 'chat' ? 'Chat' : 'Video';
+            const price = currentDoctor.prices[consultType || 'video'] || currentDoctor.prices.video || 10000;
+            const summary: BookingSummary = {
+              doctorId: currentDoctor.id,
+              doctorName: currentDoctor.fullNameWithTitle || currentDoctor.name,
+              doctorSpecialty: currentDoctor.specialty,
+              doctorAvatar: currentDoctor.avatarUrl,
+              doctorLicense: currentDoctor.verification?.licenseNumber,
+              consultationType: typeCapitalized as 'Video' | 'Voice' | 'Chat',
+              date: d,
+              timeSlot: s,
+              timeZone: 'WAT (GMT+1) • West Africa Time',
+              baseFee: price,
+              serviceFee: 500,
+              bookingMode: 'scheduled',
+              duration: '30 Minutes',
+              symptomsDescription: '',
+            };
+            try {
+              localStorage.setItem('prime_telecare_current_booking_summary', JSON.stringify(summary));
+              localStorage.setItem('prime_telecare_booking_mode', 'scheduled');
+            } catch {}
+            onSaveBookingSummary?.(summary);
+            onSelectDoctor?.(currentDoctor.id);
+            onNavigate('payment');
           }}
         />
 
@@ -587,6 +613,7 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
           <button
             onClick={() => {
               triggerHaptic('selection');
+              onSelectDoctor?.(currentDoctor.id);
               onNavigate('book-consultation');
             }}
             className="flex-1 min-h-[46px] py-3.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl shadow-md transition-all active:scale-98 flex flex-col items-center justify-center cursor-pointer"

@@ -65,6 +65,39 @@ export function getCompletedConsultations(): AppointmentAlert[] {
 }
 
 /**
+ * Converts human readable scheduled date & slot to accurate Unix timestamp in ms
+ */
+export function parseScheduledTimeToTimestamp(dateStr?: string, timeStr?: string): number {
+  const now = new Date();
+  let targetDate = new Date();
+
+  const lower = (dateStr || '').toLowerCase();
+  if (lower.includes('tomorrow')) {
+    targetDate.setDate(targetDate.getDate() + 1);
+  } else if (!lower.includes('today')) {
+    const cleaned = (dateStr || '').replace(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*/i, '').trim();
+    const parsed = new Date(cleaned);
+    if (!isNaN(parsed.getTime())) {
+      targetDate = parsed;
+    }
+  }
+
+  const match = (timeStr || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  let hours = 10;
+  let minutes = 30;
+  if (match) {
+    hours = parseInt(match[1], 10);
+    minutes = parseInt(match[2], 10);
+    const ampm = match[3]?.toUpperCase();
+    if (ampm === 'PM' && hours < 12) hours += 12;
+    if (ampm === 'AM' && hours === 12) hours = 0;
+  }
+
+  targetDate.setHours(hours, minutes, 0, 0);
+  return targetDate.getTime();
+}
+
+/**
  * Books a new consultation into the persistent appointments store
  */
 export function bookNewConsultation(booking: {
@@ -89,7 +122,7 @@ export function bookNewConsultation(booking: {
     if (booking.bookingMode === 'instant') {
       startTime = now + 2 * 60 * 1000; // instant starts in 2 minutes
     } else {
-      startTime = now + 14 * 60 * 1000; // upcoming slot
+      startTime = parseScheduledTimeToTimestamp(booking.scheduledDate, booking.scheduledTime);
     }
   }
 

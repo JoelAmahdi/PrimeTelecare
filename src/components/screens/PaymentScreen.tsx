@@ -27,13 +27,14 @@ import {
 import { ScreenId, User, BookingSummary } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { requestExportPermission } from '../../utils/healthRecordPermissions';
-import { bookNewConsultation } from '../../utils/appointmentNotifications';
+import { bookNewConsultation, parseScheduledTimeToTimestamp } from '../../utils/appointmentNotifications';
 import { markConsultationAsPaid } from '../../utils/consultationPayment';
 import { showToast } from '../../utils/toast';
 import { GoogleCalendarSyncModal } from '../common/GoogleCalendarSyncModal';
 import {
   isGoogleCalendarConnected,
   addConsultationToGoogleCalendar,
+  createGoogleCalendarWebUrl,
 } from '../../services/googleCalendar';
 import { primeApi } from '../../services/apiClient';
 
@@ -64,6 +65,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
   const [copiedBankAcc, setCopiedBankAcc] = useState(false);
   const [simulatedDeclineMode, setSimulatedDeclineMode] = useState(false);
   const [isLiveGatewayOpen, setIsLiveGatewayOpen] = useState(false);
+  const [isScheduledSuccessModalOpen, setIsScheduledSuccessModalOpen] = useState(false);
 
   // Dynamic Doctor Resolution: Strictly prioritize the doctor selected in bookingSummary
   const activeSummary = bookingSummary || (() => {
@@ -107,7 +109,14 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
 
   const patientDisplayName = user?.name?.trim() || 'Patient';
   const consultationType = activeSummary?.consultationType || 'Video';
-  const date = activeSummary?.date || 'Today, Oct 24, 2026';
+  const date =
+    activeSummary?.date ||
+    new Date().toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   const timeSlot = activeSummary?.timeSlot || '10:30 AM';
   const duration = activeSummary?.duration || '30 Minutes';
 
@@ -143,17 +152,23 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
     const consultId = bookingSummary?.consultationId || `cns-${Date.now()}`;
     markConsultationAsPaid(consultId, consultationType);
 
+    const isInstant =
+      (bookingSummary?.bookingMode || activeSummary?.bookingMode || localStorage.getItem('prime_telecare_booking_mode')) === 'instant';
+
+    const calculatedTimestamp = parseScheduledTimeToTimestamp(date, timeSlot);
+
     bookNewConsultation({
       appointmentId: consultId,
-      doctorId: doctor.id,
+      doctorId: doctor.id || 'doc-1',
       doctorName: doctor.fullNameWithTitle || doctor.name,
       doctorSpecialty: doctor.specialty,
       doctorAvatar: doctor.avatarUrl,
       patientName: patientDisplayName,
       scheduledTime: timeSlot,
       scheduledDate: date,
+      startTimeTimestamp: calculatedTimestamp,
       type: consultationType,
-      bookingMode: bookingSummary?.bookingMode || 'scheduled',
+      bookingMode: isInstant ? 'instant' : 'scheduled',
       price: details.amount,
     });
 
@@ -170,7 +185,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       : 'Routine Telehealth Consultation';
 
     primeApi.createAppointment({
-      doctorId: doctor.id,
+      doctorId: doctor.id || 'doc-1',
       patientName: patientDisplayName,
       scheduledDate: date,
       timeSlot,
@@ -183,7 +198,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
     try {
       const docAlert = {
         id: consultId,
-        doctorId: doctor.id,
+        doctorId: doctor.id || 'doc-1',
         patientName: patientDisplayName,
         doctorName: doctor.fullNameWithTitle || doctor.name,
         type: consultationType,
@@ -198,28 +213,6 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       window.dispatchEvent(new CustomEvent('new-consultation-booked', { detail: docAlert }));
       window.dispatchEvent(new Event('appointment-alerts-updated'));
     } catch {}
-
-    // Trigger Real-time Online Call on Doctor's Device
-    const callData = {
-      id: `call-${Date.now()}`,
-      consultationId: consultId,
-      doctorId: doctor.id,
-      doctorName: doctor.fullNameWithTitle || doctor.name,
-      patientName: patientDisplayName,
-      patientAvatar: user?.avatarUrl,
-      type: consultationType,
-      vitals: activeSummary?.vitals,
-      status: 'ringing' as const,
-      startedAt: Date.now(),
-    };
-
-    try {
-      localStorage.setItem('prime_telecare_incoming_call', JSON.stringify(callData));
-      localStorage.setItem('prime_telecare_active_call', JSON.stringify(callData));
-      window.dispatchEvent(new CustomEvent('incoming-doctor-call', { detail: callData }));
-    } catch {}
-
-    primeApi.startCall(callData).catch(() => {});
 
     // Credit doctor's account balance with consultation earnings
     try {
@@ -245,25 +238,55 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         timeSlot,
         durationMinutes: 30,
         notes: bookingSummary?.symptomsDescription,
+        consultationId: consultId,
+        doctorId: doctor.id || 'doc-1',
       }).catch(() => {});
     }
 
     setPaymentStatus('Paid');
     setIsProcessing(false);
-    showToast('Payment successful & consultation room unlocked!');
 
-    setTimeout(() => {
-      if (consultationType === 'Chat') {
-        onNavigate('active-chat');
-      } else {
-        onNavigate('video-call');
-      }
-    }, 1200);
+    if (isInstant) {
+      // Trigger Real-time Online Call on Doctor's Device immediately for Instant consultations
+      const callData = {
+        id: `call-${Date.now()}`,
+        consultationId: consultId,
+        doctorId: doctor.id || 'doc-1',
+        doctorName: doctor.fullNameWithTitle || doctor.name,
+        patientName: patientDisplayName,
+        patientAvatar: user?.avatarUrl,
+        type: consultationType,
+        vitals: activeSummary?.vitals,
+        status: 'ringing' as const,
+        startedAt: Date.now(),
+      };
+
+      try {
+        localStorage.setItem('prime_telecare_incoming_call', JSON.stringify(callData));
+        localStorage.setItem('prime_telecare_active_call', JSON.stringify(callData));
+        window.dispatchEvent(new CustomEvent('incoming-doctor-call', { detail: callData }));
+      } catch {}
+
+      primeApi.startCall(callData).catch(() => {});
+      showToast('Payment successful & consultation room unlocked!');
+
+      setTimeout(() => {
+        if (consultationType === 'Chat') {
+          onNavigate('active-chat');
+        } else {
+          onNavigate('video-call');
+        }
+      }, 1200);
+    } else {
+      // Scheduled Appointment: Show confirmation card with direct Google Calendar sync link & login URL
+      showToast('Consultation successfully scheduled & confirmed!');
+      setIsScheduledSuccessModalOpen(true);
+    }
   };
 
   const invoiceData = {
     invoiceNo: 'INV-2026-88392',
-    date: 'Oct 24, 2026',
+    date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     patientName: user.name || 'Patient User',
     patientEmail: user.email || 'patient@primetelecare.com',
     doctorName: doctor.fullNameWithTitle || doctor.name,
@@ -780,6 +803,116 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         consultationId={bookingSummary?.consultationId}
         walletBalance={user.walletBalance || 0}
       />
+
+      {/* Scheduled Appointment Success Modal with Direct Google Calendar Sync */}
+      {isScheduledSuccessModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 shadow-2xl space-y-5 text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-[#006c44] flex items-center justify-center mx-auto shadow-sm ring-8 ring-emerald-50">
+              <CheckCircle2 className="w-9 h-9" />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-extrabold font-outfit uppercase tracking-widest text-[#006c44] bg-emerald-50 px-2.5 py-0.5 rounded-full inline-block">
+                Confirmed &amp; Secured
+              </span>
+              <h3 className="font-extrabold font-outfit text-xl sm:text-2xl text-[#022434]">
+                Appointment Scheduled!
+              </h3>
+              <p className="text-xs text-slate-500 font-nunito max-w-xs mx-auto">
+                Your consultation has been confirmed and reserved in Dr. {doctor.name}'s schedule.
+              </p>
+            </div>
+
+            {/* Appointment Summary Box */}
+            <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 text-left space-y-3">
+              <div className="flex items-center space-x-3 pb-3 border-b border-slate-200">
+                <img
+                  src={doctor.avatarUrl}
+                  alt={doctor.name}
+                  className="w-11 h-11 rounded-xl object-cover border border-slate-200 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-bold font-outfit text-sm text-[#022434] truncate">
+                    {doctor.fullNameWithTitle || doctor.name}
+                  </h4>
+                  <p className="text-xs text-slate-500 truncate">{doctor.specialty}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs font-nunito">
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Date</span>
+                  <span className="font-bold text-[#022434]">{date}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Time Slot</span>
+                  <span className="font-bold text-[#022434]">{timeSlot}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Format</span>
+                  <span className="font-bold text-[#006c44]">{consultationType} Consultation</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Time Zone</span>
+                  <span className="font-bold text-[#022434]">{cleanTimeZone}</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 font-nunito leading-relaxed">
+              Dual reminders will be sent before your call. A direct login link has been configured for easy 1-click access from your calendar.
+            </p>
+
+            <div className="space-y-2 pt-1">
+              {/* Add to Google Calendar Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  const webUrl = createGoogleCalendarWebUrl({
+                    doctorName: doctor.fullNameWithTitle || doctor.name,
+                    doctorSpecialty: doctor.specialty,
+                    patientName: patientDisplayName,
+                    consultationType,
+                    dateStr: date,
+                    timeSlot,
+                    durationMinutes: 30,
+                    notes: bookingSummary?.symptomsDescription,
+                    consultationId: bookingSummary?.consultationId || `cns-${Date.now()}`,
+                    doctorId: doctor.id || 'doc-1',
+                  });
+                  window.open(webUrl, '_blank', 'noopener,noreferrer');
+                  showToast('Opening Google Calendar...', 'success');
+                }}
+                className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-[#022434] border border-slate-300 font-bold font-outfit text-sm rounded-xl shadow-xs transition-all flex items-center justify-center space-x-2.5 cursor-pointer"
+              >
+                <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <span>Add to Google Calendar (with Login Link)</span>
+              </button>
+
+              {/* Go to Dashboard Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  setIsScheduledSuccessModalOpen(false);
+                  onNavigate('patient-home');
+                }}
+                className="w-full py-3.5 px-4 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-xl shadow-md transition-all active:scale-[0.99] flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <span>View in My Appointments</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

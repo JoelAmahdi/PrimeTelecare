@@ -167,24 +167,25 @@ export function parseAppointmentToIsoDates(
   dateStr: string,
   timeSlot: string,
   durationMinutes = 30
-): { startIso: string; endIso: string } {
+): { startIso: string; endIso: string; startDate: Date; endDate: Date } {
   const now = new Date();
-  let targetYear = now.getFullYear();
+  let dateObj = new Date();
 
-  // Extract clean date tokens
-  // Strip "Today, ", "Tomorrow, ", "Wed, "
-  const cleanedDate = dateStr
-    .replace(/^(Today|Tomorrow|Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*/i, '')
-    .trim();
-
-  // Try parsing directly
-  let dateObj = new Date(cleanedDate);
-  if (isNaN(dateObj.getTime())) {
-    dateObj = new Date();
+  const lower = (dateStr || '').toLowerCase();
+  if (lower.includes('tomorrow')) {
+    dateObj.setDate(now.getDate() + 1);
+  } else if (!lower.includes('today')) {
+    const cleanedDate = (dateStr || '')
+      .replace(/^(Today|Tomorrow|Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*/i, '')
+      .trim();
+    const parsed = new Date(cleanedDate);
+    if (!isNaN(parsed.getTime())) {
+      dateObj = parsed;
+    }
   }
 
   // Parse timeSlot e.g. "10:30 AM" or "02:15 PM"
-  const timeMatch = timeSlot.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  const timeMatch = (timeSlot || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   let hours = 10;
   let minutes = 30;
 
@@ -207,7 +208,59 @@ export function parseAppointmentToIsoDates(
   return {
     startIso: startDate.toISOString(),
     endIso: endDate.toISOString(),
+    startDate,
+    endDate,
   };
+}
+
+/**
+ * Creates a universal Google Calendar web URL with appointment details and direct log in link
+ */
+export function createGoogleCalendarWebUrl(payload: CalendarEventPayload): string {
+  const { startDate, endDate } = parseAppointmentToIsoDates(
+    payload.dateStr,
+    payload.timeSlot,
+    payload.durationMinutes || 30
+  );
+
+  const formatUtcForGoogle = (d: Date): string => {
+    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  };
+
+  const datesParam = `${formatUtcForGoogle(startDate)}/${formatUtcForGoogle(endDate)}`;
+  const title = `Telehealth Consult: Dr. ${payload.doctorName} (${payload.consultationType} Call)`;
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prime-telecare.onrender.com';
+  const consultId = payload.consultationId || '';
+  const docId = payload.doctorId || '';
+  const loginUrl = `${origin}/?login=true&screen=patient-home${consultId ? `&consultationId=${encodeURIComponent(consultId)}` : ''}${docId ? `&doctor=${encodeURIComponent(docId)}` : ''}`;
+
+  const details = [
+    `Prime Telecare Telehealth Consultation`,
+    `----------------------------------------`,
+    `• Doctor: Dr. ${payload.doctorName} (${payload.doctorSpecialty || 'General Practice'})`,
+    `• Patient: ${payload.patientName || 'Patient'}`,
+    `• Modality: ${payload.consultationType} Call`,
+    `• Scheduled Time: ${payload.timeSlot} (${payload.dateStr})`,
+    payload.notes ? `• Clinical Notes: ${payload.notes}` : '',
+    ``,
+    `🔗 CLICK TO LOG IN & JOIN CONSULTATION:`,
+    loginUrl,
+    ``,
+    `Please log in 5 minutes before your scheduled appointment time.`
+  ].filter(Boolean).join('\n');
+
+  const location = 'Prime Telecare Telehealth Room';
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: datesParam,
+    details: details,
+    location: location,
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
 /**
@@ -233,6 +286,11 @@ export async function addConsultationToGoogleCalendar(
     payload.durationMinutes || 30
   );
 
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prime-telecare.onrender.com';
+  const consultId = payload.consultationId || '';
+  const docId = payload.doctorId || '';
+  const loginUrl = `${origin}/?login=true&screen=patient-home${consultId ? `&consultationId=${encodeURIComponent(consultId)}` : ''}${docId ? `&doctor=${encodeURIComponent(docId)}` : ''}`;
+
   const eventBody = {
     summary: `🩺 Telehealth Consult: Dr. ${payload.doctorName} (${payload.consultationType})`,
     description: [
@@ -242,7 +300,9 @@ export async function addConsultationToGoogleCalendar(
       `• Modality: ${payload.consultationType} Teleconsultation`,
       `• Scheduled Slot: ${payload.timeSlot} (${payload.dateStr})`,
       payload.notes ? `• Clinical Notes/Symptoms: ${payload.notes}` : '',
-      `• Telehealth Portal: https://primetelecare.health/consultation`,
+      ``,
+      `🔗 CLICK TO LOG IN & JOIN CONSULTATION:`,
+      loginUrl,
     ]
       .filter(Boolean)
       .join('\n'),

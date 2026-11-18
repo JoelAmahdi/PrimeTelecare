@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
 import { ClinicalTriageModal, VitalsData } from '../common/ClinicalTriageModal';
@@ -73,7 +73,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   });
 
   const loadDoctors = () => {
-    const legacyIds = new Set(['doc-anya', 'doc-kenji', 'doc-emeka', 'doc-sarah', 'doc-ching', 'doc-chike', 'doc-fatima', 'doc-1']);
+    const legacyIds = new Set(['doc-anya', 'doc-kenji', 'doc-emeka', 'doc-sarah', 'doc-ching', 'doc-chike', 'doc-fatima']);
     primeApi.getDoctors().then((docs) => {
       const serverDocs = (docs || []).filter((d) => !legacyIds.has(d.id));
       const list = [...serverDocs];
@@ -148,15 +148,21 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   // Consultation Format: Video / Voice / Chat
   const [consultationType, setConsultationType] = useState<'Video' | 'Voice' | 'Chat'>('Video');
 
-  // Schedule Dates (for 'scheduled' mode)
-  const availableDates = [
-    { label: 'Today', day: 'Wed', date: 'Oct 24', fullDate: 'Wed, Oct 24, 2026' },
-    { label: 'Tomorrow', day: 'Thu', date: 'Oct 25', fullDate: 'Thu, Oct 25, 2026' },
-    { label: 'Fri', day: 'Fri', date: 'Oct 26', fullDate: 'Fri, Oct 26, 2026' },
-    { label: 'Sat', day: 'Sat', date: 'Oct 27', fullDate: 'Sat, Oct 27, 2026' },
-    { label: 'Sun', day: 'Sun', date: 'Oct 28', fullDate: 'Sun, Oct 28, 2026' },
-    { label: 'Mon', day: 'Mon', date: 'Oct 29', fullDate: 'Mon, Oct 29, 2026' },
-  ];
+  // Schedule Dates (for 'scheduled' mode) - Dynamic next 7 days
+  const availableDates = useMemo(() => {
+    const dates = [];
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short' });
+      const day = d.toLocaleDateString('en-US', { weekday: 'short' });
+      const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const fullDate = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      dates.push({ label, day, date, fullDate, dateObj: d });
+    }
+    return dates;
+  }, []);
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
 
   const timeSlots = [
@@ -231,7 +237,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
     const chosenTimeStr = isInstant ? 'Immediate Queue (2–5 mins wait)' : selectedTimeSlot;
 
     const summary: BookingSummary = {
-      doctorId: currentDoctor.id,
+      doctorId: currentDoctor.id || chosenDoctorId || 'doc-1',
       doctorName: currentDoctor.fullNameWithTitle || currentDoctor.name,
       doctorSpecialty: currentDoctor.specialty,
       doctorAvatar: currentDoctor.avatarUrl,
@@ -260,6 +266,7 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
 
     try {
       localStorage.setItem('prime_telecare_current_booking_summary', JSON.stringify(summary));
+      localStorage.setItem('prime_telecare_booking_mode', bookingMode);
     } catch {}
 
     if (onSaveBookingSummary) {
