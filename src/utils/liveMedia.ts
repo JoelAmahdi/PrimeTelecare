@@ -272,3 +272,126 @@ export function createDoctorCanvasStream(doctorName: string, specialty: string):
   };
 }
 
+/**
+ * Audio output routing interfaces & utilities (Phone Speaker, Bluetooth, Headset)
+ */
+export interface AudioOutputDeviceInfo {
+  deviceId: string;
+  label: string;
+  type: 'speaker' | 'bluetooth' | 'headset' | 'default';
+}
+
+/**
+ * Enumerates all available audio output devices (phone speaker, bluetooth headsets, earphones, etc.)
+ */
+export async function getAudioOutputDevices(): Promise<AudioOutputDeviceInfo[]> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+    return [
+      { deviceId: 'speaker', label: 'Phone Speaker (Loudspeaker)', type: 'speaker' },
+      { deviceId: 'bluetooth', label: 'Bluetooth Audio / Headset', type: 'bluetooth' },
+      { deviceId: 'default', label: 'Default / Earpiece', type: 'default' },
+    ];
+  }
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const outputs = devices.filter((d) => d.kind === 'audiooutput');
+
+    if (outputs.length === 0) {
+      return [
+        { deviceId: 'speaker', label: 'Phone Speaker (Loudspeaker)', type: 'speaker' },
+        { deviceId: 'bluetooth', label: 'Bluetooth Audio / Headset', type: 'bluetooth' },
+        { deviceId: 'default', label: 'Default / Earpiece', type: 'default' },
+      ];
+    }
+
+    return outputs.map((d, index) => {
+      const lower = (d.label || '').toLowerCase();
+      let type: 'speaker' | 'bluetooth' | 'headset' | 'default' = 'default';
+      if (
+        lower.includes('bluetooth') ||
+        lower.includes('airpod') ||
+        lower.includes('buds') ||
+        lower.includes('wireless') ||
+        lower.includes('bt ') ||
+        lower.includes('hands-free')
+      ) {
+        type = 'bluetooth';
+      } else if (
+        lower.includes('speaker') ||
+        lower.includes('loudspeaker') ||
+        lower.includes('built-in')
+      ) {
+        type = 'speaker';
+      } else if (
+        lower.includes('headphone') ||
+        lower.includes('headset') ||
+        lower.includes('earphone')
+      ) {
+        type = 'headset';
+      }
+
+      const displayLabel =
+        d.label ||
+        (type === 'speaker'
+          ? `Phone Speaker ${index + 1}`
+          : type === 'bluetooth'
+          ? `Bluetooth Audio ${index + 1}`
+          : `Audio Output ${index + 1}`);
+
+      return {
+        deviceId: d.deviceId,
+        label: displayLabel,
+        type,
+      };
+    });
+  } catch (err) {
+    console.warn('[LiveMedia] Could not enumerate audio output devices:', err);
+    return [
+      { deviceId: 'speaker', label: 'Phone Speaker (Loudspeaker)', type: 'speaker' },
+      { deviceId: 'bluetooth', label: 'Bluetooth Audio / Headset', type: 'bluetooth' },
+      { deviceId: 'default', label: 'Default / Earpiece', type: 'default' },
+    ];
+  }
+}
+
+/**
+ * Route HTMLMediaElement (audio/video) to specific audio output device (phone speaker, bluetooth, etc.)
+ */
+export async function setAudioOutputSink(
+  element: HTMLMediaElement | null,
+  deviceId: string
+): Promise<boolean> {
+  if (!element) return false;
+  try {
+    if (typeof (element as any).setSinkId === 'function') {
+      const targetSink = deviceId === 'default' ? '' : deviceId;
+      await (element as any).setSinkId(targetSink);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('[LiveMedia] setSinkId failed:', err);
+    return false;
+  }
+}
+
+/**
+ * Triggers browser system audio output selection (selects Bluetooth or Speaker directly in supporting browsers)
+ */
+export async function requestSystemAudioOutput(): Promise<string | null> {
+  if (typeof navigator !== 'undefined' && (navigator.mediaDevices as any)?.selectAudioOutput) {
+    try {
+      const device = await (navigator.mediaDevices as any).selectAudioOutput();
+      return device?.deviceId || null;
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.warn('[LiveMedia] selectAudioOutput error:', err);
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+

@@ -29,6 +29,9 @@ import {
   Pill,
   Copy,
   Check,
+  Speaker,
+  Headphones,
+  Bluetooth,
 } from 'lucide-react';
 import { ScreenId, User as UserType } from '../../types';
 import { StatusBar } from '../common/StatusBar';
@@ -40,7 +43,16 @@ import { ConnectionRecoveryModal } from '../common/ConnectionRecoveryModal';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
 import { primeApi } from '../../services/apiClient';
 import { playRingingTone, playConnectedTone, playHangupTone } from '../../utils/audioTones';
-import { requestUserMedia, setupAudioAnalyser, startScreenShare, createDoctorCanvasStream } from '../../utils/liveMedia';
+import {
+  requestUserMedia,
+  setupAudioAnalyser,
+  startScreenShare,
+  createDoctorCanvasStream,
+  getAudioOutputDevices,
+  setAudioOutputSink,
+  requestSystemAudioOutput,
+  AudioOutputDeviceInfo,
+} from '../../utils/liveMedia';
 
 interface VideoCallScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -298,6 +310,12 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Audio Output Routing State (Phone Speaker, Bluetooth, Headset, Earpiece)
+  const [audioOutputDevices, setAudioOutputDevices] = useState<AudioOutputDeviceInfo[]>([]);
+  const [selectedAudioOutputId, setSelectedAudioOutputId] = useState<string>('speaker');
+  const [selectedAudioRouteType, setSelectedAudioRouteType] = useState<'speaker' | 'bluetooth' | 'headset' | 'default'>('speaker');
+  const [isAudioRouteModalOpen, setIsAudioRouteModalOpen] = useState<boolean>(false);
+
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const activeHandshakeIdRef = useRef<string | null>(null);
   const activeRemotePeerIdRef = useRef<string | null>(null);
@@ -366,6 +384,86 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       !!remoteStream && remoteStream.getVideoTracks().some((t) => t.readyState === 'live')
     );
   }, [localStream, remoteStream, swappedPiP, isVideoOff, isAudioOnlyMode, hasConfirmedConsent, hasCamera]);
+
+  // Discover and refresh audio output devices (phone speaker, bluetooth, headsets)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchOutputs = async () => {
+      const devs = await getAudioOutputDevices();
+      if (!isMounted) return;
+      setAudioOutputDevices(devs);
+
+      // Auto-detect bluetooth or speaker if present
+      const bluetoothDevice = devs.find((d) => d.type === 'bluetooth');
+      if (bluetoothDevice) {
+        setSelectedAudioOutputId(bluetoothDevice.deviceId);
+        setSelectedAudioRouteType('bluetooth');
+      } else {
+        const speakerDevice = devs.find((d) => d.type === 'speaker');
+        if (speakerDevice) {
+          setSelectedAudioOutputId(speakerDevice.deviceId);
+          setSelectedAudioRouteType('speaker');
+        }
+      }
+    };
+
+    fetchOutputs();
+
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', fetchOutputs);
+      return () => {
+        isMounted = false;
+        navigator.mediaDevices.removeEventListener('devicechange', fetchOutputs);
+      };
+    }
+  }, []);
+
+  const handleSelectAudioRoute = async (device: AudioOutputDeviceInfo) => {
+    triggerHaptic('medium');
+    setSelectedAudioOutputId(device.deviceId);
+    setSelectedAudioRouteType(device.type);
+    setIsAudioRouteModalOpen(false);
+
+    const audioEl = remoteAudioRef.current;
+    const videoEl = remoteVideoRef.current;
+
+    await setAudioOutputSink(audioEl, device.deviceId);
+    if (videoEl) {
+      await setAudioOutputSink(videoEl, device.deviceId);
+    }
+
+    if (device.type === 'bluetooth') {
+      showToast(`Audio output routed to Bluetooth: ${device.label}`, 'success');
+    } else if (device.type === 'speaker') {
+      showToast('Audio output routed to Phone Speaker (Loudspeaker)', 'success');
+    } else {
+      showToast(`Audio output routed to ${device.label || 'Default Audio Device'}`, 'success');
+    }
+  };
+
+  const handleSystemAudioPicker = async () => {
+    triggerHaptic('medium');
+    const deviceId = await requestSystemAudioOutput();
+    if (deviceId) {
+      const audioEl = remoteAudioRef.current;
+      const videoEl = remoteVideoRef.current;
+      await setAudioOutputSink(audioEl, deviceId);
+      if (videoEl) await setAudioOutputSink(videoEl, deviceId);
+
+      const devs = await getAudioOutputDevices();
+      setAudioOutputDevices(devs);
+      const chosen = devs.find((d) => d.deviceId === deviceId);
+      if (chosen) {
+        setSelectedAudioOutputId(chosen.deviceId);
+        setSelectedAudioRouteType(chosen.type);
+        showToast(`Connected to ${chosen.label}`, 'success');
+      } else {
+        setSelectedAudioOutputId(deviceId);
+        showToast('System audio output connected', 'success');
+      }
+      setIsAudioRouteModalOpen(false);
+    }
+  };
 
   // Active Call Timer Loop
   useEffect(() => {
@@ -965,6 +1063,9 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     const audioEl = remoteAudioRef.current;
     if (audioEl) {
       audioEl.muted = false;
+      if (selectedAudioOutputId && selectedAudioOutputId !== 'default' && selectedAudioOutputId !== 'speaker' && selectedAudioOutputId !== 'bluetooth') {
+        setAudioOutputSink(audioEl, selectedAudioOutputId).catch(() => {});
+      }
       audioEl
         .play()
         .then(() => setAudioBlocked(false))
@@ -1622,6 +1723,34 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5 text-slate-700" />}
           </button>
 
+          {/* Audio Output Route Switcher (Speakerphone, Bluetooth, Headset) */}
+          <button
+            onClick={() => {
+              triggerHaptic('light');
+              setIsAudioRouteModalOpen(!isAudioRouteModalOpen);
+            }}
+            className={`p-3 sm:p-3.5 rounded-full border transition-all relative cursor-pointer ${
+              isAudioRouteModalOpen
+                ? 'bg-[#006c44] text-white border-[#006c44]'
+                : selectedAudioRouteType === 'bluetooth'
+                ? 'bg-blue-600 text-white border-blue-500 shadow-md ring-2 ring-blue-400/40'
+                : selectedAudioRouteType === 'speaker'
+                ? 'bg-emerald-50 text-[#006c44] border-emerald-300'
+                : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
+            }`}
+            title={`Audio Output: ${selectedAudioRouteType.toUpperCase()} (Tap to switch Speaker / Bluetooth)`}
+          >
+            {selectedAudioRouteType === 'bluetooth' ? (
+              <Bluetooth className="w-5 h-5 text-white" />
+            ) : selectedAudioRouteType === 'speaker' ? (
+              <Speaker className="w-5 h-5 text-[#006c44]" />
+            ) : selectedAudioRouteType === 'headset' ? (
+              <Headphones className="w-5 h-5 text-purple-600" />
+            ) : (
+              <Volume2 className="w-5 h-5 text-slate-700" />
+            )}
+          </button>
+
           {/* In-Call Text Chat Toggle — Highlights brightly when new message arrives */}
           <button
             onClick={() => {
@@ -1902,6 +2031,136 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           onNavigate('patient-home');
         }}
       />
+
+      {/* ========================================================================= */}
+      {/* 11. AUDIO OUTPUT ROUTE PICKER (SPEAKERPHONE, BLUETOOTH, HEADSET)           */}
+      {/* ========================================================================= */}
+      {isAudioRouteModalOpen && (
+        <div className="absolute inset-0 z-50 bg-black/75 backdrop-blur-md flex items-end sm:items-center justify-center p-4 font-nunito animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 w-full max-w-sm space-y-4 shadow-2xl text-left">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-emerald-500/20 text-[#77daa4] rounded-xl border border-emerald-500/30">
+                  <Speaker className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold font-outfit text-white text-base">
+                    Audio Output
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Phone Speaker & Bluetooth Connections
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAudioRouteModalOpen(false)}
+                className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Main Audio Options */}
+            <div className="space-y-2">
+              {/* Option A: Phone Speaker (Loudspeaker) */}
+              <button
+                type="button"
+                onClick={() => {
+                  const spk = audioOutputDevices.find((d) => d.type === 'speaker');
+                  handleSelectAudioRoute(spk || { deviceId: 'speaker', label: 'Phone Speaker (Loudspeaker)', type: 'speaker' });
+                }}
+                className={`w-full p-3.5 rounded-2xl border flex items-center justify-between text-left transition-all cursor-pointer ${
+                  selectedAudioRouteType === 'speaker'
+                    ? 'bg-emerald-950/70 border-emerald-500/80 text-white'
+                    : 'bg-slate-800/80 border-slate-700 hover:bg-slate-800 text-slate-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2 rounded-xl ${selectedAudioRouteType === 'speaker' ? 'bg-emerald-500 text-[#022434]' : 'bg-slate-700 text-slate-300'}`}>
+                    <Speaker className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold font-outfit text-sm block">Phone Speaker</span>
+                    <span className="text-[10px] text-slate-400">Loudspeaker audio mode</span>
+                  </div>
+                </div>
+                {selectedAudioRouteType === 'speaker' && (
+                  <Check className="w-4 h-4 text-[#77daa4]" />
+                )}
+              </button>
+
+              {/* Option B: Bluetooth Audio / Headset */}
+              <button
+                type="button"
+                onClick={() => {
+                  const bt = audioOutputDevices.find((d) => d.type === 'bluetooth');
+                  handleSelectAudioRoute(bt || { deviceId: 'bluetooth', label: 'Bluetooth Audio Device', type: 'bluetooth' });
+                }}
+                className={`w-full p-3.5 rounded-2xl border flex items-center justify-between text-left transition-all cursor-pointer ${
+                  selectedAudioRouteType === 'bluetooth'
+                    ? 'bg-blue-950/70 border-blue-500/80 text-white'
+                    : 'bg-slate-800/80 border-slate-700 hover:bg-slate-800 text-slate-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2 rounded-xl ${selectedAudioRouteType === 'bluetooth' ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                    <Bluetooth className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold font-outfit text-sm block">Bluetooth Audio</span>
+                    <span className="text-[10px] text-slate-400">
+                      {audioOutputDevices.some((d) => d.type === 'bluetooth')
+                        ? audioOutputDevices.find((d) => d.type === 'bluetooth')?.label
+                        : 'Connect wireless earbuds / headphones'}
+                    </span>
+                  </div>
+                </div>
+                {selectedAudioRouteType === 'bluetooth' && (
+                  <Check className="w-4 h-4 text-blue-400" />
+                )}
+              </button>
+
+              {/* Option C: Device Default / Earpiece */}
+              <button
+                type="button"
+                onClick={() => {
+                  const def = audioOutputDevices.find((d) => d.type === 'default');
+                  handleSelectAudioRoute(def || { deviceId: 'default', label: 'Default / Earpiece', type: 'default' });
+                }}
+                className={`w-full p-3.5 rounded-2xl border flex items-center justify-between text-left transition-all cursor-pointer ${
+                  selectedAudioRouteType === 'default'
+                    ? 'bg-teal-950/70 border-teal-500/80 text-white'
+                    : 'bg-slate-800/80 border-slate-700 hover:bg-slate-800 text-slate-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2 rounded-xl ${selectedAudioRouteType === 'default' ? 'bg-teal-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                    <Volume2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold font-outfit text-sm block">Default / Earpiece</span>
+                    <span className="text-[10px] text-slate-400">Standard handset receiver</span>
+                  </div>
+                </div>
+                {selectedAudioRouteType === 'default' && (
+                  <Check className="w-4 h-4 text-teal-400" />
+                )}
+              </button>
+            </div>
+
+            {/* System Audio Device Picker (for Chrome / Android supporting selectAudioOutput) */}
+            <button
+              type="button"
+              onClick={handleSystemAudioPicker}
+              className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold font-outfit text-xs rounded-xl border border-slate-700 transition-all flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <Bluetooth className="w-3.5 h-3.5 text-blue-400" />
+              <span>Pair / Switch Bluetooth Output</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* In-Consultation Prescription Composer Modal */}
       <PrescriptionComposerModal
