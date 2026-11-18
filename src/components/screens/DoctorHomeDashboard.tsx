@@ -25,6 +25,59 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
   const [selectedPatientForDoc, setSelectedPatientForDoc] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isCareJourneyModalOpen, setIsCareJourneyModalOpen] = useState(false);
+  const [isDoctorOnline, setIsDoctorOnline] = useState<boolean>(true);
+
+  // Register & keep this logged-in doctor marked ONLINE in the live directory so patients immediately see them
+  useEffect(() => {
+    if (!user?.id || !user?.name) return;
+    const docId = user.id.startsWith('doc-') ? user.id : `doc-${user.id}`;
+    const cleanName = user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`;
+    const specialty = user.doctorSpecialty || 'General Practice / Family Medicine';
+
+    primeApi
+      .addDoctor({
+        id: docId,
+        name: cleanName,
+        fullNameWithTitle: `${cleanName}, MD`,
+        specialty,
+        title: `Consultant in ${specialty}`,
+        avatarUrl:
+          user.avatarUrl ||
+          'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
+        isOnline: isDoctorOnline,
+        verification: {
+          isVerified: true,
+          licenseNumber: user.doctorLicenseNo || 'MDCN Verified',
+          boardName: 'Medical and Dental Council of Nigeria (MDCN)',
+          verifiedBadgeText: 'Verified MDCN License',
+          verificationDate: 'Verified',
+        },
+        prices: { chat: 5000, voice: 7000, video: 10000 },
+      })
+      .then((saved) => {
+        try {
+          const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+          const filtered = custom.filter((d: any) => d.id !== saved.id);
+          localStorage.setItem('prime_telecare_custom_doctors', JSON.stringify([saved, ...filtered]));
+          window.dispatchEvent(new Event('doctors-directory-updated'));
+        } catch {}
+      })
+      .catch(() => {});
+  }, [user?.id, user?.name, user?.doctorSpecialty, user?.doctorLicenseNo, user?.avatarUrl, isDoctorOnline]);
+
+  const handleToggleOnlineStatus = async () => {
+    triggerHaptic('medium');
+    const next = !isDoctorOnline;
+    setIsDoctorOnline(next);
+    const docId = user?.id?.startsWith('doc-') ? user.id : `doc-${user?.id || '1'}`;
+    await primeApi.updateDoctorOnlineStatus(docId, next);
+    showToast(
+      next
+        ? 'You are now Online and visible to patients for instant consultations.'
+        : 'You are now Offline and hidden from instant consultations.',
+      'info'
+    );
+  };
 
   const handleShareBookingLink = async () => {
     triggerHaptic('selection');
@@ -213,14 +266,36 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`inline-flex items-center space-x-2 px-3.5 py-2 rounded-full text-xs font-bold ${
-              effectiveOffline
-                ? 'bg-amber-100 border border-amber-300 text-amber-900'
-                : 'bg-emerald-100/90 border border-emerald-300 text-[#006c44]'
-            }`}>
-              <span className={`w-2.5 h-2.5 rounded-full ${effectiveOffline ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`} />
-              <span>{effectiveOffline ? 'Offline (Cached Mode)' : 'Online & Accepting Patients'}</span>
-            </span>
+            <button
+              type="button"
+              onClick={handleToggleOnlineStatus}
+              disabled={effectiveOffline}
+              className={`inline-flex items-center space-x-2 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                effectiveOffline
+                  ? 'bg-amber-100 border border-amber-300 text-amber-900'
+                  : isDoctorOnline
+                  ? 'bg-emerald-100/90 border border-emerald-300 text-[#006c44] hover:bg-emerald-200/80'
+                  : 'bg-slate-100 border border-slate-300 text-slate-600 hover:bg-slate-200'
+              }`}
+              title="Click to toggle your live Online / Offline status for patients"
+            >
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  effectiveOffline
+                    ? 'bg-amber-500'
+                    : isDoctorOnline
+                    ? 'bg-emerald-500 animate-pulse'
+                    : 'bg-slate-400'
+                }`}
+              />
+              <span>
+                {effectiveOffline
+                  ? 'Offline (Cached Mode)'
+                  : isDoctorOnline
+                  ? 'Online & Accepting Patients'
+                  : 'Offline (Tap to Go Online)'}
+              </span>
+            </button>
 
             <button
               onClick={() => {
@@ -776,7 +851,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
         isOpen={isCareJourneyModalOpen}
         onClose={() => setIsCareJourneyModalOpen(false)}
         doctorName={user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`}
-        patientName={selectedPatientForDoc || 'Ada Okonkwo'}
+        patientName={selectedPatientForDoc || todaysPatients[0]?.name || 'Patient'}
       />
     </div>
   );

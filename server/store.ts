@@ -12,13 +12,7 @@ import {
   MedicalRecordFile,
 } from '../src/types';
 import {
-  currentUserPatient,
-  currentUserDoctor,
   currentUserAdmin,
-  mockDoctors,
-  mockPrescriptions,
-  mockHealthRecordAuditLogs,
-  mockChatMessages,
 } from '../src/data/mockData';
 
 export interface TriageCase {
@@ -123,43 +117,24 @@ export interface ServerState {
 const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
 const STORE_FILE = path.join(DATA_DIR, 'store.json');
 
-// Initial seed appointments
-const seedAppointments: Appointment[] = [];
+const LEGACY_PLACEHOLDER_DOCTOR_IDS = new Set([
+  'doc-anya',
+  'doc-kenji',
+  'doc-emeka',
+  'doc-sarah',
+  'doc-ching',
+  'doc-chike',
+  'doc-fatima',
+  'doc-1',
+]);
 
-// Initial seed dependents
-const seedDependents: DependentProfile[] = [
-  {
-    id: 'dep-1',
-    name: 'Kemi Okonkwo',
-    relationship: 'Child',
-    dob: '2020-04-12',
-    age: 6,
-    gender: 'Female',
-    allergies: ['Peanuts'],
-    existingConditions: ['Mild Eczema'],
-    bloodGroup: 'O+',
-    isMinor: true,
-    guardianConsent: true,
-    accessLevel: 'Full Authority',
-    clinicalRecordsConsent: true,
-    avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=150&q=80',
-  },
-  {
-    id: 'dep-2',
-    name: 'Pa Johnson Okonkwo',
-    relationship: 'Elderly Dependent',
-    dob: '1952-08-20',
-    age: 74,
-    gender: 'Male',
-    allergies: ['Penicillin'],
-    existingConditions: ['Hypertension', 'Type 2 Diabetes'],
-    bloodGroup: 'B+',
-    isMinor: false,
-    accessLevel: 'Full Authority',
-    clinicalRecordsConsent: true,
-    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80',
-  },
-];
+const LEGACY_PLACEHOLDER_USER_EMAILS = new Set([
+  'ada.okonkwo@email.com',
+  'dr.emeka@primetelecare.com',
+]);
+
+const LEGACY_PLACEHOLDER_RX_REFS = new Set(['RX-789012', 'RX-994102']);
+const LEGACY_PLACEHOLDER_AUDIT_IDS = new Set(['audit-1', 'audit-2', 'audit-3', 'audit-4', 'audit-5', 'audit-6']);
 
 class MemoryStore {
   private state: ServerState;
@@ -170,17 +145,15 @@ class MemoryStore {
 
   private getDefaultState(): ServerState {
     return {
-      users: [currentUserDoctor, currentUserAdmin],
+      users: [currentUserAdmin],
       doctors: [],
-      appointments: seedAppointments,
-      prescriptions: mockPrescriptions,
-      auditLogs: mockHealthRecordAuditLogs,
+      appointments: [],
+      prescriptions: [],
+      auditLogs: [],
       triageCases: [],
       payments: [],
       chatMessages: {},
-      dependents: {
-        
-      },
+      dependents: {},
       exportAuthorizations: {},
       activeCalls: {},
       careJourneyPlans: {},
@@ -193,18 +166,57 @@ class MemoryStore {
         const raw = fs.readFileSync(STORE_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         console.log('[Store] Loaded state from disk (' + Object.keys(parsed).length + ' collections)');
-        if (!parsed.doctors) {
-          parsed.doctors = [];
+
+        parsed.users = Array.isArray(parsed.users)
+          ? parsed.users.filter(
+              (u: User) =>
+                u.id !== 'pat-1' &&
+                u.id !== 'doc-1' &&
+                u.name !== 'Ada Okonkwo' &&
+                u.name !== 'Dr. Emeka Nnamdi' &&
+                !LEGACY_PLACEHOLDER_USER_EMAILS.has((u.email || '').toLowerCase())
+            )
+          : [currentUserAdmin];
+
+        // Ensure master admin account exists
+        if (!parsed.users.some((u: User) => u.id === 'admin-1')) {
+          parsed.users.push(currentUserAdmin);
         }
-        if (!parsed.appointments) {
-          parsed.appointments = [];
-        }
-        if (parsed.users) {
-          parsed.users = parsed.users.filter((u) => u.id !== 'pat-1' && u.name !== 'Ada Okonkwo' && u.email !== 'ada.okonkwo@email.com');
-        }
-        if (parsed.appointments) {
-          parsed.appointments = parsed.appointments.filter((a) => a.patientName !== 'Ada Okonkwo' && a.doctorId !== 'doc-anya');
-        }
+
+        parsed.doctors = Array.isArray(parsed.doctors)
+          ? parsed.doctors.filter((d: Doctor) => !LEGACY_PLACEHOLDER_DOCTOR_IDS.has(d.id))
+          : [];
+
+        parsed.appointments = Array.isArray(parsed.appointments)
+          ? parsed.appointments.filter(
+              (a: Appointment) =>
+                a.patientName !== 'Ada Okonkwo' &&
+                !LEGACY_PLACEHOLDER_DOCTOR_IDS.has(a.doctorId)
+            )
+          : [];
+
+        parsed.prescriptions = Array.isArray(parsed.prescriptions)
+          ? parsed.prescriptions.filter(
+              (p: Prescription) =>
+                p.id !== 'rx-1' &&
+                p.id !== 'rx-2' &&
+                !LEGACY_PLACEHOLDER_RX_REFS.has(p.referenceNo)
+            )
+          : [];
+
+        parsed.auditLogs = Array.isArray(parsed.auditLogs)
+          ? parsed.auditLogs.filter((l: HealthRecordAuditLog) => !LEGACY_PLACEHOLDER_AUDIT_IDS.has(l.id))
+          : [];
+
+        parsed.triageCases = Array.isArray(parsed.triageCases) ? parsed.triageCases : [];
+        parsed.payments = Array.isArray(parsed.payments) ? parsed.payments : [];
+        parsed.chatMessages = parsed.chatMessages || {};
+        parsed.dependents = parsed.dependents || {};
+        delete parsed.dependents['pat-1'];
+        parsed.exportAuthorizations = parsed.exportAuthorizations || {};
+        parsed.activeCalls = parsed.activeCalls || {};
+        parsed.careJourneyPlans = parsed.careJourneyPlans || {};
+
         return parsed;
       }
     } catch (e) {
@@ -227,6 +239,10 @@ class MemoryStore {
   }
 
   // --- Users & Auth ---
+  getUsers(): User[] {
+    return this.state.users;
+  }
+
   getUserById(id: string): User | undefined {
     return this.state.users.find((u) => u.id === id);
   }
@@ -258,10 +274,26 @@ class MemoryStore {
   saveDoctor(doc: Doctor): Doctor {
     const idx = this.state.doctors.findIndex((d) => d.id === doc.id);
     if (idx >= 0) {
-      this.state.doctors[idx] = doc;
+      this.state.doctors[idx] = { ...this.state.doctors[idx], ...doc };
     } else {
       this.state.doctors.push(doc);
     }
+    this.saveToDisk();
+    return idx >= 0 ? this.state.doctors[idx] : doc;
+  }
+
+  updateDoctorOnlineStatus(id: string, isOnline: boolean): Doctor | undefined {
+    const doc = this.state.doctors.find((d) => d.id === id || d.id === `doc-${id}`);
+    if (!doc) return undefined;
+    doc.isOnline = isOnline;
+    doc.availabilityStatus = {
+      ...(doc.availabilityStatus || {
+        nextAvailableSlot: 'Today',
+        workingDays: 'Mon - Fri (8:00 AM - 6:00 PM)',
+      }),
+      isOnline,
+      statusText: isOnline ? 'Online & Available' : 'Offline',
+    };
     this.saveToDisk();
     return doc;
   }

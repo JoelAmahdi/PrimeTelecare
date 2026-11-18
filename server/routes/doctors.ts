@@ -117,8 +117,8 @@ doctorsRouter.post('/', (req: Request, res: Response) => {
       base: Number(data.videoFee) || 10000,
     },
     availabilityStatus: {
-      isOnline: true,
-      statusText: 'Online & Available',
+      isOnline: data.isOnline !== undefined ? Boolean(data.isOnline) : true,
+      statusText: data.isOnline === false ? 'Offline' : 'Online & Available',
       nextAvailableSlot: 'Today',
       workingDays: data.workingDays || 'Mon - Fri (8:00 AM - 6:00 PM)',
     },
@@ -157,6 +157,17 @@ doctorsRouter.post('/', (req: Request, res: Response) => {
   });
 
   return res.status(201).json({ success: true, doctor: newDoctor });
+});
+
+// PATCH /api/doctors/:id/status (Toggle Online / Offline availability)
+doctorsRouter.patch('/:id/status', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { isOnline } = req.body;
+  const updated = store.updateDoctorOnlineStatus(id, Boolean(isOnline));
+  if (!updated) {
+    return res.status(404).json({ success: false, error: 'Doctor not found' });
+  }
+  return res.json({ success: true, doctor: updated });
 });
 
 // DELETE /api/doctors/:id

@@ -53,7 +53,7 @@ adminRouter.post('/doctors/:id/verify', (req: Request, res: Response) => {
   store.saveDoctor(doctor);
 
   store.createAuditLog({
-    accessedBy: 'Dr. Evelyn Reed',
+    accessedBy: 'System Administrator',
     accessorRole: 'System Administrator',
     recordAccessed: `Doctor Credentials Registry (#${doctor.id})`,
     accessReason: `Formal MDCN license verification clearance granted for ${doctor.name}`,

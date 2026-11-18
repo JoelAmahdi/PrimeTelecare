@@ -187,6 +187,18 @@ export const primeApi = {
     }
   },
 
+  async updateDoctorOnlineStatus(id: string, isOnline: boolean): Promise<Doctor | null> {
+    try {
+      const res = await request<{ success: boolean; doctor: Doctor }>(`/doctors/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isOnline }),
+      });
+      return res.doctor;
+    } catch {
+      return null;
+    }
+  },
+
   // --- Appointments ---
   async getAppointments(patientName?: string): Promise<Appointment[]> {
     try {

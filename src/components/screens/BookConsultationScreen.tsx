@@ -73,10 +73,13 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
   });
 
   const loadDoctors = () => {
+    const legacyIds = new Set(['doc-anya', 'doc-kenji', 'doc-emeka', 'doc-sarah', 'doc-ching', 'doc-chike', 'doc-fatima', 'doc-1']);
     primeApi.getDoctors().then((docs) => {
-      let list = docs || [];
+      const serverDocs = (docs || []).filter((d) => !legacyIds.has(d.id));
+      const list = [...serverDocs];
       try {
-        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]')
+          .filter((d: any) => d && !legacyIds.has(d.id));
         if (custom.length > 0) {
           const ids = new Set(list.map((d: any) => d.id));
           for (const cd of custom) {
@@ -90,7 +93,8 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
       }
     }).catch(() => {
       try {
-        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]')
+          .filter((d: any) => d && !legacyIds.has(d.id));
         setDoctorsList(custom);
         if (custom.length > 0 && !chosenDoctorId) {
           setChosenDoctorId(custom[0].id);
@@ -103,6 +107,12 @@ export const BookConsultationScreen: React.FC<BookConsultationScreenProps> = ({
 
   useEffect(() => {
     loadDoctors();
+    const poll = window.setInterval(loadDoctors, 10000);
+    window.addEventListener('doctors-directory-updated', loadDoctors);
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener('doctors-directory-updated', loadDoctors);
+    };
   }, []);
 
   useEffect(() => {

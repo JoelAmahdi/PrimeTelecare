@@ -1,25 +1,118 @@
 import { Router, Request, Response } from 'express';
 import { store } from '../store';
-import { User, UserRole } from '../../src/types';
+import { User, UserRole, Doctor } from '../../src/types';
 
 export const authRouter = Router();
+
+/**
+ * Ensures any onboarded doctor account has a live entry in the doctors directory
+ * so they appear immediately as online on the patient portal.
+ */
+function ensureDoctorInDirectory(user: User, isOnline = true): Doctor | null {
+  if (user.role !== 'doctor') return null;
+  if (!user.onboarded && !user.hasCompletedOnboarding && !user.doctorLicenseNo && !user.doctorSpecialty) {
+    return null;
+  }
+
+  const docId = user.id.startsWith('doc-') ? user.id : `doc-${user.id}`;
+  const existing = store.getDoctorById(docId) || store.getDoctorById(user.id);
+  const cleanName = (user.name || 'Physician').trim().startsWith('Dr.')
+    ? user.name.trim()
+    : `Dr. ${(user.name || 'Physician').trim()}`;
+
+  if (existing) {
+    const updated: Doctor = {
+      ...existing,
+      name: cleanName,
+      specialty: user.doctorSpecialty || existing.specialty || 'General Practice',
+      avatarUrl: user.avatarUrl || existing.avatarUrl,
+      isOnline,
+      availabilityStatus: {
+        ...(existing.availabilityStatus || {
+          nextAvailableSlot: 'Today',
+          workingDays: 'Mon - Fri (8:00 AM - 6:00 PM)',
+        }),
+        isOnline,
+        statusText: isOnline ? 'Online & Available' : 'Offline',
+      },
+    };
+    return store.saveDoctor(updated);
+  }
+
+  const specialty = user.doctorSpecialty || 'General Practice / Family Medicine';
+  const newDoc: Doctor = {
+    id: docId,
+    name: cleanName,
+    fullNameWithTitle: `${cleanName}, MD`,
+    specialty,
+    title: `Consultant in ${specialty}`,
+    rating: 5.0,
+    reviewsCount: 0,
+    avatarUrl:
+      user.avatarUrl ||
+      'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
+    isOnline,
+    isActive: true,
+    practiceStatus: 'active',
+    yearsExperience: 5,
+    patientsCount: 0,
+    about: `${cleanName} is a licensed medical practitioner on Prime Telecare specializing in ${specialty}.`,
+    qualifications: [user.doctorLicenseNo || 'MDCN Licensed Medical Practitioner'],
+    languagesSpoken: ['English'],
+    consultationFee: { chat: 5000, voice: 7000, video: 10000, base: 10000 },
+    availabilityStatus: {
+      isOnline,
+      statusText: isOnline ? 'Online & Available' : 'Offline',
+      nextAvailableSlot: 'Today',
+      workingDays: 'Mon - Fri (8:00 AM - 6:00 PM)',
+    },
+    verification: {
+      isVerified: true,
+      licenseNumber: user.doctorLicenseNo || 'MDCN Verified',
+      boardName: 'Medical and Dental Council of Nigeria (MDCN)',
+      verifiedBadgeText: 'Verified MDCN License',
+      verificationDate: 'Verified',
+    },
+    reviewPolicy: {
+      policyText: 'Authentic patient tele-consultation feedback.',
+      verifiedOnly: true,
+      auditEnforced: true,
+    },
+    reviewsList: [],
+    availableDates: ['Today', 'Tomorrow'],
+    availableTimeSlots: ['09:00 AM', '11:00 AM', '02:00 PM', '04:00 PM'],
+    prices: { chat: 5000, voice: 7000, video: 10000 },
+  };
+  return store.saveDoctor(newDoc);
+}
 
 // POST /api/auth/login
 authRouter.post('/login', (req: Request, res: Response) => {
   const { email, password, role, biometricToken } = req.body;
 
   if (biometricToken) {
-    // Biometric instant authentication
-    const user = role === 'doctor'
-      ? (store.getUserById('doc-1') || store.getDoctors()[0])
-      : role === 'admin'
-      ? store.getUserById('admin-1')
-      : store.getUsers().find((u) => u.role === 'patient');
+    const users = store.getUsers();
+    const user =
+      role === 'admin'
+        ? store.getUserById('admin-1')
+        : users.find((u) => u.role === (role || 'patient'));
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'No registered account found for biometric unlock. Please sign in with email or Google.',
+      });
+    }
+
+    if (user.role === 'doctor') {
+      ensureDoctorInDirectory(user, true);
+    }
+
     return res.json({
       success: true,
       message: 'Biometric authentication successful',
       token: `bio-jwt-${Date.now()}`,
-      user: { ...user, role: (role as UserRole) || user.role },
+      user,
     });
   }
 
@@ -49,10 +142,12 @@ authRouter.post('/login', (req: Request, res: Response) => {
     const adminUser = store.getUserById('admin-1') || {
       id: 'admin-1',
       name: 'System Administrator',
-      email: 'admin@telecare.ng',
+      email: 'admin@primetelecare.com',
       role: 'admin' as UserRole,
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-      phone: '+234 809 999 0000',
+      avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300',
+      phone: '',
+      onboarded: true,
+      hasCompletedOnboarding: true,
     };
     return res.json({
       success: true,
@@ -61,41 +156,19 @@ authRouter.post('/login', (req: Request, res: Response) => {
     });
   }
 
-  // Pre-configured doctor accounts or explicitly requested doctor role
-  if (role === 'doctor' || normalizedEmail === 'dr.emeka@primetelecare.com' || normalizedEmail.includes('doctor') || normalizedEmail.includes('dr.')) {
-    const doctorUser = store.getUserById('doc-1') || {
-      id: 'doc-1',
-      name: 'Dr. Emeka Nnamdi',
-      email: normalizedEmail.includes('@') ? normalizedEmail : 'dr.emeka@primetelecare.com',
-      role: 'doctor' as UserRole,
-      avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
-      phone: '+234 802 345 6789',
-      doctorLicenseNo: 'MDCN/2018/74920',
-      doctorSpecialty: 'General Practice & Telemedicine Specialist',
-    };
-    return res.json({
-      success: true,
-      token: `jwt-doc-${Date.now()}`,
-      user: { ...doctorUser, role: 'doctor' as UserRole },
-    });
-  }
-
-  if (normalizedEmail === 'patient@telecare.com') {
-    const existing = store.getUserByEmail(email);
-    if (existing) {
-      return res.json({ success: true, token: `jwt-${existing.id}-${Date.now()}`, user: { ...existing, role: 'patient' as UserRole } });
-    }
-  }
-
   // Check if registered user exists in database
-  const existing = store.getUserByEmail(email);
+  const existing = store.getUserByEmail(normalizedEmail);
   if (existing) {
-    const targetRole = (role === 'doctor' || role === 'admin') ? (role as UserRole) : (existing.role || (role as UserRole) || 'patient');
-    const updated = {
+    const resolvedRole: UserRole =
+      existing.role || (role === 'doctor' ? 'doctor' : 'patient');
+    const updated: User = {
       ...existing,
-      role: targetRole,
+      role: resolvedRole,
     };
     store.saveUser(updated);
+    if (updated.role === 'doctor') {
+      ensureDoctorInDirectory(updated, true);
+    }
     return res.json({
       success: true,
       token: `jwt-${existing.id}-${Date.now()}`,
@@ -103,18 +176,27 @@ authRouter.post('/login', (req: Request, res: Response) => {
     });
   }
 
-  // Auto-provision personal account for newly entered email
+  // Auto-provision a clean new account for newly entered email (requires onboarding)
+  const targetRole: UserRole = role === 'doctor' ? 'doctor' : 'patient';
   const id = `user-${Date.now()}`;
-  const displayName = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const displayName = normalizedEmail
+    .split('@')[0]
+    .replace(/[._-]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
   const newUser: User = {
     id,
-    name: displayName || 'Patient User',
-    email,
-    role: (role as UserRole) || 'patient',
-    avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
-    phone: '+234 800 000 0000',
-    walletBalance: 10000,
-    stateOfResidence: 'Lagos State',
+    name: displayName || (targetRole === 'doctor' ? 'Doctor' : 'Patient'),
+    email: normalizedEmail,
+    role: targetRole,
+    avatarUrl:
+      targetRole === 'doctor'
+        ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+    phone: '',
+    walletBalance: 0,
+    onboarded: false,
+    hasCompletedOnboarding: false,
     ndpaConsent: {
       acceptedAt: new Date().toISOString(),
       telehealthConsentGiven: true,
@@ -131,23 +213,27 @@ authRouter.post('/login', (req: Request, res: Response) => {
 
 // POST /api/auth/google
 authRouter.post('/google', (req: Request, res: Response) => {
-  const { email, name, avatarUrl, googleUid, role } = req.body;
+  const { email, name, avatarUrl, role } = req.body;
 
   if (!email) {
     return res.status(400).json({ success: false, error: 'Email is required for Google login' });
   }
 
-  // Check if user already exists
-  const existing = store.getUserByEmail(email);
+  const normalizedEmail = email.toLowerCase().trim();
+  const existing = store.getUserByEmail(normalizedEmail);
   if (existing) {
-    const targetRole = (role === 'doctor' || role === 'admin') ? (role as UserRole) : (existing.role || (role as UserRole) || 'patient');
+    const resolvedRole: UserRole =
+      existing.role || (role === 'doctor' ? 'doctor' : 'patient');
     const updated: User = {
       ...existing,
-      name: existing.name || name || email.split('@')[0],
+      name: existing.name || name || normalizedEmail.split('@')[0],
       avatarUrl: avatarUrl || existing.avatarUrl,
-      role: targetRole,
+      role: resolvedRole,
     };
     store.saveUser(updated);
+    if (updated.role === 'doctor') {
+      ensureDoctorInDirectory(updated, true);
+    }
     return res.json({
       success: true,
       token: `jwt-${existing.id}-${Date.now()}`,
@@ -155,29 +241,30 @@ authRouter.post('/google', (req: Request, res: Response) => {
     });
   }
 
-  // Auto-provision new account with Google profile info
+  const targetRole: UserRole = role === 'doctor' ? 'doctor' : 'patient';
   const id = `user-${Date.now()}`;
-  const displayName = name || email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+  const displayName =
+    name ||
+    normalizedEmail
+      .split('@')[0]
+      .replace(/[._-]/g, ' ')
+      .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
   const newUser: User = {
     id,
     name: displayName,
-    email: email.toLowerCase().trim(),
-    role: (role as UserRole) || 'patient',
-    avatarUrl: avatarUrl || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
-    phone: '+234 800 000 0000',
-    walletBalance: 10000,
-    stateOfResidence: 'Lagos State',
-    lga: 'Ikeja',
-    address: '',
-    dob: '',
-    gender: 'Other',
+    email: normalizedEmail,
+    role: targetRole,
+    avatarUrl:
+      avatarUrl ||
+      (targetRole === 'doctor'
+        ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'),
+    phone: '',
+    walletBalance: 0,
+    onboarded: false,
+    hasCompletedOnboarding: false,
     allergies: [],
-    bloodGroup: 'O+',
-    emergencyContact: {
-      name: 'Next of Kin',
-      relationship: 'Family',
-      phone: '+234 800 111 2222',
-    },
     ndpaConsent: {
       acceptedAt: new Date().toISOString(),
       telehealthConsentGiven: true,
@@ -197,8 +284,8 @@ authRouter.post('/google', (req: Request, res: Response) => {
     accessedBy: newUser.name,
     accessorRole: 'System Administrator',
     recordAccessed: `User Profile (#${newUser.id})`,
-    accessReason: 'Google OAuth registration and patient provisioning',
-    actionType: 'Created',
+    accessReason: 'Google OAuth registration',
+    actionType: 'Updated',
     ipAddress: req.ip,
     accessLocation: 'Google OAuth Portal',
   });
@@ -213,24 +300,48 @@ authRouter.post('/google', (req: Request, res: Response) => {
 
 // POST /api/auth/register
 authRouter.post('/register', (req: Request, res: Response) => {
-  const { name, email, role, phone, stateOfResidence, lga, allergies, bloodGroup, emergencyContact, dob, gender, address, doctorLicenseNo, doctorSpecialty } = req.body;
+  const {
+    name,
+    email,
+    role,
+    phone,
+    stateOfResidence,
+    lga,
+    allergies,
+    bloodGroup,
+    emergencyContact,
+    dob,
+    gender,
+    address,
+    doctorLicenseNo,
+    doctorSpecialty,
+  } = req.body;
 
   if (!name || !email) {
     return res.status(400).json({ success: false, error: 'Name and email are required' });
   }
 
-  const existing = store.getUserByEmail(email);
+  const normalizedEmail = email.toLowerCase().trim();
+  const targetRole: UserRole = role === 'doctor' ? 'doctor' : 'patient';
+
+  const existing = store.getUserByEmail(normalizedEmail);
   if (existing) {
-    const updated = {
+    const updated: User = {
       ...existing,
       name,
+      role: existing.role || targetRole,
       phone: phone || existing.phone,
       stateOfResidence: stateOfResidence || existing.stateOfResidence,
       address: address || existing.address,
       dob: dob || existing.dob,
       gender: gender || existing.gender,
+      doctorLicenseNo: doctorLicenseNo || existing.doctorLicenseNo,
+      doctorSpecialty: doctorSpecialty || existing.doctorSpecialty,
     };
     store.saveUser(updated);
+    if (updated.role === 'doctor') {
+      ensureDoctorInDirectory(updated, true);
+    }
     return res.json({
       success: true,
       message: 'Account updated successfully',
@@ -240,26 +351,30 @@ authRouter.post('/register', (req: Request, res: Response) => {
   }
 
   const id = `user-${Date.now()}`;
+  const isDoctorComplete = targetRole === 'doctor' && Boolean(doctorLicenseNo && doctorSpecialty);
   const newUser: User = {
     id,
     name,
-    email,
-    role: (role as UserRole) || 'patient',
-    avatarUrl: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200`,
-    phone: phone || '+234 800 000 0000',
-    walletBalance: 10000,
-    stateOfResidence: stateOfResidence || 'Lagos State',
-    lga: lga || 'Ikeja',
+    email: normalizedEmail,
+    role: targetRole,
+    avatarUrl:
+      targetRole === 'doctor'
+        ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+    phone: phone || '',
+    walletBalance: 0,
+    stateOfResidence: stateOfResidence || '',
+    lga: lga || '',
     address: address || '',
     dob: dob || '',
-    gender: gender || 'Female',
+    gender: gender || '',
     allergies: allergies || [],
-    bloodGroup: bloodGroup || 'O+',
-    emergencyContact: emergencyContact || {
-      name: 'Next of Kin',
-      relationship: 'Family',
-      phone: '+234 800 111 2222',
-    },
+    bloodGroup: bloodGroup || '',
+    emergencyContact,
+    doctorLicenseNo,
+    doctorSpecialty,
+    onboarded: isDoctorComplete,
+    hasCompletedOnboarding: isDoctorComplete,
     ndpaConsent: {
       acceptedAt: new Date().toISOString(),
       telehealthConsentGiven: true,
@@ -275,58 +390,15 @@ authRouter.post('/register', (req: Request, res: Response) => {
 
   store.saveUser(newUser);
 
-  if (role === 'doctor') {
-    const cleanName = newUser.name.trim().startsWith('Dr.') ? newUser.name.trim() : `Dr. ${newUser.name.trim()}`;
-    const newDoc = {
-      id: `doc-${newUser.id}`,
-      name: cleanName,
-      fullNameWithTitle: `${cleanName}, MD`,
-      specialty: doctorSpecialty || 'General Practice / Family Medicine',
-      title: `Consultant in ${doctorSpecialty || 'General Practice'}`,
-      rating: 5.0,
-      reviewsCount: 0,
-      avatarUrl: newUser.avatarUrl,
-      isOnline: true,
-      yearsExperience: 5,
-      patientsCount: 0,
-      about: `${cleanName} is a licensed medical practitioner on Prime Telecare specializing in ${
-        doctorSpecialty || 'General Practice'
-      }.`,
-      qualifications: [doctorLicenseNo || 'MDCN Licensed Medical Practitioner'],
-      languagesSpoken: ['English'],
-      consultationFee: { chat: 5000, voice: 7000, video: 10000, base: 10000 },
-      availabilityStatus: {
-        isOnline: true,
-        statusText: 'Online & Available',
-        nextAvailableSlot: 'Today',
-        workingDays: 'Mon - Fri (8:00 AM - 6:00 PM)',
-      },
-      verification: {
-        isVerified: true,
-        licenseNumber: doctorLicenseNo || 'MDCN/2026/001',
-        boardName: 'Medical and Dental Council of Nigeria (MDCN)',
-        verifiedBadgeText: 'Verified MDCN License',
-        verificationDate: 'Verified',
-      },
-      reviewPolicy: {
-        policyText: 'Authentic patient tele-consultation feedback.',
-        verifiedOnly: true,
-        auditEnforced: true,
-      },
-      reviewsList: [],
-      availableDates: ['Today', 'Tomorrow'],
-      availableTimeSlots: ['9:00 AM', '11:00 AM', '2:00 PM', '4:00 PM'],
-      prices: { chat: 5000, voice: 7000, video: 10000 },
-    };
-    store.saveDoctor(newDoc);
+  if (targetRole === 'doctor') {
+    ensureDoctorInDirectory(newUser, true);
   }
 
-  // Record NDPA audit log for account creation
   store.createAuditLog({
     accessedBy: newUser.name,
     accessorRole: 'System Administrator',
     recordAccessed: `User Profile & Consent (#${newUser.id})`,
-    accessReason: 'Initial patient enrollment and NDPA statutory consent recording',
+    accessReason: 'Initial account enrollment and NDPA statutory consent recording',
     actionType: 'Updated',
     ipAddress: req.ip,
     accessLocation: 'Registration Portal',
@@ -342,7 +414,10 @@ authRouter.post('/register', (req: Request, res: Response) => {
 
 // GET /api/auth/me
 authRouter.get('/me', (req: Request, res: Response) => {
-  const userId = (req.query.userId as string) || 'pat-1';
+  const userId = req.query.userId as string;
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'userId is required' });
+  }
   const user = store.getUserById(userId);
   if (!user) {
     return res.status(404).json({ success: false, error: 'User not found' });
@@ -358,11 +433,22 @@ authRouter.put('/profile', (req: Request, res: Response) => {
   }
 
   const existing = store.getUserById(id);
-  if (!existing) {
-    return res.status(404).json({ success: false, error: 'User not found' });
-  }
+  const merged: User = existing
+    ? { ...existing, ...updates, id }
+    : {
+        id,
+        name: updates.name || 'User',
+        email: updates.email || '',
+        role: updates.role || 'patient',
+        avatarUrl:
+          updates.avatarUrl ||
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+        ...updates,
+      };
 
-  const updated = store.saveUser({ ...existing, ...updates });
+  const updated = store.saveUser(merged);
+  if (updated.role === 'doctor') {
+    ensureDoctorInDirectory(updated, true);
+  }
   return res.json({ success: true, user: updated });
 });
-

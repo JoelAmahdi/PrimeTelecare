@@ -4,38 +4,7 @@ import { primeApi } from '../services/apiClient';
 const DEPENDENTS_KEY_PREFIX = 'prime_telecare_dependents_';
 const ACTIVE_DEPENDENT_KEY_PREFIX = 'prime_telecare_active_dep_';
 
-export const initialMockDependents: DependentProfile[] = [
-  {
-    id: 'dep-kofi',
-    name: 'Kofi Okonkwo',
-    relationship: 'Child',
-    dob: '2020-08-12',
-    age: 6,
-    gender: 'Male',
-    avatarUrl: 'https://images.unsplash.com/photo-1543332164-6e82f355badc?auto=format&fit=crop&q=80&w=200',
-    allergies: ['Amoxicillin', 'Dust Mites'],
-    existingConditions: ['Mild Asthma / Wheezing'],
-    bloodGroup: 'O+',
-    isMinor: true,
-    guardianConsent: true,
-    notes: 'Pediatric dependent under verified parental guardianship',
-  },
-  {
-    id: 'dep-mama',
-    name: 'Mama Comfort Okonkwo',
-    relationship: 'Parent',
-    dob: '1954-03-20',
-    age: 72,
-    gender: 'Female',
-    avatarUrl: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&q=80&w=200',
-    allergies: ['NSAIDs / Ibuprofen'],
-    existingConditions: ['Hypertension', 'Type 2 Diabetes'],
-    bloodGroup: 'B+',
-    isMinor: false,
-    guardianConsent: true,
-    notes: 'Elderly dependent managed by designated family caregiver',
-  },
-];
+export const initialMockDependents: DependentProfile[] = [];
 
 export function getCurrentUserId(): string {
   try {
@@ -45,33 +14,30 @@ export function getCurrentUserId(): string {
       if (u?.id) return u.id;
     }
   } catch {}
-  return 'pat-1';
+  return 'current-user';
 }
 
 /**
  * Returns dependents stored for the specific user.
- * Real users (Google/registered) start with a clean empty list.
- * Demo patient ('pat-1') retains the seed mock dependents.
+ * Every user starts with a clean empty list until they add real dependents.
  */
 export function getStoredDependents(userId?: string): DependentProfile[] {
   try {
     const currentUserId = userId || getCurrentUserId();
 
-    // Clean up any old global un-scoped key
-    if (typeof window !== 'undefined' && currentUserId !== 'pat-1') {
+    if (typeof window !== 'undefined') {
       localStorage.removeItem('prime_telecare_dependents_v1');
     }
 
     const key = `${DEPENDENTS_KEY_PREFIX}${currentUserId}`;
     const raw = localStorage.getItem(key);
     if (!raw) {
-      if (currentUserId === 'pat-1') {
-        localStorage.setItem(key, JSON.stringify(initialMockDependents));
-        return initialMockDependents;
-      }
       return [];
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((d: DependentProfile) => d.id !== 'dep-kofi' && d.id !== 'dep-mama')
+      : [];
   } catch {
     return [];
   }

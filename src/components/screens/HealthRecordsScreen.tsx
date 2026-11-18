@@ -34,6 +34,8 @@ import { showToast } from '../../utils/toast';
 import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
 import { PrescriptionPrintModal } from '../common/PrescriptionPrintModal';
 import { primeApi } from '../../services/apiClient';
+import { getStoredPrescriptions } from '../../utils/prescriptionStore';
+import { getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
 import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
 import { BiometricAuthModal } from '../common/BiometricAuthModal';
@@ -68,12 +70,46 @@ export interface ClinicalSession {
   isLatest?: boolean;
 }
 
-// Master Sessions Record
-const initialSessions: ClinicalSession[] = [];
+const STANDARD_SPECIALTIES = [
+  'General Practice / Family Medicine',
+  'Paediatrics',
+  'Cardiology',
+  'Obstetrics & Gynaecology',
+  'Internal Medicine',
+  'Dermatology',
+  'Orthopaedics',
+  'Psychiatry',
+  'Neurology',
+  'Ophthalmology',
+];
+
+function toIsoDate(rawDate?: string): string {
+  if (!rawDate) return '';
+  const trimmed = rawDate.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('today')) {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  if (lower.startsWith('tomorrow')) {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  const cleaned = trimmed.replace(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*/i, '');
+  const parsed = new Date(cleaned);
+  if (!isNaN(parsed.getTime())) {
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  }
+  return '';
+}
 
 export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, onNavigate }) => {
-  // Search & Filter State for Past Sessions
+  // Search & Filter State for Medical History Consultations (Date, Doctor Specialty, Consultation Type, Keyword)
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+  const [specialtyFilter, setSpecialtyFilter] = useState('all');
   const [formatFilter, setFormatFilter] = useState<'all' | 'Video' | 'Voice' | 'Chat' | 'with-rx'>('all');
 
   // Central export permission and approval state
@@ -110,37 +146,108 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
   const [sessions, setSessions] = useState<ClinicalSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load live prescriptions and consultation records
+  // Load live prescriptions & consultations (real appointments + real e-prescriptions)
   useEffect(() => {
     const fetchRecords = async () => {
       try {
-        const rxs = await primeApi.getPrescriptions();
-        const mapped: ClinicalSession[] = (rxs || []).map((rx, idx) => ({
-          id: rx.id,
-          consultationId: rx.consultationId || `CNS-${rx.referenceNo}`,
-          date: rx.date || 'Recent Encounter',
-          time: rx.consultationTime || '10:00 AM',
-          doctorName: rx.doctorName,
-          doctorSpecialty: rx.doctorSpecialty || 'General Practice',
-          doctorLicense: rx.doctorLicense,
-          doctorClinic: rx.doctorClinic || 'Prime Telecare Digital Practice',
-          doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-          consultationType: (rx.consultationType as any) || 'Video',
-          diagnosis: rx.diagnosis || 'Clinical Consultation',
-          chiefComplaint: rx.chiefComplaint || 'Consultation Encounter',
-          clinicalNotes: rx.doctorNotes || 'Patient evaluated and e-prescription issued.',
-          vitals: {
-            bp: '120/80 mmHg',
-            temp: '36.8°C',
-            hr: '76 bpm',
-            spo2: '99%',
-          },
-          carePlan: rx.medications?.map((m) => `${m.drugName} ${m.strength || ''} - ${m.frequency}`) || [],
-          prescription: rx,
-          testsRequested: [],
-          isLatest: idx === 0,
-        }));
-        setSessions(mapped);
+        const [remoteRxs, remoteApts] = await Promise.all([
+          primeApi.getPrescriptions().catch(() => []),
+          primeApi.getAppointments().catch(() => []),
+        ]);
+
+        const localRxs = getStoredPrescriptions();
+        const localApts = getActiveOrUpcomingConsultations();
+
+        // Merge & deduplicate prescriptions
+        const rxMap = new Map<string, Prescription>();
+        for (const rx of [...localRxs, ...(remoteRxs || [])]) {
+          const k = rx.id || rx.referenceNo;
+          if (k && !rxMap.has(k)) rxMap.set(k, rx);
+        }
+        const allRxs = Array.from(rxMap.values());
+
+        const combined: ClinicalSession[] = [];
+        const seenConsultIds = new Set<string>();
+
+        // 1. Add sessions from prescriptions
+        allRxs.forEach((rx) => {
+          const cId = rx.consultationId || `CNS-${rx.referenceNo}`;
+          seenConsultIds.add(cId);
+          combined.push({
+            id: rx.id,
+            consultationId: cId,
+            date: rx.consultationDate || rx.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            time: rx.consultationTime || 'Completed',
+            doctorName: rx.doctorName,
+            doctorSpecialty: rx.doctorSpecialty || 'General Practice',
+            doctorLicense: rx.doctorLicense || 'MDCN Verified',
+            doctorAvatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
+            consultationType: (rx.consultationType as 'Video' | 'Voice' | 'Chat') || 'Video',
+            diagnosis: rx.diagnosis || 'Clinical Consultation',
+            chiefComplaint: rx.chiefComplaint || 'Telehealth Consultation',
+            clinicalNotes: rx.doctorNotes || 'Patient evaluated and e-prescription issued.',
+            carePlan: rx.medications?.map((m) => `${m.drugName} ${m.strength || ''} - ${m.frequency}`) || [],
+            prescription: rx,
+            testsRequested: rx.labTestsToPerform || [],
+          });
+        });
+
+        // 2. Add sessions from real appointments (remote + local) not already paired with an Rx
+        const rawAppointments: Array<{
+          id: string;
+          doctorName: string;
+          doctorSpecialty: string;
+          doctorAvatar?: string;
+          date: string;
+          timeSlot: string;
+          type: 'Video' | 'Voice' | 'Chat';
+          notes?: string;
+        }> = [
+          ...(remoteApts || []).map((a: any) => ({
+            id: a.id,
+            doctorName: a.doctorName || 'Attending Physician',
+            doctorSpecialty: a.doctorSpecialty || 'General Practice',
+            doctorAvatar: a.doctorAvatar,
+            date: a.scheduledDate || a.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            timeSlot: a.timeSlot || 'Scheduled',
+            type: (a.type as 'Video' | 'Voice' | 'Chat') || 'Video',
+            notes: a.notes,
+          })),
+          ...localApts.map((a) => ({
+            id: a.id,
+            doctorName: a.doctorName || 'Attending Physician',
+            doctorSpecialty: a.doctorSpecialty || 'General Practice',
+            doctorAvatar: a.doctorAvatar,
+            date: a.scheduledDate || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            timeSlot: a.scheduledTime || 'Scheduled',
+            type: a.type || 'Video',
+            notes: undefined,
+          })),
+        ];
+
+        rawAppointments.forEach((apt) => {
+          if (seenConsultIds.has(apt.id)) return;
+          seenConsultIds.add(apt.id);
+          combined.push({
+            id: apt.id,
+            consultationId: apt.id,
+            date: apt.date,
+            time: apt.timeSlot,
+            doctorName: apt.doctorName,
+            doctorSpecialty: apt.doctorSpecialty,
+            doctorLicense: 'MDCN Verified',
+            doctorAvatar: apt.doctorAvatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
+            consultationType: apt.type,
+            diagnosis: 'Telehealth Clinical Consultation',
+            chiefComplaint: apt.notes || `${apt.type} Consultation with ${apt.doctorName}`,
+            clinicalNotes: apt.notes || 'Consultation booked and recorded in your clinical history.',
+            carePlan: [],
+            testsRequested: [],
+          });
+        });
+
+        const tagged = combined.map((item, idx) => ({ ...item, isLatest: idx === 0 }));
+        setSessions(tagged);
       } catch {
         setSessions([]);
       } finally {
@@ -152,24 +259,55 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
 
   const biometricSettings = getBiometricSettings();
 
+  // Dynamic Specialty Options (combines specialties in records + standard specialties)
+  const specialtyOptions = useMemo(() => {
+    const set = new Set<string>(STANDARD_SPECIALTIES);
+    sessions.forEach((s) => {
+      if (s.doctorSpecialty) set.add(s.doctorSpecialty);
+    });
+    return Array.from(set);
+  }, [sessions]);
+
   // Identify latest session
   const latestSession = sessions.find((s) => s.isLatest) || sessions[0];
-  const oldSessions = sessions.filter((s) => !s.isLatest);
 
-  // Filtered Old Sessions
-  const filteredOldSessions = useMemo(() => {
-    return oldSessions.filter((session) => {
-      // Format filter
+  // Filter ALL consultations by Date, Doctor Specialty, Type of Consultation, and Keyword
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((session) => {
+      // 1. Consultation Type filter
       if (formatFilter === 'with-rx' && !session.prescription) return false;
       if (formatFilter !== 'all' && formatFilter !== 'with-rx' && session.consultationType !== formatFilter) {
         return false;
       }
 
-      // Search query
+      // 2. Doctor Specialty filter
+      if (specialtyFilter !== 'all') {
+        const targetSpec = specialtyFilter.toLowerCase();
+        const sessionSpec = (session.doctorSpecialty || '').toLowerCase();
+        const isPaedMatch =
+          (targetSpec.includes('paed') || targetSpec.includes('ped')) &&
+          (sessionSpec.includes('paed') || sessionSpec.includes('ped'));
+        if (!sessionSpec.includes(targetSpec) && !targetSpec.includes(sessionSpec) && !isPaedMatch) {
+          return false;
+        }
+      }
+
+      // 3. Date filter
+      if (dateFilter) {
+        const sessionIso = toIsoDate(session.date);
+        if (sessionIso) {
+          if (sessionIso !== dateFilter) return false;
+        } else if (!session.date.toLowerCase().includes(dateFilter.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // 4. Free-text keyword search
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase().trim();
       const matchDoctor = session.doctorName.toLowerCase().includes(q);
       const matchSpecialty = session.doctorSpecialty.toLowerCase().includes(q);
+      const matchType = session.consultationType.toLowerCase().includes(q);
       const matchDiagnosis = session.diagnosis.toLowerCase().includes(q);
       const matchComplaint = session.chiefComplaint.toLowerCase().includes(q);
       const matchDate = session.date.toLowerCase().includes(q);
@@ -181,6 +319,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
       return (
         matchDoctor ||
         matchSpecialty ||
+        matchType ||
         matchDiagnosis ||
         matchComplaint ||
         matchDate ||
@@ -188,7 +327,9 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
         matchDrug
       );
     });
-  }, [oldSessions, searchQuery, formatFilter]);
+  }, [sessions, searchQuery, dateFilter, specialtyFilter, formatFilter]);
+
+  const hasActiveFilters = Boolean(searchQuery.trim() || dateFilter || specialtyFilter !== 'all' || formatFilter !== 'all');
 
   // Convert ClinicalSession to StructuredClinicalRecord for ConsultationSummaryPDFModal
   const convertSessionToStructuredRecord = (session: ClinicalSession): StructuredClinicalRecord => {
@@ -319,21 +460,186 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
           </div>
         </div>
 
+        {/* 2. SEARCH & FILTER MEDICAL HISTORY BY DATE, DOCTOR SPECIALTY & CONSULTATION TYPE */}
+        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-base font-extrabold font-outfit text-[#022434]">
+                Search Medical & Consultation History
+              </h3>
+              <p className="text-xs text-slate-500 font-nunito">
+                Filter consultations by date, doctor specialty, and consultation type
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2 self-start sm:self-auto">
+              <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                {filteredSessions.length} of {sessions.length} consultation{sessions.length !== 1 ? 's' : ''}
+              </span>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setSearchQuery('');
+                    setDateFilter('');
+                    setSpecialtyFilter('all');
+                    setFormatFilter('all');
+                  }}
+                  className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Dedicated 3-Field Filter Grid: Date, Doctor Specialty, Consultation Type */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* 1. Date Search */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold font-outfit text-slate-600 uppercase tracking-wider flex items-center space-x-1">
+                <Calendar className="w-3.5 h-3.5 text-[#006c44]" />
+                <span>Consultation Date</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => {
+                    triggerHaptic('selection');
+                    setDateFilter(e.target.value);
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold font-outfit text-[#022434] focus:outline-none focus:border-[#006c44] focus:bg-white"
+                />
+                {dateFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setDateFilter('')}
+                    className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer"
+                    aria-label="Clear date filter"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Doctor Specialty Search */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold font-outfit text-slate-600 uppercase tracking-wider flex items-center space-x-1">
+                <Stethoscope className="w-3.5 h-3.5 text-[#006c44]" />
+                <span>Doctor Specialty</span>
+              </label>
+              <select
+                value={specialtyFilter}
+                onChange={(e) => {
+                  triggerHaptic('selection');
+                  setSpecialtyFilter(e.target.value);
+                }}
+                className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold font-outfit text-[#022434] focus:outline-none focus:border-[#006c44] focus:bg-white"
+              >
+                <option value="all">All Specialties</option>
+                {specialtyOptions.map((spec) => (
+                  <option key={spec} value={spec}>
+                    {spec}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Consultation Type Search */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold font-outfit text-slate-600 uppercase tracking-wider flex items-center space-x-1">
+                <Filter className="w-3.5 h-3.5 text-[#006c44]" />
+                <span>Consultation Type</span>
+              </label>
+              <select
+                value={formatFilter}
+                onChange={(e) => {
+                  triggerHaptic('selection');
+                  setFormatFilter(e.target.value as 'all' | 'Video' | 'Voice' | 'Chat' | 'with-rx');
+                }}
+                className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold font-outfit text-[#022434] focus:outline-none focus:border-[#006c44] focus:bg-white"
+              >
+                <option value="all">All Consultation Types</option>
+                <option value="Video">Video Consultation</option>
+                <option value="Voice">Voice Consultation</option>
+                <option value="Chat">Chat Consultation</option>
+                <option value="with-rx">With E-Prescription (Rx)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Keyword Search Bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by doctor name, diagnosis, medication, or reference..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-9 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-nunito text-[#022434] placeholder:text-slate-400 focus:outline-none focus:border-[#006c44] focus:bg-white"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Quick Consultation Type Filter Pills */}
+          <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5 scrollbar-none text-xs">
+            {([
+              { id: 'all', label: 'All Types' },
+              { id: 'Video', label: 'Video', icon: Video },
+              { id: 'Voice', label: 'Voice', icon: Phone },
+              { id: 'Chat', label: 'Chat', icon: MessageSquare },
+              { id: 'with-rx', label: 'With Rx', icon: Pill },
+            ] as const).map((pill) => {
+              const Icon = 'icon' in pill ? pill.icon : null;
+              return (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setFormatFilter(pill.id);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl font-bold font-outfit whitespace-nowrap transition-all flex items-center space-x-1 cursor-pointer ${
+                    formatFilter === pill.id
+                      ? 'bg-[#022434] text-white shadow-xs'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {Icon && <Icon className="w-3 h-3" />}
+                  <span>{pill.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {sessions.length === 0 ? (
-          <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 text-center space-y-4 shadow-sm my-6">
+          <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 text-center space-y-4 shadow-sm my-4">
             <div className="w-16 h-16 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-center mx-auto text-[#006c44]">
               <FileText className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-bold font-outfit text-[#022434]">No Health Records on File Yet</h3>
+            <h3 className="text-xl font-bold font-outfit text-[#022434]">No Consultation History Yet</h3>
             <p className="text-sm text-slate-500 font-nunito max-w-md mx-auto leading-relaxed">
-              When you complete consultations with our certified physicians, your e-prescriptions, clinical diagnoses, and tamper-evident EHR encounter summaries will be archived here.
+              Once you book or complete consultations, your encounter history, clinical diagnoses, and e-prescriptions will appear here and be searchable by date, doctor specialty, and consultation type.
             </p>
             <button
+              type="button"
               onClick={() => {
                 triggerHaptic('selection');
                 onNavigate('doctor-discovery');
               }}
-              className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2"
+              className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Book Your First Consultation</span>
@@ -341,7 +647,8 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
           </div>
         ) : (
           <>
-            {/* 1. EXPORT LATEST SESSION (SPOTLIGHT HERO CARD) */}
+            {/* 1. EXPORT LATEST SESSION (SPOTLIGHT HERO CARD - shown when no filters narrow results) */}
+            {!hasActiveFilters && latestSession && (
             <div className="relative bg-gradient-to-br from-[#022434] via-[#083248] to-[#004830] text-white rounded-2xl p-5 sm:p-6 shadow-xl border border-slate-800 overflow-hidden">
           {/* Subtle Glow */}
           <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#77daa4]/15 rounded-full blur-3xl pointer-events-none" />
@@ -518,131 +825,11 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
             </div>
           </div>
         </div>
-
-        {/* 2. SEARCH & FILTER SECTION FOR OLD SESSIONS */}
-        <div className="space-y-3 pt-2">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h3 className="text-base font-extrabold font-outfit text-[#022434]">
-                Past Consultations & Encounters
-              </h3>
-              <p className="text-xs text-slate-500 font-nunito">
-                Search medical history, export clinical records, or print e-prescriptions
-              </p>
-            </div>
-
-            <span className="text-xs font-bold text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200 shrink-0 self-start sm:self-auto">
-              {filteredOldSessions.length} record{filteredOldSessions.length !== 1 ? 's' : ''} found
-            </span>
-          </div>
-
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search by doctor, diagnosis, medication (e.g. Amlodipine, Coartem), or date..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-9 py-2.5 bg-white rounded-2xl border border-slate-200 text-xs font-nunito text-[#022434] placeholder:text-slate-400 focus:outline-none focus:border-[#006c44] focus:ring-1 focus:ring-[#006c44] shadow-2xs"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
             )}
-          </div>
 
-          {/* Filter Pills */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('selection');
-                setFormatFilter('all');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold font-outfit whitespace-nowrap transition-all ${
-                formatFilter === 'all'
-                  ? 'bg-[#022434] text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              All Past Sessions
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('selection');
-                setFormatFilter('with-rx');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold font-outfit whitespace-nowrap transition-all flex items-center space-x-1 ${
-                formatFilter === 'with-rx'
-                  ? 'bg-[#006c44] text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Pill className="w-3 h-3" />
-              <span>With E-Prescription (Rx)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('selection');
-                setFormatFilter('Video');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold font-outfit whitespace-nowrap transition-all flex items-center space-x-1 ${
-                formatFilter === 'Video'
-                  ? 'bg-[#022434] text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Video className="w-3 h-3" />
-              <span>Video</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('selection');
-                setFormatFilter('Voice');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold font-outfit whitespace-nowrap transition-all flex items-center space-x-1 ${
-                formatFilter === 'Voice'
-                  ? 'bg-[#022434] text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Phone className="w-3 h-3" />
-              <span>Voice</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('selection');
-                setFormatFilter('Chat');
-              }}
-              className={`px-3 py-1.5 rounded-xl font-bold font-outfit whitespace-nowrap transition-all flex items-center space-x-1 ${
-                formatFilter === 'Chat'
-                  ? 'bg-[#022434] text-white shadow-xs'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <MessageSquare className="w-3 h-3" />
-              <span>Chat</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 3. OLD SESSIONS LIST WITH DEDICATED E-PRESCRIPTION PRINT & EXPORT BUTTONS */}
+        {/* 3. FILTERED CONSULTATION HISTORY LIST */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {filteredOldSessions.map((session) => (
+          {filteredSessions.map((session) => (
             <div
               key={session.id}
               className="bg-white rounded-3xl p-5 shadow-xs border border-slate-200/90 hover:border-slate-300 hover:shadow-sm transition-all space-y-3.5"
@@ -758,22 +945,24 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
           ))}
 
           {/* Empty State */}
-          {filteredOldSessions.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-3xl border border-slate-200/90 p-6 space-y-2">
+          {filteredSessions.length === 0 && (
+            <div className="lg:col-span-2 text-center py-12 bg-white rounded-3xl border border-slate-200/90 p-6 space-y-2">
               <Search className="w-10 h-10 text-slate-300 mx-auto" />
               <h4 className="font-extrabold font-outfit text-sm text-[#022434]">
-                No matching past sessions found
+                No matching consultations found
               </h4>
               <p className="text-xs text-slate-500 font-nunito max-w-sm mx-auto">
-                No past consultations matched your current search or filter criteria. Try adjusting your search query or reset the filter.
+                No consultations matched your selected date, doctor specialty, consultation type, or keyword filter.
               </p>
               <button
                 type="button"
                 onClick={() => {
                   setSearchQuery('');
+                  setDateFilter('');
+                  setSpecialtyFilter('all');
                   setFormatFilter('all');
                 }}
-                className="mt-2 px-4 py-2 bg-[#022434] text-white text-xs font-bold font-outfit rounded-xl hover:bg-[#03364f] transition-all"
+                className="mt-2 px-4 py-2 bg-[#022434] text-white text-xs font-bold font-outfit rounded-xl hover:bg-[#03364f] transition-all cursor-pointer"
               >
                 Reset Search Filters
               </button>

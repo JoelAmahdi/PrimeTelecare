@@ -52,10 +52,13 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
   const [isAddDoctorModalOpen, setIsAddDoctorModalOpen] = useState(false);
 
   const loadDoctors = () => {
+    const legacyIds = new Set(['doc-anya', 'doc-kenji', 'doc-emeka', 'doc-sarah', 'doc-ching', 'doc-chike', 'doc-fatima', 'doc-1']);
     primeApi.getDoctors().then((docs) => {
-      let finalDocs = docs || [];
+      const serverDocs = (docs || []).filter((d) => !legacyIds.has(d.id));
+      const finalDocs = [...serverDocs];
       try {
-        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]')
+          .filter((d: any) => d && !legacyIds.has(d.id));
         if (custom.length > 0) {
           const ids = new Set(finalDocs.map((d: any) => d.id));
           for (const cd of custom) {
@@ -66,7 +69,8 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
       setDoctors(finalDocs);
     }).catch(() => {
       try {
-        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]')
+          .filter((d: any) => d && !legacyIds.has(d.id));
         setDoctors(custom);
       } catch {
         setDoctors([]);
@@ -76,6 +80,12 @@ export const DoctorDiscoveryScreen: React.FC<DoctorDiscoveryScreenProps> = ({
 
   useEffect(() => {
     loadDoctors();
+    const poll = window.setInterval(loadDoctors, 10000);
+    window.addEventListener('doctors-directory-updated', loadDoctors);
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener('doctors-directory-updated', loadDoctors);
+    };
   }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All Specialties');

@@ -927,7 +927,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
               {
                 id: `msg-rx-${Date.now()}`,
                 sender: 'doctor',
-                senderName: 'Dr. Sarah Lee, MD',
+                senderName: rx.doctorName || 'Attending Physician',
                 text: `📄 Official E-Prescription Issued (#${rx.referenceNo}) for ${rx.diagnosis}.\nMedications: ${rx.medications.map((m) => `${m.drugName} (${m.dosage}, ${m.frequency})`).join('; ')}. Instructions: ${rx.doctorNotes || 'Follow treatment regimen.'}`,
                 timestamp: 'Just now',
                 status: 'sent',

@@ -109,9 +109,9 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
   const [restrictionError, setRestrictionError] = useState<string | null>(null);
 
   // Doctor metadata
-  const docName = doctorInfo?.name || 'Dr. Sarah Lee, MD';
-  const docLicense = doctorInfo?.license || 'MDCN/2019/98765';
-  const docSpecialty = doctorInfo?.specialty || 'Consultant Family Physician';
+  const docName = doctorInfo?.name || 'Attending Physician';
+  const docLicense = doctorInfo?.license || 'MDCN Verified';
+  const docSpecialty = doctorInfo?.specialty || 'General Practice';
   const docClinic = doctorInfo?.clinic || 'Prime Telecare Specialist Clinic';
 
   useEffect(() => {

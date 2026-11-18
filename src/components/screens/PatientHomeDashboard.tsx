@@ -78,13 +78,15 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
   }, []);
 
   const [allRegisteredDoctors, setAllRegisteredDoctors] = useState<Doctor[]>([]);
-  const [isAddDoctorModalOpen, setIsAddDoctorModalOpen] = useState(false);
 
   const loadDoctors = () => {
+    const legacyIds = new Set(['doc-anya', 'doc-kenji', 'doc-emeka', 'doc-sarah', 'doc-ching', 'doc-chike', 'doc-fatima', 'doc-1']);
     primeApi.getDoctors().then((docs) => {
-      let finalDocs = docs || [];
+      const serverDocs = (docs || []).filter((d) => !legacyIds.has(d.id));
+      const finalDocs = [...serverDocs];
       try {
-        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]')
+          .filter((d: any) => d && !legacyIds.has(d.id));
         if (custom.length > 0) {
           const ids = new Set(finalDocs.map((d: any) => d.id));
           for (const cd of custom) {
@@ -93,12 +95,13 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
         }
       } catch {}
       setAllRegisteredDoctors(finalDocs);
-      setOnlineDoctors(finalDocs.filter((d) => d.isOnline));
+      setOnlineDoctors(finalDocs.filter((d) => d.isOnline !== false));
     }).catch(() => {
       try {
-        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+        const custom = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]')
+          .filter((d: any) => d && !legacyIds.has(d.id));
         setAllRegisteredDoctors(custom);
-        setOnlineDoctors(custom.filter((d: any) => d.isOnline));
+        setOnlineDoctors(custom.filter((d: any) => d.isOnline !== false));
       } catch {
         setAllRegisteredDoctors([]);
         setOnlineDoctors([]);
@@ -108,6 +111,15 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
 
   useEffect(() => {
     loadDoctors();
+    const poll = window.setInterval(loadDoctors, 10000);
+    const handleFocus = () => loadDoctors();
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('doctors-directory-updated', handleFocus);
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('doctors-directory-updated', handleFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -324,6 +336,93 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
           {/* Main Column (lg:col-span-7 xl:col-span-8) */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-6 sm:space-y-8">
             
+            {/* Online Doctors Live Section */}
+            <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-xs border border-slate-200/90 space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-[#006c44] flex items-center justify-center border border-emerald-200/60">
+                    <Stethoscope className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
+                        Online Doctors
+                      </h3>
+                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-100 text-[#006c44] text-[10px] font-extrabold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>{onlineDoctors.length} Live</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-nunito">
+                      Available clinicians ready for instant consultation
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onNavigate('doctor-discovery');
+                  }}
+                  className="text-xs font-bold text-[#006c44] hover:underline flex items-center space-x-1 shrink-0 cursor-pointer"
+                >
+                  <span>View All</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {onlineDoctors.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {onlineDoctors.slice(0, 4).map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-300 bg-slate-50/60 hover:bg-emerald-50/40 transition-all flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <div className="relative shrink-0">
+                          <img
+                            src={doc.avatarUrl || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200'}
+                            alt={doc.name}
+                            className="w-11 h-11 rounded-xl object-cover border border-slate-200"
+                          />
+                          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold font-outfit text-xs sm:text-sm text-[#022434] truncate">
+                            {doc.name}
+                          </p>
+                          <p className="text-[11px] font-semibold text-[#006c44] truncate">
+                            {doc.specialty}
+                          </p>
+                          <p className="text-[10px] font-mono text-slate-500">
+                            ₦{(doc.prices?.video || 10000).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          onSelectDoctor(doc.id);
+                          try {
+                            localStorage.setItem('prime_telecare_booking_mode', 'instant');
+                          } catch {}
+                          onNavigate('book-consultation');
+                        }}
+                        className="px-3 py-2 bg-[#006c44] hover:bg-[#022434] text-white text-[11px] font-bold font-outfit rounded-xl transition-colors shrink-0 cursor-pointer"
+                      >
+                        Consult
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-center text-xs text-slate-500">
+                  No doctors are currently online. As soon as a registered doctor signs in, they will appear here automatically.
+                </div>
+              )}
+            </div>
+
             {/* Care Journey Tracker (Doctor-decided Recovery To-Do List) */}
             <CareJourneyPatientWidget onNavigate={onNavigate} patientId={user?.id} />
 
@@ -807,18 +906,18 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                   <div className="space-y-1">
                     <h4 className="font-bold font-outfit text-sm text-[#022434]">No Doctors Currently Online</h4>
                     <p className="text-xs text-slate-500">
-                      Create or register a doctor profile to enable instant consultations.
+                      Online doctors will appear here automatically as soon as they sign in and go live.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       setIsInstantModalOpen(false);
-                      setIsAddDoctorModalOpen(true);
+                      onNavigate('doctor-discovery');
                     }}
                     className="px-4 py-2.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all cursor-pointer"
                   >
-                    + Register Doctor Profile
+                    Browse Specialist Clinic
                   </button>
                 </div>
               )}
@@ -826,16 +925,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
           </div>
         </div>
       )}
-
-      {/* Add / Register Doctor Modal */}
-      <AddDoctorModal
-        isOpen={isAddDoctorModalOpen}
-        onClose={() => setIsAddDoctorModalOpen(false)}
-        onDoctorAdded={(newDoc) => {
-          loadDoctors();
-          showToast(`Doctor profile created for ${newDoc.name}`, 'success');
-        }}
-      />
     </div>
   );
 };
