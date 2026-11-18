@@ -2,33 +2,30 @@ import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
-  Stethoscope,
   TestTube,
-  Upload,
   FileText,
   Pill,
-  Package,
-  ShoppingBag,
-  Bell,
   Clock,
   ChevronRight,
   ShieldCheck,
   Star,
   MessageSquare,
-  Sparkles,
   Send,
   ThumbsUp,
   CheckSquare,
   Square,
+  Calendar,
 } from 'lucide-react';
 import { ScreenId, CareJourneyPlan } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import {
   getStoredCareJourneyPlan,
+  saveStoredCareJourneyPlan,
   toggleStoredCareJourneyTask,
 } from '../../utils/careJourney';
 import { CareJourneyPlanModal } from '../common/CareJourneyPlanModal';
+import { primeApi } from '../../services/apiClient';
 
 interface PostConsultationJourneyScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -37,14 +34,17 @@ interface PostConsultationJourneyScreenProps {
   patientName?: string;
 }
 
-type JourneyStage = 
-  | 'consultation-completed'
-  | 'lab-request'
-  | 'results-upload'
-  | 'doctor-review'
-  | 'prescription-issued'
-  | 'care-journey-packing'
-  | 'follow-up';
+function formatFollowUpDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  const parsed = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(parsed.getTime())) return dateStr;
+  return parsed.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScreenProps> = ({
   onNavigate,
@@ -56,6 +56,17 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
   const [isDoctorPlanModalOpen, setIsDoctorPlanModalOpen] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    primeApi
+      .getCareJourneyPlan('pat-1')
+      .then((remote) => {
+        if (isMounted && remote && remote.items) {
+          setPlan(remote);
+          saveStoredCareJourneyPlan(remote);
+        }
+      })
+      .catch(() => {});
+
     const handleUpdate = (e: any) => {
       if (e?.detail) setPlan(e.detail);
       else setPlan(getStoredCareJourneyPlan());
@@ -68,6 +79,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
     };
     window.addEventListener('storage', handleStorage);
     return () => {
+      isMounted = false;
       window.removeEventListener('care-journey-updated', handleUpdate);
       window.removeEventListener('storage', handleStorage);
     };
@@ -78,9 +90,10 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
     const updated = toggleStoredCareJourneyTask(itemId);
     if (updated) {
       setPlan(updated);
+      primeApi.saveCareJourneyPlan?.(updated).catch(() => {});
       const target = updated.items.find((i) => i.id === itemId);
       if (target?.completedByPatient) {
-        showToast('Recovery task marked as complete!', 'success');
+        showToast('Care journey task marked as complete!', 'success');
       }
     }
   };
@@ -98,7 +111,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
     date: string;
   } | null>(null);
 
-  // Check if previously rated in this session or stored
   useEffect(() => {
     try {
       const stored = localStorage.getItem(`consultation_rating_${doctorId}`);
@@ -115,7 +127,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
     }
   }, [doctorId]);
 
-  // Quick feedback tag pills
   const availableTags = [
     'Thorough Explanation',
     'Compassionate & Attentive',
@@ -160,93 +171,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
     showToast('Thank you! Your rating and feedback were submitted successfully.', 'success');
   };
 
-  // Automatically progress stages for demonstration purposes
-  useEffect(() => {
-    let timeoutId: number;
-    
-    const progressStage = () => {
-      triggerHaptic('light');
-      setCurrentStage((prev) => {
-        switch (prev) {
-          case 'consultation-completed': return 'lab-request';
-          case 'lab-request': return 'results-upload';
-          case 'results-upload': return 'doctor-review';
-          case 'doctor-review': return 'prescription-issued';
-          case 'prescription-issued': return 'care-journey-packing';
-          case 'care-journey-packing': return 'follow-up';
-          default: return prev;
-        }
-      });
-    };
-
-    if (currentStage !== 'follow-up') {
-      timeoutId = window.setTimeout(progressStage, 4000); // Progress every 4 seconds
-    }
-
-    return () => window.clearTimeout(timeoutId);
-  }, [currentStage]);
-
-  const stages = [
-    {
-      id: 'consultation-completed',
-      title: 'Consultation Completed',
-      desc: `Initial clinical assessment with ${doctorName} concluded.`,
-      icon: Stethoscope,
-      color: 'text-emerald-500',
-      bg: 'bg-emerald-50',
-    },
-    {
-      id: 'lab-request',
-      title: 'Laboratory Request Issued',
-      desc: 'Doctor has ordered a Full Blood Count (FBC) test.',
-      icon: FileText,
-      color: 'text-blue-500',
-      bg: 'bg-blue-50',
-    },
-    {
-      id: 'results-upload',
-      title: 'Lab Results Uploaded',
-      desc: 'Pathology lab has securely uploaded your results.',
-      icon: Upload,
-      color: 'text-purple-500',
-      bg: 'bg-purple-50',
-    },
-    {
-      id: 'doctor-review',
-      title: 'Doctor Reviewing Results',
-      desc: `${doctorName} is analyzing your lab reports.`,
-      icon: TestTube,
-      color: 'text-amber-500',
-      bg: 'bg-amber-50',
-    },
-    {
-      id: 'prescription-issued',
-      title: 'E-Prescription Issued',
-      desc: 'Medication plan has been digitally generated.',
-      icon: Pill,
-      color: 'text-teal-500',
-      bg: 'bg-teal-50',
-    },
-    {
-      id: 'care-journey-packing',
-      title: 'Drugs Being Packed',
-      desc: 'Prescribed medications are being prepared and packed from your care journey.',
-      icon: Package,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50',
-    },
-    {
-      id: 'follow-up',
-      title: 'Follow-Up Scheduled',
-      desc: 'Reminder set for a quick check-in next week.',
-      icon: Bell,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-100',
-    },
-  ];
-
-  const currentStageIndex = stages.findIndex(s => s.id === currentStage);
-
   const getRatingLabel = (score: number) => {
     switch (score) {
       case 5: return 'Excellent — Outstanding care!';
@@ -258,16 +182,19 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
     }
   };
 
+  const planNote = plan?.followUpPlanNote || plan?.doctorNotes;
+
   return (
     <div className="min-h-screen bg-[#f4f8fb] flex flex-col font-nunito text-[#171c1f]">
       {/* Header */}
       <div className="bg-white px-4 py-4 flex items-center justify-between border-b border-slate-200 sticky top-0 z-10 shadow-sm">
         <button
+          type="button"
           onClick={() => {
             triggerHaptic('light');
             onNavigate('patient-home');
           }}
-          className="p-2 -ml-2 text-slate-500 hover:text-[#022434] transition-colors"
+          className="p-2 -ml-2 text-slate-500 hover:text-[#022434] transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
@@ -277,7 +204,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 w-full max-w-2xl mx-auto space-y-6 pb-28">
-        
         {/* Continuous Care Banner */}
         <div className="bg-white p-5 rounded-3xl border border-emerald-100 shadow-sm flex items-start space-x-4">
           <div className="p-3 bg-emerald-50 rounded-2xl shrink-0">
@@ -286,7 +212,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
           <div>
             <h2 className="font-extrabold font-outfit text-[#022434] text-base">Continuous Care Activated</h2>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Your video consultation with <strong className="text-slate-800 font-semibold">{doctorName}</strong> has concluded. We are now orchestrating the next steps of your diagnostic and recovery journey.
+              Your consultation with <strong className="text-slate-800 font-semibold">{doctorName}</strong> has concluded. Review your doctor-approved care journey steps below and set drug purchase & administration alerts on your dashboard.
             </p>
           </div>
         </div>
@@ -309,10 +235,11 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-nunito">
-              Your attending physician ({doctorName}) is evaluating your consultation notes and selecting the recovery to-do tasks and milestones that apply to you. Once your doctor checks and approves the plan, your personalized recovery checklist will appear here and on your dashboard.
+              Your attending physician ({doctorName}) will decide your Drug Prescription check, Laboratory Investigation check, Follow-Up Visit setup, Follow-Up Date (if needed), and Follow-Up Plan Note. Once approved, it will appear here and on your dashboard.
             </p>
 
             <button
+              type="button"
               onClick={() => {
                 triggerHaptic('medium');
                 setIsDoctorPlanModalOpen(true);
@@ -324,7 +251,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
             </button>
           </div>
         ) : (
-          /* Doctor has approved the plan */
           <div className="bg-white rounded-3xl p-6 border border-emerald-200/90 shadow-xs space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center space-x-3">
@@ -332,7 +258,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                   <CheckSquare className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                     <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
                       Personalized Care Journey
                     </h3>
@@ -342,12 +268,13 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 font-nunito mt-0.5">
-                    Decided by <span className="font-bold text-slate-800">{plan.doctorName}</span> • Patient Recovery Checklist
+                    Decided by <span className="font-bold text-slate-800">{plan.doctorName}</span>
                   </p>
                 </div>
               </div>
 
               <button
+                type="button"
                 onClick={() => {
                   triggerHaptic('medium');
                   setIsDoctorPlanModalOpen(true);
@@ -363,10 +290,10 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
               const activeItems = plan.items.filter((i) => i.checkedByDoctor);
               const completedCount = activeItems.filter((i) => i.completedByPatient).length;
               const percent = activeItems.length > 0 ? Math.round((completedCount / activeItems.length) * 100) : 0;
-              return (
+              return activeItems.length > 0 ? (
                 <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-100 space-y-2">
                   <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-[#022434] font-outfit">Recovery Tasks Progress</span>
+                    <span className="text-[#022434] font-outfit">Care Checklist Progress</span>
                     <span className="text-[#006c44] font-mono">
                       {completedCount} of {activeItems.length} completed ({percent}%)
                     </span>
@@ -378,7 +305,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                     />
                   </div>
                 </div>
-              );
+              ) : null;
             })()}
 
             {/* Checklist */}
@@ -407,16 +334,26 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                       )}
                     </button>
                     <div className="flex-1 min-w-0">
-                      <p
-                        className={`text-xs sm:text-sm font-bold font-outfit ${
-                          item.completedByPatient ? 'line-through text-slate-400' : 'text-[#022434]'
-                        }`}
-                      >
-                        {item.title}
-                      </p>
+                      <div className="flex items-center flex-wrap gap-1.5">
+                        {item.category === 'medication' && <Pill className="w-4 h-4 text-emerald-700" />}
+                        {item.category === 'diagnostic' && <TestTube className="w-4 h-4 text-purple-700" />}
+                        {item.category === 'followup' && <Calendar className="w-4 h-4 text-teal-700" />}
+                        <p
+                          className={`text-xs sm:text-sm font-bold font-outfit ${
+                            item.completedByPatient ? 'line-through text-slate-400' : 'text-[#022434]'
+                          }`}
+                        >
+                          {item.title}
+                        </p>
+                      </div>
                       {item.description && (
                         <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
                           {item.description}
+                        </p>
+                      )}
+                      {item.id === 'item-lab' && plan.labInvestigationDetails && (
+                        <p className="text-[11px] font-semibold text-purple-800 bg-purple-50 border border-purple-100 px-2.5 py-1 rounded-lg mt-1.5">
+                          Ordered Investigations: {plan.labInvestigationDetails}
                         </p>
                       )}
                     </div>
@@ -429,11 +366,43 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                 ))}
             </div>
 
-            {/* Doctor Note */}
-            {plan.doctorNotes && (
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 space-y-1">
-                <span className="font-bold text-[#022434] block">Attending Doctor's Advice:</span>
-                <p className="italic">{plan.doctorNotes}</p>
+            {/* Scheduled Follow-Up Date */}
+            {plan.followUpDate && (
+              <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center shrink-0">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-800 block">
+                      Scheduled Follow-Up Date
+                    </span>
+                    <span className="text-sm font-extrabold font-outfit text-[#022434]">
+                      {formatFollowUpDate(plan.followUpDate)}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    onNavigate('book-consultation');
+                  }}
+                  className="px-4 py-2 bg-[#006c44] hover:bg-[#022434] text-white text-xs font-bold font-outfit rounded-xl transition-colors cursor-pointer"
+                >
+                  Book Follow-Up Visit
+                </button>
+              </div>
+            )}
+
+            {/* Follow-Up Plan Note */}
+            {planNote && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 space-y-1.5">
+                <div className="flex items-center space-x-1.5 font-extrabold text-[#022434] font-outfit">
+                  <FileText className="w-4 h-4 text-[#006c44]" />
+                  <span>Follow-Up Plan Note</span>
+                </div>
+                <p className="leading-relaxed whitespace-pre-line">{planNote}</p>
               </div>
             )}
           </div>
@@ -442,7 +411,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
         {/* 5-STAR RATING & SERVICE QUALITY COMMENT COMPONENT */}
         <div className="pt-2">
           <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4">
-            {/* Header */}
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-3">
                 <div className="p-2.5 bg-amber-50 rounded-2xl text-amber-500 border border-amber-100">
@@ -469,7 +437,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
               )}
             </div>
 
-            {/* Submitted State Display */}
             {isRatingSubmitted && submittedRatingData ? (
               <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -517,20 +484,19 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                     Your verified feedback directly helps us improve medical quality & standards.
                   </span>
                   <button
+                    type="button"
                     onClick={() => {
                       triggerHaptic('light');
                       setIsRatingSubmitted(false);
                     }}
-                    className="text-xs font-bold text-[#006c44] hover:underline shrink-0 ml-2"
+                    className="text-xs font-bold text-[#006c44] hover:underline shrink-0 ml-2 cursor-pointer"
                   >
                     Edit Feedback
                   </button>
                 </div>
               </div>
             ) : (
-              /* Active Rating & Comment Form */
               <form onSubmit={handleSubmitRating} className="space-y-4">
-                {/* 5-Star Interactive Rating */}
                 <div className="flex flex-col items-center justify-center py-2 bg-slate-50/70 border border-slate-100 rounded-2xl space-y-1.5">
                   <div className="flex items-center space-x-2">
                     {[1, 2, 3, 4, 5].map((star) => {
@@ -546,7 +512,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                             triggerHaptic('medium');
                             setRating(star);
                           }}
-                          className="p-1.5 hover:scale-125 transform transition-all duration-150 focus:outline-none"
+                          className="p-1.5 hover:scale-125 transform transition-all duration-150 focus:outline-none cursor-pointer"
                           aria-label={`Rate ${star} out of 5 stars`}
                         >
                           <Star
@@ -566,7 +532,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                   </p>
                 </div>
 
-                {/* Quick Quality Tags */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold font-outfit text-slate-600 flex items-center space-x-1">
                     <ThumbsUp className="w-3.5 h-3.5 text-emerald-600" />
@@ -580,7 +545,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                           key={tag}
                           type="button"
                           onClick={() => toggleTag(tag)}
-                          className={`px-3 py-1 rounded-full text-xs font-bold font-outfit transition-all ${
+                          className={`px-3 py-1 rounded-full text-xs font-bold font-outfit transition-all cursor-pointer ${
                             isSelected
                               ? 'bg-[#022434] text-[#77daa4] shadow-2xs'
                               : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
@@ -594,7 +559,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                   </div>
                 </div>
 
-                {/* Comment Textarea */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold font-outfit text-slate-600 flex items-center space-x-1">
                     <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
@@ -613,7 +577,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                   </div>
                 </div>
 
-                {/* Submit Feedback Button */}
                 <button
                   type="submit"
                   disabled={rating === 0}
@@ -631,19 +594,20 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
           </div>
         </div>
       </div>
-      
+
       {/* Bottom Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] bg-white/95 backdrop-blur-md border-t border-slate-200 z-20">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <div className="hidden sm:block text-xs font-nunito text-slate-500 truncate">
-            {plan?.status === 'approved_by_doctor' ? 'Recovery plan active & approved by clinician' : 'Awaiting clinician sign-off'}
+            {plan?.status === 'approved_by_doctor' ? 'Care journey active & approved by clinician' : 'Awaiting clinician sign-off'}
           </div>
           <button
+            type="button"
             onClick={() => {
               triggerHaptic('heavy');
               onNavigate('patient-home');
             }}
-            className="w-full sm:w-auto px-8 py-3.5 bg-[#022434] hover:bg-slate-800 text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center space-x-2"
+            className="w-full sm:w-auto px-8 py-3.5 bg-[#022434] hover:bg-slate-800 text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center space-x-2 cursor-pointer"
           >
             <span>Return to Dashboard</span>
             <ChevronRight className="w-4 h-4" />
@@ -662,4 +626,3 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
     </div>
   );
 };
-

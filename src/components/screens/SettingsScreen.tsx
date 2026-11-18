@@ -110,7 +110,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
       <Header
         title="Profile & Settings"
         showBack
-        onBack={() => onNavigate(user.role === 'doctor' ? 'doctor-home' : 'patient-home')}
+        onBack={() => onNavigate(user?.role === 'doctor' ? 'doctor-home' : user?.role === 'admin' ? 'admin-dashboard' : 'patient-home')}
       />
 
       <div className="px-1 sm:px-4 space-y-3.5 mt-3">
@@ -119,15 +119,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
           <div className="flex items-center space-x-4">
             <div className="relative">
               <img
-                src={user.avatarUrl}
-                alt={user.name}
+                src={user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'}
+                alt={user?.name || 'User'}
                 className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-100 shadow-xs"
               />
               <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></span>
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="font-bold font-outfit text-[#022434] text-lg leading-tight">{user.name}</h2>
+                <h2 className="font-bold font-outfit text-[#022434] text-lg leading-tight">{user?.name || 'Prime Telecare User'}</h2>
                 <button
                   onClick={() => {
                     triggerHaptic('selection');
@@ -140,7 +140,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
                 </button>
               </div>
               <p className="text-xs text-slate-500 font-nunito mt-0.5">
-                {user.role === 'doctor' ? `Doctor • ${user.email}` : `Patient • ${user.email}`}
+                {user?.role === 'doctor' ? `Doctor • ${user?.email || ''}` : user?.role === 'admin' ? `Admin • ${user?.email || ''}` : `Patient • ${user?.email || ''}`}
               </p>
             </div>
           </div>
@@ -465,7 +465,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
             <ChevronRight className="w-4 h-4 text-[#006c44]" />
           </button>
 
-          {role === 'doctor' && (
+          {user?.role === 'doctor' && (
             <button
               onClick={() => onNavigate('withdrawal')}
               className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-emerald-50/50 transition-colors text-left"

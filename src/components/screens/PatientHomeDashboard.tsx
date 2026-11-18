@@ -38,6 +38,12 @@ import { showToast } from '../../utils/toast';
 import { primeApi } from '../../services/apiClient';
 import { AddDoctorModal } from '../common/AddDoctorModal';
 import { CareJourneyPatientWidget } from '../common/CareJourneyPatientWidget';
+import { PostConsultationNotificationsWidget } from '../common/PostConsultationNotificationsWidget';
+import {
+  getStoredReminders,
+  getStoredDrugPurchaseNotifications,
+} from '../../utils/reminders';
+import { MedicationReminder, DrugPurchaseNotification } from '../../types';
 
 interface PatientHomeDashboardProps {
   user: User;
@@ -60,6 +66,8 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
   const [isInstantModalOpen, setIsInstantModalOpen] = useState(false);
   const [onlineDoctors, setOnlineDoctors] = useState<Doctor[]>([]);
   const [consultations, setConsultations] = useState<AppointmentAlert[]>([]);
+  const [medReminders, setMedReminders] = useState<MedicationReminder[]>(() => getStoredReminders());
+  const [purchaseAlerts, setPurchaseAlerts] = useState<DrugPurchaseNotification[]>(() => getStoredDrugPurchaseNotifications());
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [chartView, setChartView] = useState<'weekly' | 'monthly'>('weekly');
   const [metricView, setMetricView] = useState<'bpm' | 'temp' | 'bp'>('bpm');
@@ -109,12 +117,21 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
       const active = getActiveOrUpcomingConsultations();
       setConsultations(active);
     };
+    const loadAlerts = () => {
+      setMedReminders(getStoredReminders());
+      setPurchaseAlerts(getStoredDrugPurchaseNotifications());
+    };
     loadConsultations();
+    loadAlerts();
     window.addEventListener('appointment-alerts-updated', loadConsultations);
     window.addEventListener('consultation-payment-updated', loadConsultations);
+    window.addEventListener('reminders-updated', loadAlerts);
+    window.addEventListener('drug-purchase-notifications-updated', loadAlerts);
     return () => {
       window.removeEventListener('appointment-alerts-updated', loadConsultations);
       window.removeEventListener('consultation-payment-updated', loadConsultations);
+      window.removeEventListener('reminders-updated', loadAlerts);
+      window.removeEventListener('drug-purchase-notifications-updated', loadAlerts);
     };
   }, []);
 
@@ -218,7 +235,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
               aria-label="View notifications"
             >
               <Bell className="w-5 h-5" />
-              {consultations.length > 0 && (
+              {(consultations.length > 0 || medReminders.some((r) => r.enabled) || purchaseAlerts.some((p) => p.enabled && !p.purchased)) && (
                 <span className="absolute top-2 right-2 flex items-center justify-center w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full animate-pulse" />
               )}
             </button>
@@ -324,6 +341,9 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             
             {/* Care Journey Tracker (Doctor-decided Recovery To-Do List) */}
             <CareJourneyPatientWidget onNavigate={onNavigate} patientId={user?.id} />
+
+            {/* After-Consultation Notifications (Drug Purchase & Prescription Administration Alerts) */}
+            <PostConsultationNotificationsWidget user={user} onNavigate={onNavigate} />
 
             {/* Upcoming / Active Bookings Section */}
             <div className="space-y-3.5">
@@ -629,17 +649,62 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            {consultations.length > 0 ? (
-              <div className="space-y-2">
-                {consultations.map((c) => (
-                  <div key={c.id} className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-xs">
-                    <p className="font-bold text-emerald-900">{c.type} session with {c.doctorName}</p>
-                    <p className="text-emerald-700">{c.scheduledDate} at {c.scheduledTime}</p>
+            {consultations.length > 0 || medReminders.some((r) => r.enabled) || purchaseAlerts.some((p) => p.enabled && !p.purchased) ? (
+              <div className="space-y-3">
+                {consultations.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                      Consultations
+                    </span>
+                    {consultations.map((c) => (
+                      <div key={c.id} className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-xs">
+                        <p className="font-bold text-emerald-900">{c.type} session with {c.doctorName}</p>
+                        <p className="text-emerald-700">{c.scheduledDate} at {c.scheduledTime}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+
+                {purchaseAlerts.filter((p) => p.enabled && !p.purchased).length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                      Drug Purchase Alerts
+                    </span>
+                    {purchaseAlerts
+                      .filter((p) => p.enabled && !p.purchased)
+                      .map((p) => (
+                        <div key={p.id} className="p-3 bg-blue-50 rounded-xl border border-blue-100 text-xs">
+                          <p className="font-bold text-blue-950">Buy: {p.drugNames.join(', ')}</p>
+                          <p className="text-blue-700">
+                            {p.reminderDate} at {p.reminderTime}{p.pharmacyName ? ` • ${p.pharmacyName}` : ''}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {medReminders.filter((r) => r.enabled).length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                      Drug Administration (From Prescription)
+                    </span>
+                    {medReminders
+                      .filter((r) => r.enabled)
+                      .map((r) => (
+                        <div key={r.id} className="p-3 bg-teal-50 rounded-xl border border-teal-100 text-xs">
+                          <p className="font-bold text-teal-950">
+                            {r.drugName} ({r.dosage})
+                          </p>
+                          <p className="text-teal-700">
+                            {r.time} • {r.frequency}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </div>
             ) : (
-              <p className="text-xs text-slate-500 py-4 text-center">No new notifications.</p>
+              <p className="text-xs text-slate-500 py-4 text-center">No active notifications yet.</p>
             )}
             <button
               onClick={() => { triggerHaptic('light'); setIsNotificationsOpen(false); }}

@@ -337,16 +337,35 @@ export interface MedicalRecordFile {
 export interface MedicationReminder {
   id: string;
   prescriptionId?: string;
+  prescriptionRef?: string;
   drugName: string;
+  strength?: string;
   dosage: string;
   time: string;
+  times?: string[];
   frequency: string;
+  duration?: string;
   instructions?: string;
   enabled: boolean;
   isDueNow?: boolean;
   takenToday?: boolean;
   lastTakenTime?: string;
   doctorName?: string;
+}
+
+export interface DrugPurchaseNotification {
+  id: string;
+  prescriptionId?: string;
+  prescriptionRef?: string;
+  drugNames: string[];
+  pharmacyName?: string;
+  reminderDate: string; // YYYY-MM-DD
+  reminderTime: string; // e.g. "17:00" or "05:00 PM"
+  enabled: boolean;
+  purchased: boolean;
+  purchasedAt?: string;
+  notes?: string;
+  createdAt: string;
 }
 
 export interface StructuredClinicalRecord {
@@ -423,6 +442,12 @@ export interface CareJourneyPlan {
   status: 'draft_pending_doctor' | 'approved_by_doctor';
   approvedAt?: string;
   items: CareJourneyItem[];
+  drugPrescriptionChecked?: boolean;
+  labInvestigationChecked?: boolean;
+  labInvestigationDetails?: string;
+  followUpVisitChecked?: boolean;
+  followUpDate?: string;
+  followUpPlanNote?: string;
   doctorNotes?: string;
 }
 

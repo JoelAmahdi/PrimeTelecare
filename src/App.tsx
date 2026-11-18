@@ -598,6 +598,7 @@ export default function App() {
     'terms': 'Terms and Conditions',
     'login': 'Login',
     'signup': 'Sign Up',
+    'onboarding': 'Complete Registration',
     'patient-home': 'Patient Dashboard',
     'doctor-home': 'Doctor Dashboard',
     'admin-dashboard': 'Administrator Command Center',

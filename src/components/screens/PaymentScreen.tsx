@@ -228,7 +228,6 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
           localStorage.setItem('prime_telecare_user', JSON.stringify(parsed));
         }
       }
-      currentUserDoctor.walletBalance = (currentUserDoctor.walletBalance || 0) + details.amount;
       const prevEarnings = Number(localStorage.getItem('prime_telecare_doctor_earnings') || '0');
       localStorage.setItem('prime_telecare_doctor_earnings', (prevEarnings + details.amount).toString());
     } catch {}

@@ -542,7 +542,12 @@ class MemoryStore {
   // --- Care Journey Plans ---
   getCareJourneyPlan(patientId: string): CareJourneyPlan | null {
     if (!this.state.careJourneyPlans) return null;
-    return this.state.careJourneyPlans[patientId] || this.state.careJourneyPlans['default'] || null;
+    return (
+      this.state.careJourneyPlans[patientId] ||
+      this.state.careJourneyPlans['default'] ||
+      this.state.careJourneyPlans['pat-1'] ||
+      null
+    );
   }
 
   saveCareJourneyPlan(plan: CareJourneyPlan): CareJourneyPlan {
@@ -551,6 +556,7 @@ class MemoryStore {
     }
     const key = plan.patientId || 'default';
     this.state.careJourneyPlans[key] = plan;
+    this.state.careJourneyPlans['default'] = plan;
     this.saveToDisk();
     return plan;
   }

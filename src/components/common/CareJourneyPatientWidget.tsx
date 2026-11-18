@@ -2,25 +2,40 @@ import React, { useState, useEffect } from 'react';
 import {
   CheckSquare,
   Square,
-  CheckCircle2,
   Clock,
   ChevronRight,
   ShieldCheck,
   Stethoscope,
-  Sparkles,
-  ArrowRight,
+  Calendar,
+  Pill,
+  TestTube,
+  FileText,
 } from 'lucide-react';
-import { CareJourneyItem, CareJourneyPlan, ScreenId } from '../../types';
+import { CareJourneyPlan, ScreenId } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import {
   getStoredCareJourneyPlan,
+  saveStoredCareJourneyPlan,
   toggleStoredCareJourneyTask,
 } from '../../utils/careJourney';
+import { primeApi } from '../../services/apiClient';
 
 interface CareJourneyPatientWidgetProps {
   onNavigate: (screen: ScreenId) => void;
   patientId?: string;
+}
+
+function formatFollowUpDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  const parsed = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(parsed.getTime())) return dateStr;
+  return parsed.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> = ({
@@ -30,6 +45,23 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
   const [plan, setPlan] = useState<CareJourneyPlan | null>(() => getStoredCareJourneyPlan(patientId));
 
   useEffect(() => {
+    let isMounted = true;
+
+    const syncFromServer = async () => {
+      try {
+        const remotePlan = await primeApi.getCareJourneyPlan(patientId || 'pat-1');
+        if (isMounted && remotePlan && remotePlan.items) {
+          setPlan(remotePlan);
+          saveStoredCareJourneyPlan(remotePlan);
+        }
+      } catch {
+        // fallback to local plan
+      }
+    };
+
+    syncFromServer();
+    const pollId = window.setInterval(syncFromServer, 12000);
+
     const handleUpdate = (e: any) => {
       if (e?.detail) {
         setPlan(e.detail);
@@ -40,7 +72,6 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
 
     window.addEventListener('care-journey-updated', handleUpdate);
 
-    // BroadcastChannel cross-tab listener
     let channel: BroadcastChannel | null = null;
     try {
       channel = new BroadcastChannel('prime_care_journey_channel');
@@ -59,6 +90,8 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
     window.addEventListener('storage', handleStorage);
 
     return () => {
+      isMounted = false;
+      window.clearInterval(pollId);
       window.removeEventListener('care-journey-updated', handleUpdate);
       window.removeEventListener('storage', handleStorage);
       if (channel) channel.close();
@@ -70,14 +103,14 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
     const updated = toggleStoredCareJourneyTask(itemId);
     if (updated) {
       setPlan(updated);
+      primeApi.saveCareJourneyPlan?.(updated).catch(() => {});
       const target = updated.items.find((i) => i.id === itemId);
       if (target?.completedByPatient) {
-        showToast('Recovery task marked as complete!', 'success');
+        showToast('Care journey item marked as complete!', 'success');
       }
     }
   };
 
-  // If there's no plan or if the doctor hasn't approved the plan yet:
   if (!plan || plan.status !== 'approved_by_doctor') {
     return (
       <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-xs border border-slate-200/90 space-y-4">
@@ -103,21 +136,48 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
         <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/70 text-xs text-amber-950 space-y-1.5">
           <div className="flex items-center space-x-1.5 font-bold">
             <Stethoscope className="w-4 h-4 text-[#006c44]" />
-            <span>Doctor deciding your recovery plan</span>
+            <span>Doctor deciding your care journey</span>
           </div>
           <p className="text-slate-600 font-nunito leading-relaxed">
-            Your attending physician ({plan?.doctorName || 'Dr. Attending'}) is reviewing and checking the recovery to-do list for your condition.
-            The care plan will appear here automatically as soon as your doctor publishes it.
+            Your attending physician ({plan?.doctorName || 'Attending Physician'}) will check your drug prescription, laboratory investigations, follow-up visit setup, and follow-up plan note. Once approved, it will appear here automatically.
           </p>
         </div>
       </div>
     );
   }
 
-  // Doctor HAS approved the plan:
   const activeItems = plan.items.filter((i) => i.checkedByDoctor);
   const completedCount = activeItems.filter((i) => i.completedByPatient).length;
   const progressPercent = activeItems.length > 0 ? Math.round((completedCount / activeItems.length) * 100) : 0;
+  const planNote = plan.followUpPlanNote || plan.doctorNotes;
+
+  const getItemBadge = (category: string) => {
+    switch (category) {
+      case 'medication':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 text-[10px] font-bold">
+            <Pill className="w-3 h-3" />
+            <span>Drug Prescription</span>
+          </span>
+        );
+      case 'diagnostic':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 text-[10px] font-bold">
+            <TestTube className="w-3 h-3" />
+            <span>Lab Investigation</span>
+          </span>
+        );
+      case 'followup':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 text-[10px] font-bold">
+            <Calendar className="w-3 h-3" />
+            <span>Follow-Up Visit</span>
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-xs border border-emerald-200/90 space-y-4 relative overflow-hidden">
@@ -128,7 +188,7 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
             <CheckSquare className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
               <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
                 Care Journey Tracker
               </h3>
@@ -138,17 +198,18 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
               </span>
             </div>
             <p className="text-xs text-slate-500 font-nunito">
-              Decided by <span className="font-bold text-slate-700">{plan.doctorName}</span> • Patient Recovery To-Do List
+              Decided by <span className="font-bold text-slate-700">{plan.doctorName}</span>
             </p>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={() => {
             triggerHaptic('light');
             onNavigate('post-consultation-journey');
           }}
-          className="text-xs font-bold text-[#006c44] hover:underline flex items-center space-x-1 shrink-0"
+          className="text-xs font-bold text-[#006c44] hover:underline flex items-center space-x-1 shrink-0 cursor-pointer"
         >
           <span>Full Journey</span>
           <ChevronRight className="w-3.5 h-3.5" />
@@ -156,20 +217,22 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
       </div>
 
       {/* Progress Bar */}
-      <div className="space-y-1.5 bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-100">
-        <div className="flex items-center justify-between text-xs font-bold">
-          <span className="text-[#022434] font-outfit">Recovery Tasks Completed</span>
-          <span className="text-[#006c44] font-mono">
-            {completedCount} of {activeItems.length} ({progressPercent}%)
-          </span>
+      {activeItems.length > 0 && (
+        <div className="space-y-1.5 bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-100">
+          <div className="flex items-center justify-between text-xs font-bold">
+            <span className="text-[#022434] font-outfit">Care Checklist Progress</span>
+            <span className="text-[#006c44] font-mono">
+              {completedCount} of {activeItems.length} ({progressPercent}%)
+            </span>
+          </div>
+          <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+            <div
+              className="bg-[#006c44] h-2.5 rounded-full transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
         </div>
-        <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
-          <div
-            className="bg-[#006c44] h-2.5 rounded-full transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Interactive To-Do Checklist */}
       <div className="space-y-2">
@@ -177,7 +240,7 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
           <div
             key={item.id}
             onClick={() => handleToggleTask(item.id)}
-            className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3 ${
+            className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3 ${
               item.completedByPatient
                 ? 'bg-slate-50 border-slate-200 opacity-75'
                 : 'bg-white hover:bg-emerald-50/40 border-slate-200/90 shadow-2xs'
@@ -195,33 +258,73 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
               )}
             </button>
             <div className="flex-1 min-w-0">
-              <p
-                className={`text-xs sm:text-sm font-bold font-outfit ${
-                  item.completedByPatient ? 'line-through text-slate-400' : 'text-[#022434]'
-                }`}
-              >
-                {item.title}
-              </p>
+              <div className="flex items-center flex-wrap gap-1.5">
+                <p
+                  className={`text-xs sm:text-sm font-bold font-outfit ${
+                    item.completedByPatient ? 'line-through text-slate-400' : 'text-[#022434]'
+                  }`}
+                >
+                  {item.title}
+                </p>
+                {getItemBadge(item.category)}
+              </div>
               {item.description && (
                 <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                   {item.description}
                 </p>
               )}
+              {item.id === 'item-lab' && plan.labInvestigationDetails && (
+                <p className="text-[11px] font-semibold text-purple-800 bg-purple-50 border border-purple-100 px-2.5 py-1 rounded-lg mt-1.5">
+                  Lab Tests: {plan.labInvestigationDetails}
+                </p>
+              )}
             </div>
             {item.completedByPatient && (
               <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold shrink-0 self-center">
-                Completed
+                Done
               </span>
             )}
           </div>
         ))}
       </div>
 
-      {/* Doctor Notes if present */}
-      {plan.doctorNotes && (
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600">
-          <span className="font-bold text-[#022434] block mb-0.5">Doctor's Clinical Advice:</span>
-          <span>{plan.doctorNotes}</span>
+      {/* Follow-Up Date Card (if set by Doctor) */}
+      {plan.followUpDate && (
+        <div className="p-3.5 bg-teal-50/70 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center shrink-0">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-800 block">
+                Recommended Follow-Up Date
+              </span>
+              <span className="text-xs sm:text-sm font-extrabold font-outfit text-[#022434]">
+                {formatFollowUpDate(plan.followUpDate)}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('selection');
+              onNavigate('book-consultation');
+            }}
+            className="px-3.5 py-2 bg-[#006c44] hover:bg-[#022434] text-white text-xs font-bold font-outfit rounded-xl transition-colors self-start sm:self-auto cursor-pointer"
+          >
+            Schedule Follow-Up
+          </button>
+        </div>
+      )}
+
+      {/* Follow-Up Plan Note */}
+      {planNote && (
+        <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 space-y-1">
+          <div className="flex items-center space-x-1.5 font-extrabold text-[#022434] font-outfit">
+            <FileText className="w-3.5 h-3.5 text-[#006c44]" />
+            <span>Follow-Up Plan Note</span>
+          </div>
+          <p className="leading-relaxed whitespace-pre-line">{planNote}</p>
         </div>
       )}
     </div>

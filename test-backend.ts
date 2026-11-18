@@ -228,15 +228,37 @@ async function testBackend() {
       doctorId: 'doc-test',
       doctorName: 'Dr. Test Attending',
       status: 'approved_by_doctor',
+      drugPrescriptionChecked: true,
+      labInvestigationChecked: true,
+      labInvestigationDetails: 'FBC, Malaria Parasite',
+      followUpVisitChecked: true,
+      followUpDate: '2026-11-24',
+      followUpPlanNote: 'Review lab results and check fever resolution.',
       items: [
-        { id: 'i-1', title: 'Take antibiotics', category: 'medication', checkedByDoctor: true, completedByPatient: false }
+        { id: 'item-rx', title: 'Drug Prescription Check', category: 'medication', checkedByDoctor: true, completedByPatient: false },
+        { id: 'item-lab', title: 'Laboratory Investigation Check', category: 'diagnostic', checkedByDoctor: true, completedByPatient: false },
+        { id: 'item-followup', title: 'Follow-Up Visit Set Up Check', category: 'followup', checkedByDoctor: true, completedByPatient: false },
       ],
     }),
   });
-  assert(savePlan.status === 200 && savePlan.data.success && savePlan.data.plan.status === 'approved_by_doctor', 'POST /api/records/care-journey saves doctor approved plan');
+  assert(
+    savePlan.status === 200 &&
+      savePlan.data.success &&
+      savePlan.data.plan.status === 'approved_by_doctor' &&
+      savePlan.data.plan.followUpDate === '2026-11-24' &&
+      savePlan.data.plan.followUpPlanNote === 'Review lab results and check fever resolution.',
+    'POST /api/records/care-journey saves doctor approved plan with checks, follow-up date and plan note'
+  );
 
   const getPlan = await req('/records/care-journey?patientId=patient-test');
-  assert(getPlan.status === 200 && getPlan.data.plan && getPlan.data.plan.id === 'cjp-test-1', 'GET /api/records/care-journey retrieves care journey plan');
+  assert(
+    getPlan.status === 200 &&
+      getPlan.data.plan &&
+      getPlan.data.plan.id === 'cjp-test-1' &&
+      getPlan.data.plan.labInvestigationChecked === true &&
+      getPlan.data.plan.followUpDate === '2026-11-24',
+    'GET /api/records/care-journey retrieves care journey plan with all clinical fields'
+  );
 
   console.log(`\n--- Test Results: ${passed} Passed, ${failed} Failed ---`);
   server.close(() => {
