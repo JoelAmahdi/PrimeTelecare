@@ -69,53 +69,18 @@ export const ConsultationSummaryPDFModal: React.FC<ConsultationSummaryPDFModalPr
       console.error('Error reading clinical record', e);
     }
 
-    // Default fallback structured record
+    // Default empty structured record when no consultation record is attached yet
     setActiveRecord({
-      id: 'CR-2026-9948',
-      patientId: user.id || 'PAT-User',
-      patientName: user.name || 'Patient',
-      patientAgeGender: `${user.gender || 'Not specified'}, ${user.age || 'Age undisclosed'}`,
-      doctorName: 'Dr. Sarah Johnson',
-      doctorSpecialty: 'Pediatrician & Family Health Specialist',
-      doctorLicense: 'MDCN/2019/88492',
-      dateStr: 'September 15, 2026 at 10:30 AM',
+      id: `CR-${Date.now().toString().slice(-4)}`,
+      patientId: user.id || '',
+      patientName: user.name || '',
+      patientAgeGender: [user.gender, user.age].filter(Boolean).join(', '),
+      doctorName: permission.doctorName || '',
+      doctorSpecialty: '',
+      doctorLicense: permission.doctorLicense || '',
+      dateStr: new Date().toLocaleDateString(),
       timestamp: Date.now(),
-      markdownNotes: `# Chief Complaint
-High fever (38.8°C), body aches, chills, and mild fatigue for 2 days.
-
-# Relevant History
-No prior hospital admissions. Known allergy to Penicillin. Seasonal asthma history.
-
-# Observations & Vitals
-Patient alert and oriented. Mild pharyngeal redness observed via tele-examination. Skin clear with no petechial rash.
-- BP: 118/76 mmHg
-- Temp: 38.2°C
-- HR: 82 bpm
-- SpO2: 98%
-
-# Assessment & Diagnosis
-**Assessment**: Acute febrile illness consistent with uncomplicated seasonal malaria or viral syndrome.
-**Diagnosis**: Provisional: Uncomplicated Acute Febrile Syndrome (Rule out Malaria)
-
-# Care Plan
-Maintain high fluid intake (at least 2.5L water daily). Tepid sponging for fever management. Adequate physical rest.
-
-# Medications
-- Artemether / Lumefantrine (Coartem) 80/480mg, 1 tablet, Twice daily (after fatty meal), 3 days
-- Paracetamol 500mg, 2 tablets, 3 times daily (8-hourly), 5 days
-
-# Tests Requested
-- Malaria RDT / Blood Smear
-- Full Blood Count (FBC)
-
-# Warning Signs
-High fever exceeding 39.5°C, severe vomiting, shortness of breath, extreme lethargy, or yellowing of the eyes.
-
-# Follow-up & Outcome
-- Follow-up Date: September 18, 2026 (In 3 days)
-- Referral Decision: None Required
-- Consultation Outcome: Managed with Care Plan
-`,
+      markdownNotes: '',
     });
   }, [consultationRecord, user, isOpen]);
 
@@ -123,9 +88,9 @@ High fever exceeding 39.5°C, severe vomiting, shortness of breath, extreme leth
 
   const docRefNo = activeRecord.id;
   const verificationHash = `PT-NDPA-VERIFY-${Math.floor(100000 + Math.random() * 900000)}`;
-  const doctorName = activeRecord.doctorName || permission.doctorName || 'Dr. Sarah Johnson';
-  const doctorLicense = activeRecord.doctorLicense || permission.doctorLicense || 'MDCN/2019/88492';
-  const doctorSpecialty = activeRecord.doctorSpecialty || 'Pediatrician & Family Health Specialist';
+  const doctorName = activeRecord.doctorName || permission.doctorName || '';
+  const doctorLicense = activeRecord.doctorLicense || permission.doctorLicense || '';
+  const doctorSpecialty = activeRecord.doctorSpecialty || '';
 
   // Lifecycle check:
   // 1. Awaiting Doctor's Approval: status !== 'granted'

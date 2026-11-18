@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
 import {
@@ -31,6 +31,8 @@ import { showToast } from '../../utils/toast';
 import { DoctorWeeklyCalendar } from '../common/DoctorWeeklyCalendar';
 import { processJoinOrPayConsultation } from '../../utils/consultationPayment';
 
+import { primeApi } from '../../services/apiClient';
+
 interface DoctorProfileScreenProps {
   doctorId?: string;
   onNavigate: (screen: ScreenId) => void;
@@ -38,74 +40,103 @@ interface DoctorProfileScreenProps {
   onSaveBookingSummary?: (summary: BookingSummary) => void;
 }
 
-const defaultDoctorPlaceholder: Doctor = {
-  id: 'doc-fallback',
-  name: 'Attending Physician',
-  title: 'Consultant Medical Specialist',
-  fullNameWithTitle: 'Consultant Physician',
-  specialty: 'General Tele-Medicine',
-  rating: 4.9,
-  reviewsCount: 12,
-  experience: '8+ yrs',
-  prices: { video: 10000, chat: 5000 },
-  avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=300&q=80',
-  isOnline: true,
-  about: 'Licensed tele-consultant providing comprehensive clinical care on Prime Telecare.',
-  nextSlot: 'Today, 10:30 AM',
-};
-
 export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
   doctorId,
   onNavigate,
   role = 'patient',
   onSaveBookingSummary,
 }) => {
-  const currentDoctor: Doctor =
-    mockDoctors.find((d) => d.id === doctorId) || mockDoctors[0] || defaultDoctorPlaceholder;
+  const [currentDoctor, setCurrentDoctor] = useState<Doctor | null>(() => {
+    try {
+      const custom: Doctor[] = JSON.parse(localStorage.getItem('prime_telecare_custom_doctors') || '[]');
+      const pool = [...custom, ...mockDoctors];
+      if (doctorId) {
+        return pool.find((d) => d.id === doctorId) || null;
+      }
+      return pool[0] || null;
+    } catch {
+      return mockDoctors.find((d) => d.id === doctorId) || mockDoctors[0] || null;
+    }
+  });
+  const [isLoadingDoctor, setIsLoadingDoctor] = useState<boolean>(!currentDoctor);
+
+  useEffect(() => {
+    let isMounted = true;
+    primeApi
+      .getDoctors()
+      .then((docs) => {
+        if (!isMounted) return;
+        const list = Array.isArray(docs) ? docs : [];
+        const match = doctorId ? list.find((d) => d.id === doctorId) : list[0];
+        if (match) {
+          setCurrentDoctor(match);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setIsLoadingDoctor(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [doctorId]);
 
   const [isLiked, setIsLiked] = useState(false);
-  const [selectedDate, setSelectedDate] = useState('Today, Oct 24');
-  const [selectedSlot, setSelectedSlot] = useState('10:30 AM');
+  const [selectedDate, setSelectedDate] = useState('Today');
+  const [selectedSlot, setSelectedSlot] = useState('Immediate');
   const [showFullAbout, setShowFullAbout] = useState(false);
+
+  if (isLoadingDoctor) {
+    return (
+      <div className="min-h-screen bg-[#f6fafd] flex items-center justify-center p-6 font-nunito">
+        <div className="text-center space-y-2">
+          <div className="w-8 h-8 border-3 border-emerald-200 border-t-[#006c44] rounded-full animate-spin mx-auto" />
+          <p className="text-xs font-bold text-slate-500">Loading clinician profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentDoctor) {
+    return (
+      <div className="min-h-screen bg-[#f6fafd] flex items-center justify-center p-6 font-nunito">
+        <div className="bg-white rounded-3xl p-6 max-w-sm w-full border border-slate-200 text-center space-y-4">
+          <h2 className="font-extrabold font-outfit text-lg text-[#022434]">Clinician Not Found</h2>
+          <button
+            type="button"
+            onClick={() => onNavigate('doctor-discovery')}
+            className="w-full py-3 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-xs rounded-xl cursor-pointer"
+          >
+            Back to Find Doctors
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Fallbacks for optional fields
   const fullName = currentDoctor.fullNameWithTitle || currentDoctor.name;
-  const qualifications = currentDoctor.qualifications || [
-    'MBBS (University of Lagos)',
-    'FWACP (West African College of Physicians)',
-    'MDCN Licensed Medical Practitioner (#MDCN/2018/74920)',
-  ];
-  const languages = currentDoctor.languagesSpoken || ['English', 'Yoruba', 'Pidgin'];
+  const qualifications = currentDoctor.qualifications || [];
+  const languages = currentDoctor.languagesSpoken || ['English'];
   const verification = currentDoctor.verification || {
     isVerified: true,
-    licenseNumber: 'MDCN/2018/74920',
+    licenseNumber: 'MDCN Verified',
     boardName: 'Medical and Dental Council of Nigeria (MDCN)',
     verifiedBadgeText: 'Verified MDCN License',
-    verificationDate: 'Verified Jan 2024',
+    verificationDate: 'Verified',
   };
   const availability = currentDoctor.availabilityStatus || {
     isOnline: currentDoctor.isOnline,
-    statusText: 'Online & Available Today',
-    nextAvailableSlot: '10:30 AM Today',
-    workingDays: 'Mon - Sat (8:00 AM - 6:00 PM)',
+    statusText: currentDoctor.isOnline ? 'Online & Available' : 'Offline',
+    nextAvailableSlot: currentDoctor.isOnline ? 'Available Now' : 'Scheduled',
+    workingDays: 'Mon - Sat',
   };
   const reviewPolicy = currentDoctor.reviewPolicy || {
-    policyText:
-      'Only patients who have completed a verified tele-consultation on Prime Telecare can leave ratings and reviews. All patient reviews undergo clinical authenticity verification.',
+    policyText: 'Verified consultation reviews only.',
     verifiedOnly: true,
     auditEnforced: true,
   };
-  const reviewsList = currentDoctor.reviewsList || [
-    {
-      id: 'r-default-1',
-      patientName: 'Kemi A.',
-      rating: 5,
-      date: 'Oct 18, 2026',
-      comment:
-        'Dr. Anya was extremely patient and attentive during our video session. E-prescription was issued immediately.',
-      verifiedConsultation: true,
-    },
-  ];
+  const reviewsList = currentDoctor.reviewsList || [];
 
   const handleShareDoctor = async () => {
     triggerHaptic('selection');

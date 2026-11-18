@@ -21,16 +21,16 @@ const STORAGE_KEY = 'prime_telecare_slot_alerts';
  */
 export function getDefaultSlotAlert(): SlotAlert {
   return {
-    id: 'slot-alert-demo-1',
-    doctorId: 'doc-1',
-    doctorName: 'Dr. Sarah Johnson',
-    doctorSpecialty: 'Pediatric Specialist',
-    doctorAvatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-    dateFormatted: 'Wed, Oct 22',
-    timeSlot: '10:30 AM',
+    id: `slot-alert-${Date.now()}`,
+    doctorId: '',
+    doctorName: '',
+    doctorSpecialty: '',
+    doctorAvatar: '',
+    dateFormatted: '',
+    timeSlot: '',
     consultType: 'Video',
     status: 'active',
-    createdAt: Date.now() - 3600000,
+    createdAt: Date.now(),
   };
 }
 

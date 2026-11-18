@@ -42,7 +42,7 @@ export function createDefaultRecoveryReminder(): PostConsultationReminder {
   return {
     id: 'rem-24h-default',
     consultationId: `c-${now}`,
-    doctorName: 'Attending Physician',
+    doctorName: '',
     doctorSpecialty: 'General Practice',
     doctorAvatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
     patientName: 'Patient',

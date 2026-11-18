@@ -75,13 +75,16 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
     }
   })();
 
-  const resolvedDoctorName = activeSummary?.doctorName || 'Attending Physician';
-  const resolvedSpecialty = activeSummary?.doctorSpecialty || 'General Practice';
+  const resolvedDoctorName =
+    activeSummary?.doctorName && activeSummary.doctorName !== 'Attending Physician'
+      ? activeSummary.doctorName
+      : 'Selected Doctor';
+  const resolvedSpecialty = activeSummary?.doctorSpecialty || '';
   const resolvedAvatar =
     activeSummary?.doctorAvatar ||
     'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400';
   const resolvedLicense = activeSummary?.doctorLicense || 'MDCN Verified';
-  const resolvedId = activeSummary?.doctorId || 'doc-attending';
+  const resolvedId = activeSummary?.doctorId || '';
 
   const doctor = {
     id: resolvedId,

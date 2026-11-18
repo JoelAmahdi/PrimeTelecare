@@ -23,13 +23,13 @@ const STORAGE_KEY = 'prime_telecare_export_permissions_v1';
 const EVENT_NAME = 'health-record-permission-change';
 
 const DEFAULT_PERMISSION: HealthRecordExportPermission = {
-  sessionId: 'SESS-2026-9948',
-  patientName: 'Patient',
-  doctorName: 'Dr. Sarah Johnson',
-  doctorLicense: 'MDCN/2019/88492',
-  status: 'pending_doctor_approval', // Requires doctor permission before export
-  purpose: 'Second Medical Opinion & Personal Health Archive',
-  requestedAt: 'October 24, 2026 at 10:30 AM',
+  sessionId: '',
+  patientName: '',
+  doctorName: '',
+  doctorLicense: '',
+  status: 'not_requested',
+  purpose: '',
+  requestedAt: '',
   remindedCount: 0,
   isPaid: false,
   paymentAmount: 3000,
@@ -94,8 +94,8 @@ export function grantDoctorExportPermission(doctorName?: string, doctorLicense?:
   const updated: HealthRecordExportPermission = {
     ...current,
     status: 'granted',
-    doctorName: doctorName || current.doctorName || 'Dr. Sarah Johnson',
-    doctorLicense: doctorLicense || current.doctorLicense || 'MDCN/2019/88492',
+    doctorName: doctorName || current.doctorName || '',
+    doctorLicense: doctorLicense || current.doctorLicense || '',
     grantedAt: new Date().toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',

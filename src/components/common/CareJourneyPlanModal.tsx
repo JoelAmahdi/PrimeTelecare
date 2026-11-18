@@ -65,7 +65,7 @@ function normalizePlanItems(existingItems: CareJourneyItem[] = []): CareJourneyI
 export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
   isOpen,
   onClose,
-  doctorName = 'Attending Physician',
+  doctorName = '',
   patientName = 'Patient',
   patientId = 'pat-1',
   onPlanPublished,

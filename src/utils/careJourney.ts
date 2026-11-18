@@ -75,7 +75,7 @@ export function toggleStoredCareJourneyTask(itemId: string): CareJourneyPlan | n
   return updatedPlan;
 }
 
-export function createInitialCareJourneyDraft(patientName = 'Patient', doctorName = 'Attending Physician'): CareJourneyPlan {
+export function createInitialCareJourneyDraft(patientName = 'Patient', doctorName = ''): CareJourneyPlan {
   return {
     id: `cjp-${Date.now()}`,
     patientId: 'pat-1',

@@ -79,8 +79,8 @@ export function processJoinOrPayConsultation(opts: JoinConsultationOptions) {
   const {
     id,
     type,
-    doctorId = 'doc-attending',
-    doctorName = 'Attending Physician',
+    doctorId = '',
+    doctorName = '',
     doctorSpecialty = 'General Practice',
     doctorAvatar = 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
     price = 10000,

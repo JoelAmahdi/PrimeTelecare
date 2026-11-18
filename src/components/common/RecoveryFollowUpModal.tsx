@@ -418,7 +418,7 @@ export const RecoveryFollowUpModal: React.FC<RecoveryFollowUpModalProps> = ({
                   Recovery Report Submitted!
                 </h3>
                 <p className="text-xs text-slate-600 max-w-xs mx-auto">
-                  Dr. Sarah Johnson has been notified of your recovery status (<strong>{recoveryState}</strong>). Your compliance details have been added to your electronic health record.
+                  {reminder?.doctorName || 'Your doctor'} has been notified of your recovery status (<strong>{recoveryState}</strong>).
                 </p>
               </div>
 
@@ -442,7 +442,7 @@ export const RecoveryFollowUpModal: React.FC<RecoveryFollowUpModalProps> = ({
                     <span className="font-bold font-outfit">Automated Priority Escalation</span>
                   </div>
                   <p className="text-[11px] text-rose-900">
-                    Because your symptoms have worsened, this case has been escalated to the priority triage queue. We recommend messaging Dr. Sarah Johnson immediately.
+                    Escalated to priority triage. Please message {reminder?.doctorName || 'your doctor'} immediately.
                   </p>
                   <button
                     onClick={() => {

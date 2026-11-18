@@ -186,8 +186,8 @@ export function resetDemoAppointment15Min(): void {
     {
       id: 'alert-default-15m',
       appointmentId: 'app-1',
-      doctorId: 'doc-attending',
-      doctorName: 'Attending Physician',
+      doctorId: '',
+      doctorName: 'Doctor',
       doctorSpecialty: 'General Practice',
       doctorAvatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
       patientName: 'Patient',

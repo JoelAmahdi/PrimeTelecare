@@ -50,7 +50,7 @@ appointmentsRouter.post('/', (req: Request, res: Response) => {
   if (!doctor) {
     doctor = store.getDoctors().find((d) => d.id === doctorId || d.name === doctorId) || {
       id: doctorId,
-      name: req.body.doctorName || 'Attending Physician',
+      name: req.body.doctorName || 'Doctor',
       specialty: req.body.doctorSpecialty || 'General Practice',
       avatarUrl: req.body.doctorAvatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
     } as any;

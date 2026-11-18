@@ -180,7 +180,7 @@ export const PostConsultationNotificationsWidget: React.FC<PostConsultationNotif
           key: `${rx.id}::${med.id || med.drugName}`,
           prescriptionId: rx.id,
           prescriptionRef: rx.referenceNo || rx.id,
-          doctorName: rx.doctorName || 'Attending Physician',
+          doctorName: rx.doctorName && rx.doctorName !== 'Attending Physician' ? rx.doctorName : '',
           rxDate: rx.date || '',
           medication: med,
         });

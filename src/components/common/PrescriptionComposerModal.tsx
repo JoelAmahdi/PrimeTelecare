@@ -108,8 +108,23 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
   const [isDigitallySigned, setIsDigitallySigned] = useState(true);
   const [restrictionError, setRestrictionError] = useState<string | null>(null);
 
-  // Doctor metadata
-  const docName = doctorInfo?.name || 'Attending Physician';
+  // Doctor metadata — resolve from prop or signed-in doctor profile
+  const loggedInDocName = (() => {
+    try {
+      const raw = localStorage.getItem('prime_telecare_user');
+      if (raw) {
+        const u = JSON.parse(raw);
+        if (u?.role === 'doctor' && u?.name) {
+          return u.name.trim().startsWith('Dr.') ? u.name.trim() : `Dr. ${u.name.trim()}`;
+        }
+      }
+    } catch {}
+    return '';
+  })();
+  const docName =
+    (doctorInfo?.name && doctorInfo.name !== 'Attending Physician' ? doctorInfo.name : '') ||
+    loggedInDocName ||
+    'Doctor';
   const docLicense = doctorInfo?.license || 'MDCN Verified';
   const docSpecialty = doctorInfo?.specialty || 'General Practice';
   const docClinic = doctorInfo?.clinic || 'Prime Telecare Specialist Clinic';

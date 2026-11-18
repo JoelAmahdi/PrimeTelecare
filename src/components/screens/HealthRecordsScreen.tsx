@@ -203,7 +203,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
         }> = [
           ...(remoteApts || []).map((a: any) => ({
             id: a.id,
-            doctorName: a.doctorName || 'Attending Physician',
+            doctorName: a.doctorName && a.doctorName !== 'Attending Physician' ? a.doctorName : 'Doctor',
             doctorSpecialty: a.doctorSpecialty || 'General Practice',
             doctorAvatar: a.doctorAvatar,
             date: a.scheduledDate || a.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
@@ -213,7 +213,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
           })),
           ...localApts.map((a) => ({
             id: a.id,
-            doctorName: a.doctorName || 'Attending Physician',
+            doctorName: a.doctorName && a.doctorName !== 'Attending Physician' ? a.doctorName : 'Doctor',
             doctorSpecialty: a.doctorSpecialty || 'General Practice',
             doctorAvatar: a.doctorAvatar,
             date: a.scheduledDate || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),

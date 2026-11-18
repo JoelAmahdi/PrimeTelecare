@@ -21,7 +21,7 @@ chatRouter.post('/:sessionId/messages', (req: Request, res: Response) => {
 
   const message = store.addChatMessage(sessionId, {
     sender,
-    senderName: senderName || (sender === 'doctor' ? 'Attending Physician' : 'Patient'),
+    senderName: senderName || (sender === 'doctor' ? 'Doctor' : 'Patient'),
     text,
     imageUrl,
     status: status || 'delivered',

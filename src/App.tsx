@@ -176,6 +176,35 @@ export default function App() {
       return undefined;
     }
   });
+  const [activeCallSession, setActiveCallSession] = useState<{
+    doctorId?: string;
+    doctorName?: string;
+    doctorSpecialty?: string;
+    doctorAvatar?: string;
+    patientName?: string;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('prime_telecare_active_call_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const syncCallSession = () => {
+      try {
+        const saved = localStorage.getItem('prime_telecare_active_call_session');
+        setActiveCallSession(saved ? JSON.parse(saved) : null);
+      } catch {}
+    };
+    window.addEventListener('active-call-session-updated', syncCallSession);
+    window.addEventListener('storage', syncCallSession);
+    return () => {
+      window.removeEventListener('active-call-session-updated', syncCallSession);
+      window.removeEventListener('storage', syncCallSession);
+    };
+  }, []);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [showQuickLoginSetup, setShowQuickLoginSetup] = useState<boolean>(false);
   const [isNetworkIssue, setIsNetworkIssue] = useState<boolean>(false);
@@ -712,12 +741,23 @@ export default function App() {
               <PostConsultationJourneyScreen
                 onNavigate={navigateTo}
                 role={effectiveRole}
-                doctorId={currentBookingSummary?.doctorId || selectedDoctorId || 'doc-attending'}
-                doctorName={
-                  currentBookingSummary?.doctorName ||
-                  'Attending Physician'
+                doctorId={
+                  effectiveRole === 'doctor'
+                    ? activeUser.id
+                    : currentBookingSummary?.doctorId || activeCallSession?.doctorId || selectedDoctorId || ''
                 }
-                patientName={activeUser.name}
+                doctorName={
+                  effectiveRole === 'doctor'
+                    ? activeUser.name.trim().startsWith('Dr.')
+                      ? activeUser.name.trim()
+                      : `Dr. ${activeUser.name.trim()}`
+                    : currentBookingSummary?.doctorName || activeCallSession?.doctorName || ''
+                }
+                patientName={
+                  effectiveRole === 'doctor'
+                    ? activeCallSession?.patientName || 'Patient'
+                    : activeUser.name
+                }
               />
             )}
 
@@ -761,8 +801,26 @@ export default function App() {
                 onNavigate={navigateTo}
                 user={activeUser}
                 doctorName={
-                  currentBookingSummary?.doctorName ||
-                  'Attending Physician'
+                  effectiveRole === 'doctor'
+                    ? activeUser.name.trim().startsWith('Dr.')
+                      ? activeUser.name.trim()
+                      : `Dr. ${activeUser.name.trim()}`
+                    : currentBookingSummary?.doctorName || activeCallSession?.doctorName || ''
+                }
+                doctorSpecialty={
+                  effectiveRole === 'doctor'
+                    ? activeUser.doctorSpecialty || ''
+                    : currentBookingSummary?.doctorSpecialty || activeCallSession?.doctorSpecialty || ''
+                }
+                doctorAvatar={
+                  effectiveRole === 'doctor'
+                    ? activeUser.avatarUrl
+                    : currentBookingSummary?.doctorAvatar || activeCallSession?.doctorAvatar
+                }
+                patientName={
+                  effectiveRole === 'doctor'
+                    ? activeCallSession?.patientName || ''
+                    : activeUser.name
                 }
               />
             )}
@@ -926,7 +984,18 @@ export default function App() {
           onAccept={(call) => {
             setIncomingCall(null);
             primeApi.respondCall(call.id, 'accepted').catch(() => {});
+            const sessionPayload = {
+              doctorId: activeUser.id,
+              doctorName: activeUser.name.trim().startsWith('Dr.')
+                ? activeUser.name.trim()
+                : `Dr. ${activeUser.name.trim()}`,
+              doctorSpecialty: activeUser.doctorSpecialty || '',
+              doctorAvatar: activeUser.avatarUrl || '',
+              patientName: call.patientName || '',
+            };
+            setActiveCallSession(sessionPayload);
             try {
+              localStorage.setItem('prime_telecare_active_call_session', JSON.stringify(sessionPayload));
               localStorage.removeItem('prime_telecare_incoming_call');
               localStorage.removeItem('prime_telecare_active_call');
             } catch {}

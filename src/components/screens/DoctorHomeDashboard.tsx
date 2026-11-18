@@ -362,8 +362,17 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                 <button
                   onClick={() => {
                     triggerHaptic('heavy');
+                    const sessionPayload = {
+                      doctorId: user.id,
+                      doctorName: user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`,
+                      doctorSpecialty: user.doctorSpecialty || '',
+                      doctorAvatar: user.avatarUrl || '',
+                      patientName: liveConsultationAlert.patientName || '',
+                    };
                     setLiveConsultationAlert(null);
                     try {
+                      localStorage.setItem('prime_telecare_active_call_session', JSON.stringify(sessionPayload));
+                      window.dispatchEvent(new Event('active-call-session-updated'));
                       localStorage.removeItem('prime_telecare_new_consultation_alert');
                     } catch {}
                     if (liveConsultationAlert.type === 'Chat') {
@@ -692,6 +701,19 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                           type="button"
                           onClick={() => {
                             triggerHaptic('selection');
+                            try {
+                              localStorage.setItem(
+                                'prime_telecare_active_call_session',
+                                JSON.stringify({
+                                  doctorId: user.id,
+                                  doctorName: user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`,
+                                  doctorSpecialty: user.doctorSpecialty || '',
+                                  doctorAvatar: user.avatarUrl || '',
+                                  patientName: patient.name || '',
+                                })
+                              );
+                              window.dispatchEvent(new Event('active-call-session-updated'));
+                            } catch {}
                             onNavigate(patient.type === 'Chat' ? 'active-chat' : 'video-call');
                           }}
                           className="px-4 py-1.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"

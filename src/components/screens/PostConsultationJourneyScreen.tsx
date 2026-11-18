@@ -50,8 +50,8 @@ function formatFollowUpDate(dateStr?: string): string {
 export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScreenProps> = ({
   onNavigate,
   role = 'patient',
-  doctorName = 'Attending Physician',
-  doctorId = 'doc-attending',
+  doctorName = '',
+  doctorId = '',
   patientName = 'Patient',
 }) => {
   const homeScreen: ScreenId = role === 'doctor' ? 'doctor-home' : 'patient-home';
@@ -255,9 +255,11 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                       <span>Doctor Approved</span>
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 font-nunito mt-0.5">
-                    Decided by <span className="font-bold text-slate-800">{plan.doctorName}</span>
-                  </p>
+                  {plan.doctorName && plan.doctorName !== 'Attending Physician' && (
+                    <p className="text-xs text-slate-500 font-nunito mt-0.5">
+                      Decided by <span className="font-bold text-slate-800">{plan.doctorName}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 

@@ -36,10 +36,10 @@ interface ConnectionRecoveryModalProps {
 export const ConnectionRecoveryModal: React.FC<ConnectionRecoveryModalProps> = ({
   isOpen,
   onClose,
-  doctorName = 'Dr. Sarah Johnson',
-  doctorSpecialty = 'Pediatric Specialist',
-  doctorAvatar = 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-  patientPhone = '+234 803 123 4567',
+  doctorName = 'Doctor',
+  doctorSpecialty = '',
+  doctorAvatar = '',
+  patientPhone = '',
   onRecheckConnection,
   onSwitchToAudioOnly,
   onRequestCallback,
@@ -239,7 +239,7 @@ export const ConnectionRecoveryModal: React.FC<ConnectionRecoveryModalProps> = (
                 <strong className="font-extrabold font-outfit text-sm text-[#022434]">Call-back Request Dispatched!</strong>
               </div>
               <p className="text-emerald-900 pl-7 text-[11px]">
-                Dr. Sarah Johnson has been notified to call your cellular line <strong>{phoneInput}</strong> directly via standard telephone network within 60 seconds.
+                {doctorName} has been notified to call <strong>{phoneInput}</strong> directly.
               </p>
             </div>
           )}

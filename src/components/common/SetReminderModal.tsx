@@ -21,7 +21,7 @@ export const SetReminderModal: React.FC<SetReminderModalProps> = ({
   medication,
   prescriptionId,
   prescriptionRef,
-  doctorName = 'Attending Physician',
+  doctorName = '',
   existingReminder,
   onSaveReminder,
 }) => {

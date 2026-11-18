@@ -46,6 +46,9 @@ interface VideoCallScreenProps {
   onNavigate: (screen: ScreenId) => void;
   user?: UserType;
   doctorName?: string;
+  doctorSpecialty?: string;
+  doctorAvatar?: string;
+  patientName?: string;
 }
 
 interface InCallMessage {
@@ -64,10 +67,74 @@ interface InCallMessage {
 export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   onNavigate,
   user = currentUserPatient,
-  doctorName = 'Attending Physician',
+  doctorName = '',
+  doctorSpecialty = '',
+  doctorAvatar = '',
+  patientName = '',
 }) => {
   // Active Patient Profile Info (Primary or Family Dependent)
   const activeProfile = getActiveProfileInfo(user);
+
+  const isDoctorAccount = user?.role === 'doctor';
+  const ownFormattedDoctorName = isDoctorAccount && user?.name
+    ? user.name.trim().startsWith('Dr.')
+      ? user.name.trim()
+      : `Dr. ${user.name.trim()}`
+    : '';
+  const initialCleanDoctorName =
+    ownFormattedDoctorName ||
+    (doctorName && doctorName !== 'Attending Physician' ? doctorName : '');
+  const [resolvedDoctorName, setResolvedDoctorName] = useState<string>(initialCleanDoctorName);
+  const [resolvedPatientName, setResolvedPatientName] = useState<string>(
+    isDoctorAccount
+      ? patientName || ''
+      : patientName || activeProfile.displayName || user?.name || ''
+  );
+  const [resolvedDoctorAvatar, setResolvedDoctorAvatar] = useState<string>(
+    isDoctorAccount ? user?.avatarUrl || '' : doctorAvatar || ''
+  );
+
+  useEffect(() => {
+    if (isDoctorAccount) {
+      if (ownFormattedDoctorName) setResolvedDoctorName(ownFormattedDoctorName);
+      if (patientName) setResolvedPatientName(patientName);
+    } else {
+      if (doctorName && doctorName !== 'Attending Physician') {
+        setResolvedDoctorName(doctorName);
+      }
+      if (doctorAvatar) setResolvedDoctorAvatar(doctorAvatar);
+    }
+    // Hydrate from persisted session or active call if either party name is missing
+    try {
+      const savedRaw = localStorage.getItem('prime_telecare_active_call_session');
+      if (savedRaw) {
+        const saved = JSON.parse(savedRaw);
+        if (!isDoctorAccount && !initialCleanDoctorName && saved.doctorName && saved.doctorName !== 'Attending Physician') {
+          setResolvedDoctorName(saved.doctorName);
+          if (saved.doctorAvatar) setResolvedDoctorAvatar(saved.doctorAvatar);
+        }
+        if (isDoctorAccount && !patientName && saved.patientName) {
+          setResolvedPatientName(saved.patientName);
+        }
+      }
+    } catch {}
+
+    primeApi
+      .getActiveCall()
+      .then((call) => {
+        if (!call) return;
+        if (!isDoctorAccount && !initialCleanDoctorName && call.doctorName && call.doctorName !== 'Attending Physician') {
+          setResolvedDoctorName(call.doctorName);
+        }
+        if (isDoctorAccount && !patientName && call.patientName) {
+          setResolvedPatientName(call.patientName);
+        }
+      })
+      .catch(() => {});
+  }, [doctorName, doctorAvatar, patientName, isDoctorAccount, ownFormattedDoctorName]);
+
+  const displayDoctorName = resolvedDoctorName || 'Doctor';
+  const displayPatientName = resolvedPatientName || 'Patient';
 
   // Pre-Session Consent & Identity Verification Modal State
   const [hasConfirmedConsent, setHasConfirmedConsent] = useState(false);
@@ -841,7 +908,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         patientName: activeProfile.displayName || user?.name || 'Patient',
         patientAvatar: user?.avatarUrl,
         doctorId: 'all',
-        doctorName: doctorName,
+        doctorName: displayDoctorName,
         type: 'Video' as const,
         status: 'ringing' as const,
         timestamp: Date.now(),
@@ -998,8 +1065,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     const isDoctor = user?.role === 'doctor';
     const senderRole: 'doctor' | 'patient' = isDoctor ? 'doctor' : 'patient';
     const mySenderName = isDoctor
-      ? (user?.name || doctorName)
-      : (activeProfile.displayName || user?.name || 'Patient');
+      ? displayDoctorName
+      : displayPatientName;
 
     const msg: InCallMessage = {
       id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1097,41 +1164,59 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
               {/* Doctor Details */}
               <div className="flex items-center space-x-3 bg-white/5 p-3 rounded-2xl border border-white/10">
-                <img
-                  src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200"
-                  alt={doctorName}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-[#77daa4]"
-                />
+                {resolvedDoctorAvatar ? (
+                  <img
+                    src={resolvedDoctorAvatar}
+                    alt={displayDoctorName}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-[#77daa4]"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-[#77daa4] flex items-center justify-center text-[#77daa4] font-extrabold font-outfit text-sm shrink-0">
+                    {displayDoctorName.replace(/^Dr\.\s*/i, '').slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div className="text-left">
                   <div className="flex items-center space-x-1.5">
-                    <span className="font-extrabold font-outfit text-sm text-white">{doctorName}</span>
+                    <span className="font-extrabold font-outfit text-sm text-white">{displayDoctorName}</span>
                     <span className="text-[10px] font-extrabold bg-emerald-500/30 text-[#77daa4] px-2 py-0.5 rounded-full border border-emerald-400/40">
-                      Verified Practitioner
+                      Verified
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300">MDCN Registered Telehealth Clinician</p>
+                  {doctorSpecialty && (
+                    <p className="text-xs text-slate-300">{doctorSpecialty}</p>
+                  )}
                 </div>
               </div>
 
               {/* Patient Details */}
               <div className="flex items-center space-x-3 bg-white/5 p-3 rounded-2xl border border-white/10">
-                <img
-                  src={activeProfile.avatarUrl}
-                  alt={activeProfile.displayName}
-                  className="w-10 h-10 rounded-full object-cover border border-slate-300"
-                />
+                {!isDoctorAccount && activeProfile.avatarUrl ? (
+                  <img
+                    src={activeProfile.avatarUrl}
+                    alt={displayPatientName}
+                    className="w-10 h-10 rounded-full object-cover border border-slate-300"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-slate-700 border border-slate-400 flex items-center justify-center text-white font-extrabold font-outfit text-xs shrink-0">
+                    {displayPatientName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div className="text-left">
                   <div className="flex items-center space-x-1.5">
                     <span className="font-extrabold font-outfit text-xs text-white">
-                      Patient: {activeProfile.displayName}
+                      Patient: {displayPatientName}
                     </span>
-                    <span className="text-[10px] font-bold bg-slate-700 text-slate-200 px-2 py-0.5 rounded-full">
-                      {activeProfile.relationshipLabel}
-                    </span>
+                    {!isDoctorAccount && (
+                      <span className="text-[10px] font-bold bg-slate-700 text-slate-200 px-2 py-0.5 rounded-full">
+                        {activeProfile.relationshipLabel}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-slate-300">
-                    {activeProfile.ageGenderLabel} • Primary Account: {user.name}
-                  </p>
+                  {!isDoctorAccount && (
+                    <p className="text-[11px] text-slate-300">
+                      {activeProfile.ageGenderLabel}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1234,7 +1319,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                     : iceStatus === 'checking'
                     ? 'Connecting Live Video...'
                     : myRole === 'patient'
-                    ? `Calling ${doctorName}...`
+                    ? `Calling ${displayDoctorName}...`
                     : 'Waiting for Patient...'}
                 </span>
               </div>
@@ -1301,8 +1386,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           <div className="relative">
             <div className="w-32 h-32 rounded-full border-4 border-emerald-400/40 p-1 shadow-2xl relative">
               <img
-                src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400"
-                alt={doctorName}
+                src={resolvedDoctorAvatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400'}
+                alt={displayDoctorName}
                 className="w-full h-full rounded-full object-cover"
               />
               <span className="absolute bottom-1 right-1 bg-emerald-500 text-[#022434] p-2 rounded-full border-2 border-[#022434]">
@@ -1317,7 +1402,9 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             <span className="text-xs font-extrabold font-outfit text-[#77daa4] uppercase tracking-wider bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-400/30">
               Audio Mode
             </span>
-            <h2 className="text-2xl font-extrabold font-outfit text-white">{doctorName}</h2>
+            <h2 className="text-2xl font-extrabold font-outfit text-white">
+              {myRole === 'doctor' ? displayPatientName : displayDoctorName}
+            </h2>
           </div>
 
           {/* Active Voice Waveform */}
@@ -1382,8 +1469,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         <div className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-5 animate-in fade-in duration-200">
           <div className="relative">
             <img
-              src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400"
-              alt={doctorName}
+              src={resolvedDoctorAvatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400'}
+              alt={displayDoctorName}
               className="w-28 h-28 rounded-full object-cover border-4 border-emerald-400 shadow-2xl ring-8 ring-emerald-400/20 animate-pulse"
             />
             <div className="absolute -bottom-1 -right-1 p-2.5 bg-emerald-500 rounded-full text-[#022434] shadow-lg animate-bounce">
@@ -1394,7 +1481,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             <span className="text-[11px] font-mono text-emerald-400 font-bold uppercase tracking-wider block">
               Direct Encrypted WebRTC Link
             </span>
-            <h3 className="font-outfit font-extrabold text-2xl text-white">Calling {doctorName}...</h3>
+            <h3 className="font-outfit font-extrabold text-2xl text-white">Calling {displayDoctorName}...</h3>
             <p className="text-xs text-slate-300">
               Connecting audio/video channels
             </p>
@@ -1413,7 +1500,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             }`}
           />
           <span className="text-sm sm:text-base font-extrabold font-outfit text-white tracking-wide">
-            {myRole === 'doctor' ? activeProfile.displayName || 'Patient' : doctorName}
+            {myRole === 'doctor' ? displayPatientName : displayDoctorName}
           </span>
           <span className="text-[11px] font-mono text-emerald-300 font-bold">
             {formatTime(elapsedSeconds)}
@@ -1435,7 +1522,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               Connection Interrupted
             </span>
             <h3 className="text-xl font-extrabold font-outfit text-white">
-              Reconnecting to {doctorName}...
+              Reconnecting to {myRole === 'doctor' ? displayPatientName : displayDoctorName}...
             </h3>
             <p className="text-xs text-slate-300">
               Attempt {reconnectAttempt} of 3 • Rejoining clinical stream in {reconnectCountdown}s
@@ -1700,7 +1787,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             <div className="space-y-1">
               <h3 className="text-xl font-extrabold font-outfit text-white">End Consultation?</h3>
               <p className="text-xs text-slate-300">
-                Are you sure you want to end your live session with {doctorName}? Duration: {formatTime(elapsedSeconds)}.
+                End session with {myRole === 'doctor' ? displayPatientName : displayDoctorName}? Duration: {formatTime(elapsedSeconds)}.
               </p>
             </div>
 
@@ -1792,8 +1879,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       <ConnectionRecoveryModal
         isOpen={showConnectionRecoveryModal}
         onClose={() => setShowConnectionRecoveryModal(false)}
-        doctorName="Dr. Sarah Johnson"
-        doctorSpecialty="Pediatric Specialist"
+        doctorName={displayDoctorName}
+        doctorSpecialty={doctorSpecialty || user?.doctorSpecialty || ''}
         onRecheckConnection={() => {
           setIsReconnecting(false);
           setConnectionQuality('excellent');
@@ -1821,15 +1908,15 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         isOpen={isPrescriptionModalOpen}
         onClose={() => setIsPrescriptionModalOpen(false)}
         patientInfo={{
-          name: activeProfile.displayName || user?.name || 'Patient',
+          name: displayPatientName,
           allergies: user?.allergies || [],
         }}
         consultationType="Video"
         doctorInfo={{
-          name: doctorName,
+          name: displayDoctorName,
           license: user?.doctorLicenseNo || 'MDCN Verified',
-          specialty: user?.doctorSpecialty || 'Telehealth Physician',
-          clinic: 'Prime Telecare Clinical Suite',
+          specialty: user?.doctorSpecialty || doctorSpecialty || '',
+          clinic: 'Prime Telecare',
         }}
         onPrescriptionSaved={(rx) => {
           setIsPrescriptionModalOpen(false);
@@ -1838,7 +1925,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           const rxMsg: InCallMessage = {
             id: `rx-${Date.now()}`,
             sender: 'doctor',
-            senderName: doctorName,
+            senderName: displayDoctorName,
             text: `E-Prescription #${rx.referenceNo}: ${rx.medications.map((m) => `${m.drugName} (${m.dosage}, ${m.frequency})`).join('; ')}`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
@@ -1847,7 +1934,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           setMessages((prev) => [...prev, rxMsg]);
           primeApi.sendChatMessage(sessionId, {
             sender: 'doctor',
-            senderName: doctorName,
+            senderName: displayDoctorName,
             text: rxMsg.text,
           }).catch(() => {});
         }}

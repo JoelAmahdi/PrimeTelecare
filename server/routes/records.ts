@@ -59,7 +59,7 @@ recordsRouter.post('/export-request', (req: Request, res: Response) => {
 
 // POST /api/records/export-authorize
 recordsRouter.post('/export-authorize', (req: Request, res: Response) => {
-  const { sessionId = 'app-1', action, doctorName = 'Dr. Sarah Johnson', doctorLicense = 'MDCN/2019/88492' } = req.body;
+  const { sessionId = 'app-1', action, doctorName = '', doctorLicense = '' } = req.body;
 
   const isGranted = action === 'grant';
   const auth = store.saveExportAuthorization(sessionId, {
