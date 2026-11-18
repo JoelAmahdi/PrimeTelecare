@@ -634,7 +634,7 @@ export const primeApi = {
   // --- WebRTC Video Signaling ---
   async sendVideoSignal(
     sessionId: string,
-    signal: { sender: string; peerId?: string; type: string; data?: any }
+    signal: { sender: string; peerId?: string; handshakeId?: string; type: string; data?: any }
   ) {
     try {
       return await request<{ success: boolean; signalId: string; seq: number }>(

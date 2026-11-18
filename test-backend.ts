@@ -284,6 +284,28 @@ async function testBackend() {
     'GET /api/video/:sessionId/signal delivers peer signals via sequence counter'
   );
 
+  // Verify handshakeId-scoped offer/answer/candidate signaling never drops same-handshake signals
+  const hsId = 'hs-test-001';
+  await req('/video/room-webrtc-test/signal', {
+    method: 'POST',
+    body: JSON.stringify({ sender: 'patient', peerId: 'pat-peer-1', handshakeId: hsId, type: 'offer', data: { type: 'offer', sdp: 'v=0', handshakeId: hsId } }),
+  });
+  await req('/video/room-webrtc-test/signal', {
+    method: 'POST',
+    body: JSON.stringify({ sender: 'doctor', peerId: 'doc-peer-1', handshakeId: hsId, type: 'answer', data: { type: 'answer', sdp: 'v=0', handshakeId: hsId } }),
+  });
+  await req('/video/room-webrtc-test/signal', {
+    method: 'POST',
+    body: JSON.stringify({ sender: 'doctor', peerId: 'doc-peer-1', handshakeId: hsId, type: 'candidate', data: { candidate: 'candidate:1 1 udp 1 1.2.3.4 5000 typ host' } }),
+  });
+  const docSignalsForPat = await req('/video/room-webrtc-test/signal?afterSeq=0&excludePeerId=pat-peer-1');
+  assert(
+    docSignalsForPat.status === 200 &&
+      docSignalsForPat.data.signals.some((s: any) => s.type === 'answer' && s.handshakeId === hsId) &&
+      docSignalsForPat.data.signals.some((s: any) => s.type === 'candidate' && s.handshakeId === hsId),
+    'GET /api/video/:sessionId/signal preserves doctor answer and ICE candidates with handshakeId'
+  );
+
   console.log(`\n--- Test Results: ${passed} Passed, ${failed} Failed ---`);
   server.close(() => {
     process.exit(failed > 0 ? 1 : 0);

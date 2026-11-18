@@ -28,59 +28,91 @@ export async function requestUserMedia(
     };
   }
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: video ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode } : false,
-      audio: audio ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
-    });
+  const attempts: Array<{ constraints: MediaStreamConstraints; label: string }> = [];
 
-    const videoTrack = stream.getVideoTracks()[0] || null;
-    const audioTrack = stream.getAudioTracks()[0] || null;
+  if (video && audio) {
+    attempts.push(
+      {
+        label: 'HD video + enhanced audio',
+        constraints: {
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode },
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        },
+      },
+      {
+        label: 'facingMode video + standard audio',
+        constraints: { video: { facingMode }, audio: true },
+      },
+      {
+        label: 'default camera + microphone',
+        constraints: { video: true, audio: true },
+      },
+      {
+        label: 'camera only (microphone unavailable)',
+        constraints: { video: true, audio: false },
+      },
+      {
+        label: 'audio only (camera unavailable)',
+        constraints: { video: false, audio: true },
+      }
+    );
+  } else if (video) {
+    attempts.push(
+      { label: 'HD video', constraints: { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode }, audio: false } },
+      { label: 'default camera', constraints: { video: true, audio: false } }
+    );
+  } else {
+    attempts.push({ label: 'audio only', constraints: { video: false, audio: true } });
+  }
 
-    return {
-      stream,
-      videoTrack,
-      audioTrack,
-      hasCamera: !!videoTrack,
-      hasMicrophone: !!audioTrack,
-      error: null,
-    };
-  } catch (err: any) {
-    console.warn('[LiveMedia] Camera/Mic request failed, attempting audio-only fallback:', err.message);
+  let lastError: any = null;
 
-    // Fallback: Try audio only if video request failed (e.g. no camera attached)
-    if (video) {
-      try {
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        return {
-          stream: audioStream,
-          videoTrack: null,
-          audioTrack: audioStream.getAudioTracks()[0] || null,
-          hasCamera: false,
-          hasMicrophone: true,
-          error: 'Camera unavailable. Switched to live microphone audio stream.',
-        };
-      } catch (audioErr: any) {
-        return {
-          stream: null,
-          videoTrack: null,
-          audioTrack: null,
-          hasCamera: false,
-          hasMicrophone: false,
-          error: audioErr.message || 'Camera and microphone permissions were denied.',
-        };
+  for (const attempt of attempts) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(attempt.constraints);
+      const videoTrack = stream.getVideoTracks()[0] || null;
+      const audioTrack = stream.getAudioTracks()[0] || null;
+
+      // Ensure tracks are enabled right away
+      if (videoTrack) videoTrack.enabled = true;
+      if (audioTrack) audioTrack.enabled = true;
+
+      const warning =
+        video && !videoTrack
+          ? 'Camera unavailable. Switched to audio stream.'
+          : audio && !audioTrack
+          ? 'Microphone unavailable. Video stream active.'
+          : null;
+
+      return {
+        stream,
+        videoTrack,
+        audioTrack,
+        hasCamera: !!videoTrack,
+        hasMicrophone: !!audioTrack,
+        error: warning,
+      };
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[LiveMedia] ${attempt.label} failed:`, err?.name, err?.message);
+      // If user explicitly denied permission, no need to retry other constraints that ask for the same blocked permission
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        break;
       }
     }
-
-    return {
-      stream: null,
-      videoTrack: null,
-      audioTrack: null,
-      hasCamera: false,
-      hasMicrophone: false,
-      error: err.message || 'Media permission denied.',
-    };
   }
+
+  return {
+    stream: null,
+    videoTrack: null,
+    audioTrack: null,
+    hasCamera: false,
+    hasMicrophone: false,
+    error:
+      lastError?.name === 'NotAllowedError' || lastError?.name === 'PermissionDeniedError'
+        ? 'Camera/microphone permission was blocked. Allow camera access in your browser bar and tap Enable Camera.'
+        : lastError?.message || 'Camera and microphone unavailable.',
+  };
 }
 
 /**

@@ -105,7 +105,7 @@ export const NextAppointmentBanner: React.FC<NextAppointmentBannerProps> = ({
   const personName = role === 'doctor' ? activeAlert.patientName : activeAlert.doctorName;
   const personSubtitle =
     role === 'doctor'
-      ? `${activeAlert.type} Consultation · Chief Complaint: High Fever & Fatigue`
+      ? `${activeAlert.type} Consultation`
       : `${activeAlert.doctorSpecialty} · ${activeAlert.type} Consultation`;
 
 

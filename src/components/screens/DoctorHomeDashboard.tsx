@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle, CheckSquare } from 'lucide-react';
+import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle } from 'lucide-react';
 import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { NextAppointmentBanner } from '../common/NextAppointmentBanner';
 import { ClinicalDocumentationModal } from '../common/ClinicalDocumentationModal';
-import { CareJourneyPlanModal } from '../common/CareJourneyPlanModal';
 import { useOfflineStatus } from '../../utils/useOfflineStatus';
 import { getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
 import { primeApi } from '../../services/apiClient';
@@ -24,7 +23,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
   const effectiveOffline = isOfflineMode ?? isOffline;
   const [selectedPatientForDoc, setSelectedPatientForDoc] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [isCareJourneyModalOpen, setIsCareJourneyModalOpen] = useState(false);
   const [isDoctorOnline, setIsDoctorOnline] = useState<boolean>(true);
 
   // Register & keep this logged-in doctor marked ONLINE in the live directory so patients immediately see them
@@ -221,8 +219,8 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
       <div className="md:hidden">
         <Header
           title="Doctor Dashboard"
-          showBell
-          bellCount={3}
+          showBell={todaysPatients.length > 0}
+          bellCount={todaysPatients.length}
           onBellClick={() => {
             triggerHaptic('light');
             onNavigate('active-chat');
@@ -295,18 +293,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                   ? 'Online & Accepting Patients'
                   : 'Offline (Tap to Go Online)'}
               </span>
-            </button>
-
-            <button
-              onClick={() => {
-                triggerHaptic('medium');
-                setIsCareJourneyModalOpen(true);
-              }}
-              className="px-4 py-2.5 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-[#006c44] font-bold font-outfit text-xs sm:text-sm rounded-xl shadow-xs transition-all active:scale-95 flex items-center space-x-2 cursor-pointer"
-              title="Review and decide patient recovery care plan"
-            >
-              <CheckSquare className="w-4 h-4 text-[#006c44]" />
-              <span>Care Journey Plan</span>
             </button>
 
             <button
@@ -800,31 +786,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
               </div>
             )}
 
-            {/* Doctor's Telemedicine Schedule Card */}
-            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-extrabold font-outfit text-sm sm:text-base text-[#022434]">
-                  Clinical Schedule
-                </h4>
-                <span className="text-xs font-bold text-slate-400 font-mono">WAT (GMT+1)</span>
-              </div>
-
-              <div className="space-y-2.5 text-xs font-nunito">
-                <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                  <span className="text-slate-500">Morning Shift</span>
-                  <span className="font-bold text-[#022434]">08:00 AM – 01:00 PM</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                  <span className="text-slate-500">Afternoon Shift</span>
-                  <span className="font-bold text-[#022434]">02:00 PM – 06:00 PM</span>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-slate-500">Emergency On-Call</span>
-                  <span className="font-bold text-emerald-600">Active (24/7 Hotline)</span>
-                </div>
-              </div>
-            </div>
-
             {/* Regulatory & Security Info Box */}
             <div className="bg-slate-100/70 rounded-3xl p-5 border border-slate-200 text-xs text-slate-600 font-nunito space-y-2">
               <div className="flex items-center space-x-2 text-[#022434] font-bold font-outfit">
@@ -845,14 +806,6 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
           onClose={() => setSelectedPatientForDoc(null)}
         />
       )}
-
-      {/* Doctor Care Journey Plan Decision Modal */}
-      <CareJourneyPlanModal
-        isOpen={isCareJourneyModalOpen}
-        onClose={() => setIsCareJourneyModalOpen(false)}
-        doctorName={user.name.startsWith('Dr.') ? user.name : `Dr. ${user.name}`}
-        patientName={selectedPatientForDoc || todaysPatients[0]?.name || 'Patient'}
-      />
     </div>
   );
 };

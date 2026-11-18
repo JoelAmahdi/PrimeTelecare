@@ -8,8 +8,8 @@ function getIceServers() {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
     // Public OpenRelay / Metered TURN relays for cellular & symmetric NAT traversal
     {
       urls: [
@@ -104,6 +104,7 @@ interface WebRTCSignal {
   seq: number;
   sender: string;
   peerId: string;
+  handshakeId?: string;
   type: 'ready' | 'offer' | 'answer' | 'candidate' | 'leave';
   data: any;
   timestamp: number;
@@ -126,7 +127,7 @@ function getRoom(sessionId: string): RoomState {
 // POST /api/video/:sessionId/signal
 videoRouter.post('/:sessionId/signal', (req: Request, res: Response) => {
   const { sessionId } = req.params;
-  const { sender, peerId, type, data } = req.body;
+  const { sender, peerId, handshakeId, type, data } = req.body;
 
   if (!sender || !type) {
     return res.status(400).json({ success: false, error: 'Sender and signal type required' });
@@ -134,15 +135,19 @@ videoRouter.post('/:sessionId/signal', (req: Request, res: Response) => {
 
   const room = getRoom(sessionId);
   const resolvedPeerId = peerId || sender;
+  const resolvedHandshakeId: string | undefined = handshakeId || data?.handshakeId || undefined;
   const now = Date.now();
 
   // Prune signals older than 2 minutes so dead prior calls never poison new calls
   room.signals = room.signals.filter((s) => now - s.timestamp < 120_000);
 
-  // If a peer sends a fresh 'offer', discard older offers/answers/candidates from previous handshakes
+  // If a peer sends a fresh 'offer' for a NEW handshakeId, prune only signals from OLDER handshakes
+  // (never delete 'ready' signals or signals belonging to this same handshakeId)
   if (type === 'offer') {
     room.signals = room.signals.filter(
-      (s) => s.type === 'ready' || (s.peerId === resolvedPeerId && s.type === 'ready')
+      (s) =>
+        s.type === 'ready' ||
+        (resolvedHandshakeId && s.handshakeId === resolvedHandshakeId)
     );
   }
 
@@ -153,11 +158,19 @@ videoRouter.post('/:sessionId/signal', (req: Request, res: Response) => {
     );
   }
 
+  // When a peer leaves, remove their stale 'ready' so future peers don't offer to a dead peer
+  if (type === 'leave') {
+    room.signals = room.signals.filter(
+      (s) => !(s.peerId === resolvedPeerId && s.type === 'ready')
+    );
+  }
+
   const signal: WebRTCSignal = {
     id: `sig-${now}-${Math.random().toString(36).slice(2, 7)}`,
     seq: room.nextSeq++,
     sender,
     peerId: resolvedPeerId,
+    handshakeId: resolvedHandshakeId,
     type,
     data: data ?? null,
     timestamp: now,

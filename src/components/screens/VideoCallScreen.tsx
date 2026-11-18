@@ -29,7 +29,6 @@ import {
   Pill,
   Copy,
   Check,
-  CheckSquare,
 } from 'lucide-react';
 import { ScreenId, User as UserType } from '../../types';
 import { StatusBar } from '../common/StatusBar';
@@ -39,7 +38,6 @@ import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { ConnectionRecoveryModal } from '../common/ConnectionRecoveryModal';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
-import { CareJourneyPlanModal } from '../common/CareJourneyPlanModal';
 import { primeApi } from '../../services/apiClient';
 import { playRingingTone, playConnectedTone, playHangupTone } from '../../utils/audioTones';
 import { requestUserMedia, setupAudioAnalyser, startScreenShare, createDoctorCanvasStream } from '../../utils/liveMedia';
@@ -102,7 +100,6 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const isChatOpenRef = useRef(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
-  const [isCareJourneyModalOpen, setIsCareJourneyModalOpen] = useState(false);
 
   useEffect(() => {
     isChatOpenRef.current = isChatOpen;
@@ -222,6 +219,9 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [hasCamera, setHasCamera] = useState<boolean>(false);
   const [hasMicrophone, setHasMicrophone] = useState<boolean>(false);
+  const [hasRemoteVideo, setHasRemoteVideo] = useState<boolean>(false);
+  const [audioBlocked, setAudioBlocked] = useState<boolean>(false);
+  const [isAcquiringMedia, setIsAcquiringMedia] = useState<boolean>(false);
   const [isConnectingCall, setIsConnectingCall] = useState<boolean>(false);
   const [isPeerConnected, setIsPeerConnected] = useState<boolean>(false);
   const isPeerConnectedRef = useRef<boolean>(false);
@@ -232,10 +232,15 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const activeHandshakeIdRef = useRef<string | null>(null);
+  const activeRemotePeerIdRef = useRef<string | null>(null);
+  const pendingCandidatesByHandshakeRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
+  const requestReconnectRef = useRef<(() => void) | null>(null);
   const iceServersRef = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
     {
       urls: [
         'turn:openrelay.metered.ca:80',
@@ -258,6 +263,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Keep video/audio DOM elements reliably bound whenever streams or layout swap
+  // Keep <video> muted so Chrome/Safari/iOS NEVER block autoplay; <audio> element handles unmuted voice
   useEffect(() => {
     const localEl = localVideoRef.current;
     if (localEl && localStream) {
@@ -273,6 +279,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       if (remoteEl.srcObject !== remoteStream) {
         remoteEl.srcObject = remoteStream;
       }
+      remoteEl.muted = true;
       remoteEl.play().catch(() => {});
     }
 
@@ -281,9 +288,17 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       if (audioEl.srcObject !== remoteStream) {
         audioEl.srcObject = remoteStream;
       }
-      audioEl.play().catch(() => {});
+      audioEl.muted = false;
+      audioEl
+        .play()
+        .then(() => setAudioBlocked(false))
+        .catch(() => setAudioBlocked(true));
     }
-  }, [localStream, remoteStream, swappedPiP, isVideoOff, isAudioOnlyMode, hasConfirmedConsent]);
+
+    setHasRemoteVideo(
+      !!remoteStream && remoteStream.getVideoTracks().some((t) => t.readyState === 'live')
+    );
+  }, [localStream, remoteStream, swappedPiP, isVideoOff, isAudioOnlyMode, hasConfirmedConsent, hasCamera]);
 
   // Active Call Timer Loop
   useEffect(() => {
@@ -296,40 +311,76 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
   // Acquire local camera/mic (can be triggered directly inside user click gesture for iOS Safari)
   const acquireLocalMedia = async (mode: 'user' | 'environment' = facingMode) => {
+    setIsAcquiringMedia(true);
     setMediaError(null);
-    const media = await requestUserMedia(true, true, mode);
-    if (media.stream) {
-      if (localStreamRef.current && localStreamRef.current !== media.stream) {
-        localStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-      localStreamRef.current = media.stream;
-      setLocalStream(media.stream);
-      setHasCamera(media.hasCamera);
-      setHasMicrophone(media.hasMicrophone);
-      if (media.error) {
-        setMediaError(media.error);
-      }
-      // If peer connection already exists, replace or add tracks live
-      const pc = peerConnectionRef.current;
-      if (pc && pc.signalingState !== 'closed') {
-        const senders = pc.getSenders();
-        media.stream.getTracks().forEach((track) => {
-          const existingSender = senders.find((s) => s.track?.kind === track.kind);
-          if (existingSender) {
-            existingSender.replaceTrack(track).catch(() => {});
-          } else {
-            pc.addTrack(track, media.stream!);
-          }
+    try {
+      const media = await requestUserMedia(true, true, mode);
+      if (media.stream) {
+        if (localStreamRef.current && localStreamRef.current !== media.stream) {
+          localStreamRef.current.getTracks().forEach((t) => t.stop());
+        }
+        // Apply current mute/video toggles cleanly
+        media.stream.getAudioTracks().forEach((t) => {
+          t.enabled = !isMuted;
         });
+        media.stream.getVideoTracks().forEach((t) => {
+          t.enabled = !isVideoOff;
+        });
+
+        localStreamRef.current = media.stream;
+        setLocalStream(media.stream);
+        setHasCamera(media.hasCamera);
+        setHasMicrophone(media.hasMicrophone);
+        if (media.error) {
+          setMediaError(media.error);
+        }
+
+        // If peer connection already exists, hot-swap or upgrade recvonly -> sendrecv and renegotiate
+        const pc = peerConnectionRef.current;
+        if (pc && pc.signalingState !== 'closed') {
+          let needsRenegotiation = false;
+          const transceivers = pc.getTransceivers();
+
+          for (const track of media.stream.getTracks()) {
+            const matchingTransceiver = transceivers.find(
+              (t) =>
+                t.sender?.track?.kind === track.kind ||
+                t.receiver?.track?.kind === track.kind
+            );
+
+            if (matchingTransceiver) {
+              if (matchingTransceiver.direction === 'recvonly' || matchingTransceiver.direction === 'inactive') {
+                matchingTransceiver.direction = 'sendrecv';
+                needsRenegotiation = true;
+              }
+              try {
+                await matchingTransceiver.sender.replaceTrack(track);
+              } catch {
+                needsRenegotiation = true;
+              }
+            } else {
+              pc.addTrack(track, media.stream);
+              needsRenegotiation = true;
+            }
+          }
+
+          if (needsRenegotiation && requestReconnectRef.current) {
+            requestReconnectRef.current();
+          }
+        }
+        return media.stream;
+      } else {
+        setHasCamera(false);
+        setHasMicrophone(false);
+        setMediaError(media.error || 'Camera/microphone permission denied. Tap Enable Camera to retry.');
+        return null;
       }
-      return media.stream;
-    } else {
-      setMediaError(media.error || 'Camera/microphone permission denied. Tap Enable Camera to retry.');
-      return null;
+    } finally {
+      setIsAcquiringMedia(false);
     }
   };
 
-  // Live WebRTC PeerConnection & Order-Independent 2-Way Signaling Lifecycle
+  // Live WebRTC PeerConnection & Zero-Glare Handshake-Scoped 2-Way Signaling Lifecycle
   useEffect(() => {
     if (!hasConfirmedConsent) return;
 
@@ -342,18 +393,23 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
     const myPeerId = peerIdRef.current;
 
-    const sendSignal = async (type: 'ready' | 'offer' | 'answer' | 'candidate' | 'leave', data?: any) => {
-      const payload = { sender: myRole, peerId: myPeerId, type, data };
+    const sendSignal = async (
+      type: 'ready' | 'offer' | 'answer' | 'candidate' | 'leave',
+      data?: any,
+      handshakeId?: string
+    ) => {
+      const payload = { sender: myRole, peerId: myPeerId, handshakeId, type, data };
       try {
         signalChannel?.postMessage({ sessionId, ...payload });
       } catch {}
       await primeApi.sendVideoSignal(sessionId, payload);
     };
 
-    const drainPendingCandidates = async (pc: RTCPeerConnection) => {
-      if (!pc.remoteDescription || pendingCandidatesRef.current.length === 0) return;
-      const queued = [...pendingCandidatesRef.current];
-      pendingCandidatesRef.current = [];
+    const drainPendingCandidates = async (pc: RTCPeerConnection, handshakeId: string) => {
+      if (!pc.remoteDescription) return;
+      const queued = pendingCandidatesByHandshakeRef.current[handshakeId];
+      if (!queued || queued.length === 0) return;
+      delete pendingCandidatesByHandshakeRef.current[handshakeId];
       for (const cand of queued) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(cand));
@@ -361,7 +417,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       }
     };
 
-    const buildPeerConnection = (): RTCPeerConnection => {
+    const buildPeerConnection = (handshakeId: string): RTCPeerConnection => {
       if (peerConnectionRef.current) {
         try {
           peerConnectionRef.current.ontrack = null;
@@ -372,21 +428,24 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         } catch {}
       }
 
-      pendingCandidatesRef.current = [];
+      activeHandshakeIdRef.current = handshakeId;
       remoteStreamRef.current = new MediaStream();
 
       const pc = new RTCPeerConnection({
         iceServers: iceServersRef.current,
-        iceCandidatePoolSize: 4,
+        iceCandidatePoolSize: 6,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
       });
       peerConnectionRef.current = pc;
 
-      // Attach local camera & mic tracks, or recvonly transceivers so remote video ALWAYS streams
+      // Attach local camera & mic tracks; fallback to recvonly transceiver ONLY if device track is missing
       const stream = localStreamRef.current;
       let hasVideoSender = false;
       let hasAudioSender = false;
       if (stream) {
         stream.getTracks().forEach((track) => {
+          if (track.readyState !== 'live') return;
           if (track.kind === 'video') hasVideoSender = true;
           if (track.kind === 'audio') hasAudioSender = true;
           pc.addTrack(track, stream);
@@ -399,9 +458,28 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         pc.addTransceiver('audio', { direction: 'recvonly' });
       }
 
-      // Accumulate incoming remote tracks safely across Chrome, Android, and iOS Safari
+      const publishRemoteStream = () => {
+        if (!isMounted || peerConnectionRef.current !== pc) return;
+        const liveTracks = remoteStreamRef.current
+          .getTracks()
+          .filter((t) => t.readyState === 'live');
+        const freshStream = new MediaStream(liveTracks);
+        setRemoteStream(freshStream);
+        setHasRemoteVideo(liveTracks.some((t) => t.kind === 'video'));
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = freshStream;
+          remoteVideoRef.current.muted = true;
+          remoteVideoRef.current.play().catch(() => {});
+        }
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = freshStream;
+          remoteAudioRef.current.play().then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+        }
+      };
+
+      // Accumulate incoming remote tracks safely across Chrome, Edge, Android, and iOS Safari
       pc.ontrack = (event) => {
-        if (!isMounted) return;
+        if (!isMounted || peerConnectionRef.current !== pc) return;
         const incomingTracks: MediaStreamTrack[] = [];
         if (event.streams && event.streams[0]) {
           event.streams[0].getTracks().forEach((t) => incomingTracks.push(t));
@@ -410,48 +488,64 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           incomingTracks.push(event.track);
         }
 
-        const existingIds = new Set(remoteStreamRef.current.getTracks().map((t) => t.id));
-        incomingTracks.forEach((t) => {
-          if (!existingIds.has(t.id)) {
-            remoteStreamRef.current.addTrack(t);
-            existingIds.add(t.id);
+        incomingTracks.forEach((track) => {
+          // Remove any stale/ended track of the same kind before adding the live one
+          remoteStreamRef.current.getTracks().forEach((existing) => {
+            if (existing.id !== track.id && existing.kind === track.kind && existing.readyState === 'ended') {
+              remoteStreamRef.current.removeTrack(existing);
+            }
+          });
+          const alreadyAdded = remoteStreamRef.current.getTracks().some((t) => t.id === track.id);
+          if (!alreadyAdded) {
+            remoteStreamRef.current.addTrack(track);
           }
+          // Chrome/Safari often fire ontrack while track.muted=true before first RTP packet arrives
+          track.onunmute = () => publishRemoteStream();
+          track.onended = () => publishRemoteStream();
         });
 
-        const freshStream = new MediaStream(remoteStreamRef.current.getTracks());
-        setRemoteStream(freshStream);
-        isPeerConnectedRef.current = true;
-        setIsPeerConnected(true);
-        setIceStatus('connected');
+        publishRemoteStream();
       };
 
       pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendSignal('candidate', event.candidate.toJSON());
+        if (event.candidate && peerConnectionRef.current === pc) {
+          sendSignal('candidate', event.candidate.toJSON(), handshakeId);
         }
       };
 
       const handleStateUpdate = () => {
-        if (!isMounted) return;
+        if (!isMounted || peerConnectionRef.current !== pc) return;
         const state = pc.iceConnectionState || pc.connectionState;
         setIceStatus(state);
         if (state === 'connected' || state === 'completed') {
           isPeerConnectedRef.current = true;
           setIsPeerConnected(true);
           playConnectedTone();
+          publishRemoteStream();
         } else if (state === 'failed') {
           isPeerConnectedRef.current = false;
           setIsPeerConnected(false);
-          // Self-heal failed ICE by re-announcing ready
-          sendSignal('ready', { restart: true });
+          setTimeout(() => {
+            if (isMounted && peerConnectionRef.current === pc && pc.iceConnectionState === 'failed') {
+              if (myRole === 'patient') {
+                createAndSendOffer(true);
+              } else {
+                sendSignal('ready', { role: myRole, restart: true });
+              }
+            }
+          }, 1200);
         } else if (state === 'disconnected') {
           setTimeout(() => {
-            if (isMounted && pc.iceConnectionState === 'disconnected') {
+            if (isMounted && peerConnectionRef.current === pc && pc.iceConnectionState === 'disconnected') {
               isPeerConnectedRef.current = false;
               setIsPeerConnected(false);
-              sendSignal('ready', { restart: true });
+              if (myRole === 'patient') {
+                createAndSendOffer(true);
+              } else {
+                sendSignal('ready', { role: myRole, restart: true });
+              }
             }
-          }, 3000);
+          }, 5000);
         }
       };
 
@@ -461,27 +555,48 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       return pc;
     };
 
-    const createAndSendOffer = async () => {
+    const createAndSendOffer = async (force: boolean = false) => {
       const now = Date.now();
-      if (now - lastOfferSentAtRef.current < 2500) return;
+      if (!force && now - lastOfferSentAtRef.current < 4000) return;
       lastOfferSentAtRef.current = now;
 
+      const handshakeId = `hs-${now}-${Math.random().toString(36).slice(2, 7)}`;
       try {
-        const pc = buildPeerConnection();
+        setIceStatus('checking');
+        const pc = buildPeerConnection(handshakeId);
         const offer = await pc.createOffer({
           offerToReceiveAudio: true,
           offerToReceiveVideo: true,
         });
         await pc.setLocalDescription(offer);
-        await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
+        await sendSignal('offer', { type: offer.type, sdp: offer.sdp, handshakeId }, handshakeId);
       } catch (err) {
         console.warn('[WebRTC] Offer creation error:', err);
+      }
+    };
+
+    // Expose manual/renegotiation reconnect trigger
+    requestReconnectRef.current = () => {
+      if (!isMounted) return;
+      isPeerConnectedRef.current = false;
+      setIsPeerConnected(false);
+      setIceStatus('checking');
+      if (myRole === 'patient') {
+        createAndSendOffer(true);
+      } else {
+        sendSignal('ready', {
+          role: myRole,
+          restart: true,
+          hasVideo: !!localStreamRef.current?.getVideoTracks().length,
+          hasAudio: !!localStreamRef.current?.getAudioTracks().length,
+        });
       }
     };
 
     const handleIncomingSignal = async (sig: {
       sender: string;
       peerId?: string;
+      handshakeId?: string;
       type: string;
       data: any;
     }) => {
@@ -489,44 +604,102 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       if (sig.peerId && sig.peerId === myPeerId) return;
       if (!sig.peerId && sig.sender === myRole) return;
 
+      const sigHandshakeId: string | undefined = sig.handshakeId || sig.data?.handshakeId;
+
       try {
         if (sig.type === 'ready') {
-          // Patient always initiates a fresh SDP Offer whenever Doctor announces ready
+          // Patient is the deterministic Offerer whenever Doctor joins or requests restart
           if (myRole === 'patient') {
             const pc = peerConnectionRef.current;
-            const alreadyLive =
+            const sameRemotePeer = activeRemotePeerIdRef.current === (sig.peerId || sig.sender);
+            const isConnectingOrLive =
               pc &&
-              (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') &&
-              !sig.data?.restart;
-            if (!alreadyLive) {
-              await createAndSendOffer();
+              sameRemotePeer &&
+              !sig.data?.restart &&
+              (pc.iceConnectionState === 'connected' ||
+                pc.iceConnectionState === 'completed' ||
+                pc.iceConnectionState === 'checking' ||
+                (pc.signalingState === 'have-local-offer' &&
+                  Date.now() - lastOfferSentAtRef.current < 12000));
+
+            if (!isConnectingOrLive) {
+              activeRemotePeerIdRef.current = sig.peerId || sig.sender;
+              await createAndSendOffer(!!sig.data?.restart);
+            }
+          } else {
+            // Doctor received Patient's ready -> re-announce ready once if not already connected/checking
+            const pc = peerConnectionRef.current;
+            const doctorAlreadyWorking =
+              pc &&
+              (pc.iceConnectionState === 'connected' ||
+                pc.iceConnectionState === 'completed' ||
+                pc.iceConnectionState === 'checking');
+            if (!doctorAlreadyWorking) {
+              await sendSignal('ready', {
+                role: myRole,
+                hasVideo: !!localStreamRef.current?.getVideoTracks().length,
+                hasAudio: !!localStreamRef.current?.getAudioTracks().length,
+              });
             }
           }
-        } else if (sig.type === 'offer') {
-          // Answerer (typically Doctor, or fallback if roles differ) handles incoming Offer
-          const pc = buildPeerConnection();
-          await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
-          await drainPendingCandidates(pc);
+        } else if (sig.type === 'offer' && sig.data?.sdp) {
+          // Answerer (Doctor) handles incoming Offer without wiping candidates for this handshakeId
+          const offerHsId = sigHandshakeId || `hs-legacy-${Date.now()}`;
+          if (
+            offerHsId === activeHandshakeIdRef.current &&
+            peerConnectionRef.current &&
+            peerConnectionRef.current.signalingState !== 'closed'
+          ) {
+            return;
+          }
+
+          // Ensure Doctor's local camera & mic are ready before creating the Answer SDP
+          if (!localStreamRef.current) {
+            await acquireLocalMedia(facingMode);
+          }
+
+          activeRemotePeerIdRef.current = sig.peerId || sig.sender;
+          setIceStatus('checking');
+          const pc = buildPeerConnection(offerHsId);
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: sig.data.type, sdp: sig.data.sdp }));
+          await drainPendingCandidates(pc, offerHsId);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          await sendSignal('answer', { type: answer.type, sdp: answer.sdp });
-        } else if (sig.type === 'answer') {
+          await sendSignal('answer', { type: answer.type, sdp: answer.sdp, handshakeId: offerHsId }, offerHsId);
+        } else if (sig.type === 'answer' && sig.data?.sdp) {
           const pc = peerConnectionRef.current;
-          if (pc && pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
-            await drainPendingCandidates(pc);
+          const matchesHandshake = !sigHandshakeId || sigHandshakeId === activeHandshakeIdRef.current;
+          if (pc && matchesHandshake && pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription({ type: sig.data.type, sdp: sig.data.sdp }));
+            if (activeHandshakeIdRef.current) {
+              await drainPendingCandidates(pc, activeHandshakeIdRef.current);
+            }
           }
         } else if (sig.type === 'candidate' && sig.data) {
           const pc = peerConnectionRef.current;
-          if (pc && pc.remoteDescription) {
+          const candHsId = sigHandshakeId || activeHandshakeIdRef.current || 'default';
+          if (
+            pc &&
+            pc.remoteDescription &&
+            (!sigHandshakeId || sigHandshakeId === activeHandshakeIdRef.current)
+          ) {
             await pc.addIceCandidate(new RTCIceCandidate(sig.data)).catch(() => {});
           } else {
-            pendingCandidatesRef.current.push(sig.data);
+            if (!pendingCandidatesByHandshakeRef.current[candHsId]) {
+              pendingCandidatesByHandshakeRef.current[candHsId] = [];
+            }
+            pendingCandidatesByHandshakeRef.current[candHsId].push(sig.data);
           }
         } else if (sig.type === 'leave') {
+          if (sig.peerId && activeRemotePeerIdRef.current && sig.peerId !== activeRemotePeerIdRef.current) {
+            return;
+          }
           isPeerConnectedRef.current = false;
           setIsPeerConnected(false);
+          setHasRemoteVideo(false);
           setRemoteStream(null);
+          activeRemotePeerIdRef.current = null;
+          setIceStatus('waiting');
           showToast('The other participant left the call room.', 'info');
         }
       } catch (err) {
@@ -545,7 +718,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         }
       } catch {}
 
-      // 2. Ensure local media is acquired (if not already captured during the Enter button click)
+      // 2. Ensure local media is acquired BEFORE signaling so video track is included in initial SDP
       let activeLocalStream = localStreamRef.current;
       if (!activeLocalStream) {
         activeLocalStream = await acquireLocalMedia(facingMode);
@@ -559,7 +732,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
       if (!isMounted) return;
 
-      // 3. Open same-browser BroadcastChannel for instant local testing
+      // 3. Open same-browser BroadcastChannel for instant local/same-device signaling
       try {
         signalChannel = new BroadcastChannel('prime_webrtc_signal');
         signalChannel.onmessage = (event) => {
@@ -569,24 +742,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         };
       } catch {}
 
-      // 4. Prepare PeerConnection and announce presence immediately
-      buildPeerConnection();
-      await sendSignal('ready', { role: myRole });
-
-      // If patient, also send an immediate initial offer so waiting doctor connects instantly
-      if (myRole === 'patient') {
-        await createAndSendOffer();
-      }
-
-      // 5. Heartbeat 'ready' every 3.5s while waiting so late-joining peers always establish a fresh handshake
-      readyHeartbeatTimer = setInterval(() => {
-        if (!isMounted) return;
-        if (!isPeerConnectedRef.current) {
-          sendSignal('ready', { role: myRole });
-        }
-      }, 3500);
-
-      // 6. Poll server signaling queue every 900ms using monotonic server seq (zero clock skew!)
+      // 4. Poll server signaling queue every 700ms using monotonic server seq
       const pollSignals = async () => {
         if (!isMounted) return;
         try {
@@ -600,8 +756,33 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         } catch {}
       };
 
+      // 5. Announce presence FIRST, then immediately poll so either join order handshakes cleanly
+      await sendSignal('ready', {
+        role: myRole,
+        hasVideo: !!localStreamRef.current?.getVideoTracks().length,
+        hasAudio: !!localStreamRef.current?.getAudioTracks().length,
+      });
+
       await pollSignals();
-      signalPollTimer = setInterval(pollSignals, 900);
+      signalPollTimer = setInterval(pollSignals, 700);
+
+      // 6. Gentle 10-second discovery heartbeat ONLY when idle (never interrupts in-flight ICE checking!)
+      readyHeartbeatTimer = setInterval(() => {
+        if (!isMounted || isPeerConnectedRef.current) return;
+        const pc = peerConnectionRef.current;
+        const inFlight =
+          pc &&
+          (pc.iceConnectionState === 'checking' ||
+            pc.iceConnectionState === 'connected' ||
+            pc.iceConnectionState === 'completed');
+        if (!inFlight) {
+          sendSignal('ready', {
+            role: myRole,
+            hasVideo: !!localStreamRef.current?.getVideoTracks().length,
+            hasAudio: !!localStreamRef.current?.getAudioTracks().length,
+          });
+        }
+      }, 10000);
     };
 
     initCall();
@@ -609,6 +790,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     return () => {
       isMounted = false;
       isPeerConnectedRef.current = false;
+      requestReconnectRef.current = null;
       if (signalPollTimer) clearInterval(signalPollTimer);
       if (readyHeartbeatTimer) clearInterval(readyHeartbeatTimer);
       if (signalChannel) {
@@ -691,14 +873,35 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     }
   };
 
-  const handleToggleVideo = () => {
+  const handleToggleVideo = async () => {
     triggerHaptic('light');
     const nextVideoOff = !isVideoOff;
     setIsVideoOff(nextVideoOff);
-    if (localStream) {
-      localStream.getVideoTracks().forEach((t) => {
+    if (!nextVideoOff && (!localStreamRef.current || localStreamRef.current.getVideoTracks().length === 0)) {
+      await acquireLocalMedia(facingMode);
+      return;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach((t) => {
         t.enabled = !nextVideoOff;
       });
+    }
+  };
+
+  const handleForceReconnect = () => {
+    triggerHaptic('medium');
+    showToast('Reconnecting live video stream...', 'info');
+    requestReconnectRef.current?.();
+  };
+
+  const handleUnblockAudio = () => {
+    const audioEl = remoteAudioRef.current;
+    if (audioEl) {
+      audioEl.muted = false;
+      audioEl
+        .play()
+        .then(() => setAudioBlocked(false))
+        .catch(() => {});
     }
   };
 
@@ -974,7 +1177,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
             {/* Entry Button */}
             <button
-              disabled={!consentCheck1 || !consentCheck2 || !consentCheck3}
+              disabled={!consentCheck1 || !consentCheck2 || !consentCheck3 || isAcquiringMedia}
               onClick={async () => {
                 triggerHaptic('heavy');
                 await acquireLocalMedia(facingMode);
@@ -983,7 +1186,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               className="w-full py-4 bg-[#77daa4] disabled:bg-slate-700 disabled:text-slate-500 hover:bg-emerald-300 text-[#022434] font-extrabold font-outfit text-sm rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 active:scale-[0.98] cursor-pointer"
             >
               <Video className="w-5 h-5" />
-              <span>Join Consultation</span>
+              <span>{isAcquiringMedia ? 'Starting Camera & Mic...' : 'Join Consultation'}</span>
             </button>
           </div>
         </div>
@@ -994,25 +1197,41 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       {/* ========================================================================= */}
       {!isAudioOnlyMode ? (
         /* Video Mode Stream */
-        <div className="absolute inset-0 z-0 bg-slate-950">
+        <div className="absolute inset-0 z-0 bg-slate-950" onClick={audioBlocked ? handleUnblockAudio : undefined}>
           <video
             ref={swappedPiP ? localVideoRef : remoteVideoRef}
             autoPlay
             playsInline
-            muted={swappedPiP}
+            muted
             className={`w-full h-full object-cover object-center filter brightness-95 ${
               swappedPiP ? 'scale-x-[-1]' : ''
             }`}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/85 pointer-events-none" />
 
-          {/* Waiting for Peer Banner */}
-          {!isPeerConnected && (
+          {/* Audio Autoplay Unblock Pill (only if browser blocked unmuted remote audio) */}
+          {audioBlocked && isPeerConnected && (
+            <button
+              type="button"
+              onClick={handleUnblockAudio}
+              className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-[#022434] font-extrabold font-outfit text-xs rounded-full shadow-xl flex items-center space-x-2 animate-bounce cursor-pointer"
+            >
+              <Volume2 className="w-4 h-4" />
+              <span>Tap to Enable Call Audio</span>
+            </button>
+          )}
+
+          {/* Waiting for Peer / Reconnect Banner */}
+          {(!isPeerConnected || (!hasRemoteVideo && !swappedPiP)) && (
             <div className="absolute top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-20 max-w-sm bg-black/80 backdrop-blur-md p-4 rounded-2xl border border-emerald-500/40 text-white shadow-2xl text-center space-y-2.5">
               <div className="flex items-center justify-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                 <span className="text-xs font-bold font-outfit text-emerald-300 uppercase tracking-wider">
-                  {iceStatus === 'checking'
+                  {isPeerConnected && !hasRemoteVideo
+                    ? myRole === 'patient'
+                      ? 'Waiting for Doctor Camera...'
+                      : 'Waiting for Patient Camera...'
+                    : iceStatus === 'checking'
                     ? 'Connecting Live Video...'
                     : myRole === 'patient'
                     ? `Calling ${doctorName}...`
@@ -1032,20 +1251,28 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                 </div>
               )}
               <div className="flex flex-wrap items-center justify-center gap-2">
-                {myRole === 'patient' && (
+                <button
+                  type="button"
+                  onClick={handleForceReconnect}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reconnect Video</span>
+                </button>
+                {myRole === 'patient' && !isPeerConnected && (
                   <button
                     type="button"
                     onClick={handleRingDoctorAgain}
-                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-1.5 cursor-pointer"
                   >
-                    <PhoneCall className="w-3.5 h-3.5 animate-bounce" />
+                    <PhoneCall className="w-3.5 h-3.5" />
                     <span>Ring Doctor</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={handleCopyCallLink}
-                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-1.5 cursor-pointer"
                 >
                   {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
                   <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
@@ -1112,18 +1339,22 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       <div
         onClick={() => {
           triggerHaptic('selection');
+          if (!hasCamera && !swappedPiP) {
+            acquireLocalMedia(facingMode);
+            return;
+          }
           setSwappedPiP(!swappedPiP);
         }}
         className="absolute top-18 sm:top-20 right-3 sm:right-5 z-20 w-24 h-36 sm:w-28 sm:h-40 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/40 shadow-2xl bg-slate-900 group cursor-pointer hover:border-emerald-400 transition-colors"
-        title="Tap to swap main and preview cameras"
+        title={!hasCamera && !swappedPiP ? 'Tap to enable camera' : 'Tap to swap main and preview cameras'}
       >
-        {!isVideoOff && !isAudioOnlyMode ? (
+        {!isVideoOff && !isAudioOnlyMode && (swappedPiP || hasCamera) ? (
           <div className="relative w-full h-full">
             <video
               ref={swappedPiP ? remoteVideoRef : localVideoRef}
               autoPlay
               playsInline
-              muted={!swappedPiP}
+              muted
               className={`w-full h-full object-cover ${!swappedPiP ? 'scale-x-[-1]' : ''}`}
             />
             {/* Visual Green Camera Active Dot */}
@@ -1131,9 +1362,9 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           </div>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-slate-900/90 text-center space-y-1">
-            <VideoOff className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400" />
-            <span className="text-[9px] sm:text-[10px] text-slate-300 font-extrabold font-outfit">
-              {isAudioOnlyMode ? 'Audio Only' : 'Camera Off'}
+            <VideoOff className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
+            <span className="text-[9px] sm:text-[10px] text-slate-200 font-extrabold font-outfit leading-tight">
+              {isAudioOnlyMode ? 'Audio Only' : !hasCamera ? 'Tap for Camera' : 'Camera Off'}
             </span>
           </div>
         )}
@@ -1327,20 +1558,6 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               </span>
             )}
           </button>
-
-          {/* Doctor Only: Care Journey Plan To-Do List Decision */}
-          {user?.role === 'doctor' && (
-            <button
-              onClick={() => {
-                triggerHaptic('medium');
-                setIsCareJourneyModalOpen(true);
-              }}
-              className="p-3 sm:p-3.5 rounded-full bg-teal-50 border border-teal-300 text-teal-800 hover:bg-teal-100 transition-all cursor-pointer"
-              title="Decide Patient Care Journey Plan"
-            >
-              <CheckSquare className="w-5 h-5 text-teal-700" />
-            </button>
-          )}
 
           {/* Doctor Only: Issue E-Prescription */}
           {user?.role === 'doctor' && (
@@ -1632,31 +1849,6 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             sender: 'doctor',
             senderName: doctorName,
             text: rxMsg.text,
-          }).catch(() => {});
-        }}
-      />
-
-      {/* Doctor In-Consultation Care Journey Plan Modal */}
-      <CareJourneyPlanModal
-        isOpen={isCareJourneyModalOpen}
-        onClose={() => setIsCareJourneyModalOpen(false)}
-        doctorName={doctorName}
-        patientName={activeProfile.displayName || user?.name || 'Patient'}
-        onPlanPublished={(plan) => {
-          const planMsg: InCallMessage = {
-            id: `plan-${Date.now()}`,
-            sender: 'doctor',
-            senderName: doctorName,
-            text: `Care Journey Plan approved (${plan.items.filter((i) => i.checkedByDoctor).length} checks)${plan.followUpDate ? ` • Follow-up: ${plan.followUpDate}` : ''}`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          };
-          seenMsgIdsRef.current.add(planMsg.id);
-          seenMsgIdsRef.current.add(`${planMsg.sender}::${planMsg.text}::${planMsg.timestamp}`);
-          setMessages((prev) => [...prev, planMsg]);
-          primeApi.sendChatMessage(sessionId, {
-            sender: 'doctor',
-            senderName: doctorName,
-            text: planMsg.text,
           }).catch(() => {});
         }}
       />

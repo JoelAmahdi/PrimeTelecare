@@ -901,20 +901,24 @@ export default function App() {
           />
         )}
 
-        {/* Global Modals & Push Notifications */}
-        <RecoveryPushNotificationBanner
-          onOpenRecoveryModal={(reminder) => {
-            setSelectedRecoveryReminder(reminder);
-            setIsRecoveryModalOpen(true);
-          }}
-        />
+        {/* Global Modals & Push Notifications (Patient Only — never shown on Doctor Dashboard) */}
+        {!isAuthScreen && effectiveRole === 'patient' && (
+          <>
+            <RecoveryPushNotificationBanner
+              onOpenRecoveryModal={(reminder) => {
+                setSelectedRecoveryReminder(reminder);
+                setIsRecoveryModalOpen(true);
+              }}
+            />
 
-        <RecoveryFollowUpModal
-          isOpen={isRecoveryModalOpen}
-          onClose={() => setIsRecoveryModalOpen(false)}
-          reminder={selectedRecoveryReminder}
-          onNavigate={navigateTo}
-        />
+            <RecoveryFollowUpModal
+              isOpen={isRecoveryModalOpen}
+              onClose={() => setIsRecoveryModalOpen(false)}
+              reminder={selectedRecoveryReminder}
+              onNavigate={navigateTo}
+            />
+          </>
+        )}
 
         {/* Real-time Online Incoming Call Modal for Doctor */}
         <IncomingCallModal

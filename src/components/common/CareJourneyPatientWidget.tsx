@@ -111,34 +111,9 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
     }
   };
 
+  // Only show Care Journey post-consultation once decided & approved by the doctor
   if (!plan || plan.status !== 'approved_by_doctor') {
-    return (
-      <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-xs border border-slate-200/90 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200/60">
-              <Clock className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
-                Care Journey Tracker
-              </h3>
-              <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">
-                Awaiting Doctor Decision
-              </span>
-            </div>
-          </div>
-          <span className="px-2.5 py-1 rounded-full bg-amber-100/70 text-amber-800 text-xs font-bold font-mono">
-            Pending Review
-          </span>
-        </div>
-
-        <div className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-200/70 text-xs text-amber-950 flex items-center space-x-2 font-bold">
-          <Stethoscope className="w-4 h-4 text-[#006c44] shrink-0" />
-          <span>Pending doctor approval</span>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   const activeItems = plan.items.filter((i) => i.checkedByDoctor);
