@@ -50,7 +50,6 @@ interface PatientHomeDashboardProps {
   onNavigate: (screen: ScreenId) => void;
   onSelectDoctor: (doctorId: string) => void;
   onSaveBookingSummary?: (summary: BookingSummary) => void;
-  onSwitchRole?: (role: any) => void;
   isOfflineMode?: boolean;
 }
 
@@ -59,7 +58,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
   onNavigate,
   onSelectDoctor,
   onSaveBookingSummary,
-  onSwitchRole,
   isOfflineMode = false,
 }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -216,19 +214,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-3 self-end md:self-center">
-            {onSwitchRole && (
-              <button
-                onClick={() => {
-                  triggerHaptic('medium');
-                  onSwitchRole('doctor');
-                }}
-                className="px-3.5 py-2.5 sm:px-4 sm:py-3 bg-white hover:bg-slate-50 border border-slate-200 text-[#022434] font-bold font-outfit text-xs sm:text-sm rounded-2xl shadow-2xs transition-all flex items-center space-x-1.5 sm:space-x-2 active:scale-95 cursor-pointer"
-                title="Switch to Doctor Clinical Portal"
-              >
-                <Stethoscope className="w-4 h-4 text-[#006c44]" />
-                <span className="hidden sm:inline">Doctor Portal</span>
-              </button>
-            )}
             <button
               onClick={() => { triggerHaptic('selection'); setIsNotificationsOpen(true); }}
               className="relative p-2.5 sm:p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-[#022434] transition-all cursor-pointer shadow-2xs"

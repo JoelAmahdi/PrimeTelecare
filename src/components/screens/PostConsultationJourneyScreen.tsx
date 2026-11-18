@@ -16,7 +16,7 @@ import {
   Square,
   Calendar,
 } from 'lucide-react';
-import { ScreenId, CareJourneyPlan } from '../../types';
+import { ScreenId, CareJourneyPlan, UserRole } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import {
@@ -29,6 +29,7 @@ import { primeApi } from '../../services/apiClient';
 
 interface PostConsultationJourneyScreenProps {
   onNavigate: (screen: ScreenId) => void;
+  role?: UserRole;
   doctorName?: string;
   doctorId?: string;
   patientName?: string;
@@ -48,10 +49,12 @@ function formatFollowUpDate(dateStr?: string): string {
 
 export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScreenProps> = ({
   onNavigate,
+  role = 'patient',
   doctorName = 'Attending Physician',
   doctorId = 'doc-attending',
   patientName = 'Patient',
 }) => {
+  const homeScreen: ScreenId = role === 'doctor' ? 'doctor-home' : 'patient-home';
   const [plan, setPlan] = useState<CareJourneyPlan | null>(() => getStoredCareJourneyPlan());
   const [isDoctorPlanModalOpen, setIsDoctorPlanModalOpen] = useState(false);
 
@@ -192,7 +195,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
           type="button"
           onClick={() => {
             triggerHaptic('light');
-            onNavigate('patient-home');
+            onNavigate(homeScreen);
           }}
           className="p-2 -ml-2 text-slate-500 hover:text-[#022434] transition-colors cursor-pointer"
         >
@@ -238,17 +241,19 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
               Your attending physician ({doctorName}) will decide your Drug Prescription check, Laboratory Investigation check, Follow-Up Visit setup, Follow-Up Date (if needed), and Follow-Up Plan Note. Once approved, it will appear here and on your dashboard.
             </p>
 
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('medium');
-                setIsDoctorPlanModalOpen(true);
-              }}
-              className="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#006c44] font-extrabold font-outfit text-xs sm:text-sm rounded-2xl shadow-2xs transition-all flex items-center justify-center space-x-2 cursor-pointer"
-            >
-              <CheckSquare className="w-4 h-4" />
-              <span>Decide & Approve Care Plan (Doctor Sign-off)</span>
-            </button>
+            {role === 'doctor' && (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  setIsDoctorPlanModalOpen(true);
+                }}
+                className="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#006c44] font-extrabold font-outfit text-xs sm:text-sm rounded-2xl shadow-2xs transition-all flex items-center justify-center space-x-2 cursor-pointer"
+              >
+                <CheckSquare className="w-4 h-4" />
+                <span>Decide & Approve Care Plan (Doctor Sign-off)</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-3xl p-6 border border-emerald-200/90 shadow-xs space-y-5">
@@ -273,16 +278,18 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('medium');
-                  setIsDoctorPlanModalOpen(true);
-                }}
-                className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold font-outfit rounded-xl transition-all self-start sm:self-center cursor-pointer"
-              >
-                Modify Plan (Doctor)
-              </button>
+              {role === 'doctor' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setIsDoctorPlanModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold font-outfit rounded-xl transition-all self-start sm:self-center cursor-pointer"
+                >
+                  Modify Plan (Doctor)
+                </button>
+              )}
             </div>
 
             {/* Completion Progress Bar */}
@@ -605,7 +612,7 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
             type="button"
             onClick={() => {
               triggerHaptic('heavy');
-              onNavigate('patient-home');
+              onNavigate(homeScreen);
             }}
             className="w-full sm:w-auto px-8 py-3.5 bg-[#022434] hover:bg-slate-800 text-white font-extrabold font-outfit text-sm rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center space-x-2 cursor-pointer"
           >

@@ -22,8 +22,6 @@ interface DesktopNavbarProps {
   currentScreen: ScreenId;
   onNavigate: (screen: ScreenId) => void;
   role: UserRole;
-  onRoleChange?: (role: UserRole) => void;
-  onSwitchRole?: (role: UserRole) => void;
   user: UserType;
   isEmulatorActive?: boolean;
   onToggleEmulator?: () => void;
@@ -34,13 +32,10 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
   currentScreen,
   onNavigate,
   role,
-  onRoleChange,
-  onSwitchRole,
   user,
   onOpenLogoutModal,
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const handleRoleSwitch = onSwitchRole || onRoleChange;
 
   // Hidden during full-screen video consultation calls
   if (currentScreen === 'video-call') {
@@ -123,21 +118,6 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
 
           {/* Right: Profile & Actions */}
           <div className="flex items-center space-x-3">
-            {/* Quick Switch Role Button */}
-            {handleRoleSwitch && (role === 'doctor' || role === 'patient') && (
-              <button
-                onClick={() => {
-                  triggerHaptic('medium');
-                  handleRoleSwitch(role === 'doctor' ? 'patient' : 'doctor');
-                }}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-300 bg-emerald-50 text-[#006c44] hover:bg-emerald-100 transition-all cursor-pointer shadow-2xs"
-                title={role === 'doctor' ? 'Switch to Patient Dashboard & view consultations' : 'Switch to Doctor Clinical Dashboard'}
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{role === 'doctor' ? 'Switch to Patient View' : 'Switch to Doctor View'}</span>
-              </button>
-            )}
-
             {/* Profile Menu Dropdown */}
             <div className="relative">
               <button
@@ -164,20 +144,6 @@ export const DesktopNavbar: React.FC<DesktopNavbarProps> = ({
                       {role} Account
                     </span>
                   </div>
-
-                  {handleRoleSwitch && (role === 'doctor' || role === 'patient') && (
-                    <button
-                      onClick={() => {
-                        triggerHaptic('medium');
-                        setIsProfileMenuOpen(false);
-                        handleRoleSwitch(role === 'doctor' ? 'patient' : 'doctor');
-                      }}
-                      className="w-full flex items-center space-x-2 px-3 py-2 rounded-xl text-left text-xs text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100 transition-colors cursor-pointer font-bold mb-1"
-                    >
-                      <Stethoscope className="w-3.5 h-3.5 text-[#006c44]" />
-                      <span>Switch to {role === 'doctor' ? 'Patient Portal' : 'Doctor Portal'}</span>
-                    </button>
-                  )}
 
                   <button
                     onClick={() => {

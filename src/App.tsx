@@ -56,12 +56,11 @@ import {
   isIdleOver15Minutes,
 } from './utils/sessionLock';
 
-// Role-Based Screen Access List with fluid portal accessibility
+// Role-Based Screen Access List — Strictly One Account, One Portal
 const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
   patient: [
     'onboarding',
     'patient-home',
-    'doctor-home',
     'book-consultation',
     'doctor-discovery',
     'doctor-profile',
@@ -69,6 +68,7 @@ const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
     'active-chat',
     'video-call',
     'upload-media',
+    'prescription-detail',
     'health-records',
     'settings',
     'security-center',
@@ -80,10 +80,6 @@ const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
   doctor: [
     'onboarding',
     'doctor-home',
-    'patient-home',
-    'book-consultation',
-    'doctor-discovery',
-    'payment',
     'active-chat',
     'video-call',
     'upload-media',
@@ -95,14 +91,11 @@ const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
     'settings',
     'security-center',
     'account-details',
-    'family-account',
     'service-router',
     'post-consultation-journey',
   ],
   admin: [
     'admin-dashboard',
-    'patient-home',
-    'doctor-home',
     'doctor-discovery',
     'doctor-profile',
     'settings',
@@ -428,22 +421,6 @@ export default function App() {
     setCurrentScreen(targetScreen);
   };
 
-  const handleSwitchRole = (newRole: UserRole) => {
-    triggerHaptic('medium');
-    setRole(newRole);
-    if (currentUser) {
-      const updatedUser: User = { ...currentUser, role: newRole };
-      setCurrentUser(updatedUser);
-      try {
-        localStorage.setItem('prime_telecare_user', JSON.stringify(updatedUser));
-        localStorage.setItem('prime_telecare_role', newRole);
-      } catch {}
-    }
-    const target = getDefaultDashboardForRole(newRole);
-    navigateTo(target);
-    showToast(`Switched to ${newRole === 'doctor' ? 'Doctor Clinical' : 'Patient Care'} Portal`, 'info');
-  };
-
   // Real-time Incoming Telehealth Call Listener & Poller for Doctors
   useEffect(() => {
     const checkIncomingCalls = async () => {
@@ -651,7 +628,6 @@ export default function App() {
                 role={effectiveRole}
                 user={activeUser}
                 onOpenLogoutModal={() => setIsLogoutModalOpen(true)}
-                onSwitchRole={handleSwitchRole}
               />
             )}
             <AnimatePresence mode="wait">
@@ -714,7 +690,6 @@ export default function App() {
                 onSelectDoctor={setSelectedDoctorId}
                 onSaveBookingSummary={setCurrentBookingSummary}
                 isOfflineMode={effectiveOffline}
-                onSwitchRole={handleSwitchRole}
               />
             )}
 
@@ -723,7 +698,6 @@ export default function App() {
                 user={activeUser}
                 onNavigate={navigateTo}
                 isOfflineMode={effectiveOffline}
-                onSwitchRole={handleSwitchRole}
               />
             )}
 
@@ -737,6 +711,7 @@ export default function App() {
             {currentScreen === 'post-consultation-journey' && (
               <PostConsultationJourneyScreen
                 onNavigate={navigateTo}
+                role={effectiveRole}
                 doctorId={currentBookingSummary?.doctorId || selectedDoctorId || 'doc-attending'}
                 doctorName={
                   currentBookingSummary?.doctorName ||
