@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle } from 'lucide-react';
+import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle, Calendar } from 'lucide-react';
 import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
@@ -9,8 +9,9 @@ import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { NextAppointmentBanner } from '../common/NextAppointmentBanner';
 import { ClinicalDocumentationModal } from '../common/ClinicalDocumentationModal';
 import { useOfflineStatus } from '../../utils/useOfflineStatus';
-import { getActiveOrUpcomingConsultations, completeConsultation } from '../../utils/appointmentNotifications';
+import { getActiveOrUpcomingConsultations, completeConsultation, rescheduleConsultation } from '../../utils/appointmentNotifications';
 import { primeApi } from '../../services/apiClient';
+import { createGoogleCalendarWebUrl } from '../../services/googleCalendar';
 
 interface DoctorHomeDashboardProps {
   user: User;
@@ -114,15 +115,102 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
     id: string;
     name: string;
     time: string;
+    date?: string;
     type: string;
     symptom: string;
     status: string;
     avatar: string;
     tag: string;
     tagColor: string;
+    doctorId?: string;
+    doctorName?: string;
+    doctorSpecialty?: string;
+    rescheduled?: boolean;
+    rescheduleReason?: string;
   }
 
   const [todaysPatients, setTodaysPatients] = useState<PatientQueueItem[]>([]);
+  const [patientToReschedule, setPatientToReschedule] = useState<PatientQueueItem | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState<string>('');
+  const [rescheduleSlot, setRescheduleSlot] = useState<string>('');
+  const [rescheduleReason, setRescheduleReason] = useState<string>('Clinical emergency conflict');
+  const [isSubmittingReschedule, setIsSubmittingReschedule] = useState(false);
+
+  const rescheduleDates = React.useMemo(() => {
+    const dates = [];
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short' });
+      const fullDate = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      dates.push({ label, fullDate });
+    }
+    return dates;
+  }, []);
+
+  const rescheduleSlots = [
+    '09:00 AM',
+    '10:00 AM',
+    '11:00 AM',
+    '11:30 AM',
+    '01:30 PM',
+    '02:30 PM',
+    '03:30 PM',
+    '04:30 PM',
+    '05:30 PM',
+  ];
+
+  const handleSyncToDoctorCalendar = (patient: PatientQueueItem) => {
+    triggerHaptic('selection');
+    const doctorCleanName = user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`;
+    const url = createGoogleCalendarWebUrl({
+      doctorName: doctorCleanName,
+      doctorSpecialty: user.doctorSpecialty || patient.doctorSpecialty || 'General Practice',
+      patientName: patient.name,
+      consultationType: patient.type,
+      dateStr: patient.date || 'Today',
+      timeSlot: patient.time,
+      consultationId: patient.id,
+      doctorId: user.id,
+      targetRole: 'doctor',
+      notes: patient.symptom,
+    });
+    window.open(url, '_blank', 'noopener,noreferrer');
+    showToast('Opening Google Calendar for Clinician...', 'success');
+  };
+
+  const handleConfirmReschedule = async () => {
+    if (!patientToReschedule || !rescheduleDate || !rescheduleSlot) {
+      showToast('Please select both a date and time slot.', 'error');
+      return;
+    }
+    setIsSubmittingReschedule(true);
+    try {
+      triggerHaptic('success');
+      rescheduleConsultation(
+        patientToReschedule.id,
+        rescheduleDate,
+        rescheduleSlot,
+        rescheduleReason
+      );
+
+      await primeApi.updateAppointment(patientToReschedule.id, {
+        scheduledDate: rescheduleDate,
+        timeSlot: rescheduleSlot,
+        notes: `Rescheduled: ${rescheduleReason}`,
+      }).catch(() => {});
+
+      showToast(`Appointment for ${patientToReschedule.name} rescheduled to ${rescheduleDate} at ${rescheduleSlot}. Patient has been notified!`, 'success');
+      setPatientToReschedule(null);
+      window.dispatchEvent(new Event('appointment-alerts-updated'));
+    } catch (e) {
+      showToast('Failed to reschedule appointment.', 'error');
+    } finally {
+      setIsSubmittingReschedule(false);
+    }
+  };
+
   const [liveConsultationAlert, setLiveConsultationAlert] = useState<any>(() => {
     try {
       const raw = localStorage.getItem('prime_telecare_new_consultation_alert');
@@ -147,12 +235,18 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
         id: c.id,
         name: c.patientName || 'Patient',
         time: c.scheduledTime || 'Scheduled',
+        date: c.scheduledDate || 'Today',
         type: c.type || 'Video',
         symptom: 'Telehealth Consultation',
         status: 'Booked',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
         tag: c.bookingMode === 'instant' ? 'Instant Care' : 'Scheduled',
         tagColor: 'bg-emerald-100 text-[#006c44] border-emerald-200',
+        doctorId: c.doctorId,
+        doctorName: c.doctorName,
+        doctorSpecialty: c.doctorSpecialty,
+        rescheduled: c.rescheduled,
+        rescheduleReason: c.rescheduleReason,
       }));
 
       try {
@@ -164,12 +258,16 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             id: a.id,
             name: a.patientName || 'Patient',
             time: a.timeSlot || 'Scheduled',
+            date: a.scheduledDate || 'Today',
             type: a.type || 'Video',
             symptom: a.notes || 'Telehealth Consultation',
             status: a.status === 'upcoming' ? 'Paid & Upcoming' : (a.status || 'Booked'),
             avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
             tag: (a.timeSlot?.includes('Immediate') || a.scheduledDate?.includes('Instant')) ? 'Instant Care' : 'Live Booking',
             tagColor: 'bg-emerald-100 text-[#006c44] border-emerald-200',
+            doctorId: a.doctorId,
+            doctorName: a.doctorName,
+            doctorSpecialty: a.doctorSpecialty,
           }));
           const ids = new Set(local.map((l) => l.id));
           const merged = [...local];
@@ -685,28 +783,61 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                           className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shrink-0"
                         />
                         <div>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                             <h4 className="font-bold font-outfit text-sm sm:text-base text-[#022434]">
                               {patient.name}
                             </h4>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${patient.tagColor}`}>
                               {patient.tag}
                             </span>
+                            {patient.rescheduled && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center space-x-1">
+                                <Clock className="w-2.5 h-2.5 text-amber-700" />
+                                <span>Rescheduled</span>
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-slate-500 font-nunito mt-0.5">
-                            {patient.symptom} • <span className="font-medium text-slate-700">{patient.time}</span> ({patient.type})
+                            {patient.symptom} • <span className="font-medium text-slate-700">{patient.date ? `${patient.date}, ` : ''}{patient.time}</span> ({patient.type})
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => handleSyncToDoctorCalendar(patient)}
+                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold font-outfit text-xs rounded-xl shadow-2xs transition-all flex items-center space-x-1 cursor-pointer"
+                          title="Sync with Doctor's Google Calendar"
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Google Cal</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerHaptic('light');
+                            setPatientToReschedule(patient);
+                            setRescheduleDate(patient.date || rescheduleDates[1]?.fullDate || rescheduleDates[0]?.fullDate);
+                            setRescheduleSlot(patient.time && !patient.time.includes('Immediate') ? patient.time : '11:00 AM');
+                            setRescheduleReason('Clinical emergency conflict');
+                          }}
+                          className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 font-bold font-outfit text-xs rounded-xl transition-all flex items-center space-x-1 cursor-pointer"
+                          title="Reschedule if unavailable"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Reschedule</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => setSelectedPatientForDoc(patient.name)}
-                          className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold font-outfit text-xs rounded-xl transition-all cursor-pointer"
+                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold font-outfit text-xs rounded-xl transition-all cursor-pointer"
                         >
-                          Clinical Notes
+                          Notes
                         </button>
+
                         <button
                           type="button"
                           onClick={() => {
@@ -729,19 +860,20 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                             } catch {}
                             onNavigate(patient.type === 'Chat' ? 'active-chat' : 'video-call');
                           }}
-                          className="px-4 py-1.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
+                          className="px-3.5 py-1.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
                         >
                           <Video className="w-3.5 h-3.5 text-emerald-300" />
                           <span>Start Session</span>
                         </button>
+
                         <button
                           type="button"
                           onClick={() => handleConcludeConsultation(patient.id, patient.name)}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#006c44] border border-emerald-200/80 font-bold font-outfit text-xs rounded-xl transition-all flex items-center space-x-1 cursor-pointer"
+                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#006c44] border border-emerald-200/80 font-bold font-outfit text-xs rounded-xl transition-all flex items-center space-x-1 cursor-pointer"
                           title="Mark Consultation Completed"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Conclude</span>
+                          <span className="hidden sm:inline">Conclude</span>
                         </button>
                       </div>
                     </div>
@@ -849,6 +981,164 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
           doctorUser={user}
           onClose={() => setSelectedPatientForDoc(null)}
         />
+      )}
+
+      {/* Clinician Reschedule Appointment Modal */}
+      {patientToReschedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-lg w-full border border-slate-200 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-amber-100 text-amber-900 rounded-xl">
+                  <Calendar className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
+                    Reschedule Appointment
+                  </h3>
+                  <p className="text-xs text-slate-500 font-nunito">
+                    Patient: <strong className="text-slate-800">{patientToReschedule.name}</strong> • Currently: {patientToReschedule.date || 'Today'} ({patientToReschedule.time})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPatientToReschedule(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs font-nunito">
+              {/* 1. Select New Date */}
+              <div className="space-y-2">
+                <label className="font-bold font-outfit text-slate-700 block text-xs">
+                  Select New Date
+                </label>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {rescheduleDates.map((item) => {
+                    const isSelected = rescheduleDate === item.fullDate;
+                    return (
+                      <button
+                        key={item.fullDate}
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          setRescheduleDate(item.fullDate);
+                        }}
+                        className={`py-2 px-2.5 rounded-xl border text-center transition-all font-outfit cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#006c44] text-white border-[#006c44] font-bold shadow-xs ring-2 ring-emerald-400/20'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 font-medium'
+                        }`}
+                      >
+                        <span className="block text-xs font-bold">{item.label}</span>
+                        <span className="block text-[10px] opacity-80 truncate">{item.fullDate.split(',')[1]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Select New Time Slot */}
+              <div className="space-y-2">
+                <label className="font-bold font-outfit text-slate-700 block text-xs">
+                  Select New Time Slot
+                </label>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {rescheduleSlots.map((slot) => {
+                    const isSelected = rescheduleSlot === slot;
+                    return (
+                      <button
+                        key={slot}
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          setRescheduleSlot(slot);
+                        }}
+                        className={`py-2 px-2.5 rounded-xl border text-center transition-all font-mono text-xs cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#022434] text-white border-[#022434] font-bold shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {slot}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. Reason for Reschedule */}
+              <div className="space-y-2">
+                <label className="font-bold font-outfit text-slate-700 block text-xs">
+                  Reason for Reschedule (Sent to Patient)
+                </label>
+                <div className="flex flex-wrap gap-1.5 pb-1">
+                  {[
+                    'Clinical emergency conflict',
+                    'Ward rounds delay',
+                    'Hospital surgical duty',
+                    'Clinician schedule adjustment',
+                  ].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRescheduleReason(r)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                        rescheduleReason === r
+                          ? 'bg-amber-100 text-amber-900 border-amber-300 font-semibold'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={rescheduleReason}
+                  onChange={(e) => setRescheduleReason(e.target.value)}
+                  placeholder="Enter custom reason or note..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-[#0f172a] focus:outline-none focus:border-[#006c44]"
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-[11px] text-amber-900 flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  The patient will receive a real-time notification with the new date, reason, and a 1-click <strong>Save to Google Calendar</strong> link with login deep-link.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPatientToReschedule(null)}
+                className="px-4 py-2 text-xs font-bold font-outfit text-slate-500 hover:text-slate-800 rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReschedule}
+                disabled={isSubmittingReschedule || !rescheduleDate || !rescheduleSlot}
+                className="px-5 py-2.5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-xs rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
+              >
+                {isSubmittingReschedule ? (
+                  <span>Updating Schedule...</span>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                    <span>Confirm &amp; Notify Patient</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

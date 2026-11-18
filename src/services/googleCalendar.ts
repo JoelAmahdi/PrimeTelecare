@@ -147,6 +147,9 @@ export interface CalendarEventPayload {
   durationMinutes?: number;
   meetingLink?: string;
   notes?: string;
+  consultationId?: string;
+  doctorId?: string;
+  targetRole?: 'doctor' | 'patient';
 }
 
 export interface GoogleCalendarEvent {
@@ -228,27 +231,48 @@ export function createGoogleCalendarWebUrl(payload: CalendarEventPayload): strin
   };
 
   const datesParam = `${formatUtcForGoogle(startDate)}/${formatUtcForGoogle(endDate)}`;
-  const title = `Telehealth Consult: Dr. ${payload.doctorName} (${payload.consultationType} Call)`;
-
+  const isDoctor = payload.targetRole === 'doctor';
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prime-telecare.onrender.com';
   const consultId = payload.consultationId || '';
   const docId = payload.doctorId || '';
-  const loginUrl = `${origin}/?login=true&screen=patient-home${consultId ? `&consultationId=${encodeURIComponent(consultId)}` : ''}${docId ? `&doctor=${encodeURIComponent(docId)}` : ''}`;
 
-  const details = [
-    `Prime Telecare Telehealth Consultation`,
-    `----------------------------------------`,
-    `• Doctor: Dr. ${payload.doctorName} (${payload.doctorSpecialty || 'General Practice'})`,
-    `• Patient: ${payload.patientName || 'Patient'}`,
-    `• Modality: ${payload.consultationType} Call`,
-    `• Scheduled Time: ${payload.timeSlot} (${payload.dateStr})`,
-    payload.notes ? `• Clinical Notes: ${payload.notes}` : '',
-    ``,
-    `🔗 CLICK TO LOG IN & JOIN CONSULTATION:`,
-    loginUrl,
-    ``,
-    `Please log in 5 minutes before your scheduled appointment time.`
-  ].filter(Boolean).join('\n');
+  const loginUrl = isDoctor
+    ? `${origin}/?login=true&screen=doctor-home${consultId ? `&consultationId=${encodeURIComponent(consultId)}` : ''}`
+    : `${origin}/?login=true&screen=patient-home${consultId ? `&consultationId=${encodeURIComponent(consultId)}` : ''}${docId ? `&doctor=${encodeURIComponent(docId)}` : ''}`;
+
+  const title = isDoctor
+    ? `Telehealth Patient Consult: ${payload.patientName || 'Patient'} (${payload.consultationType} Call)`
+    : `Telehealth Consult: Dr. ${payload.doctorName} (${payload.consultationType} Call)`;
+
+  const details = isDoctor
+    ? [
+        `Prime Telecare Clinician Portal - Patient Appointment`,
+        `-----------------------------------------------------`,
+        `• Patient: ${payload.patientName || 'Patient'}`,
+        `• Clinician: Dr. ${payload.doctorName} (${payload.doctorSpecialty || 'General Practice'})`,
+        `• Modality: ${payload.consultationType} Teleconsultation`,
+        `• Scheduled Slot: ${payload.timeSlot} (${payload.dateStr})`,
+        payload.notes ? `• Patient Triage & Vitals: ${payload.notes}` : '',
+        ``,
+        `🔗 CLICK TO LOG IN & ENTER CLINICAL SESSION:`,
+        loginUrl,
+        ``,
+        `Secure MDCN teleconsultation portal. Patient will be notified before call start.`
+      ].filter(Boolean).join('\n')
+    : [
+        `Prime Telecare Telehealth Consultation`,
+        `----------------------------------------`,
+        `• Doctor: Dr. ${payload.doctorName} (${payload.doctorSpecialty || 'General Practice'})`,
+        `• Patient: ${payload.patientName || 'Patient'}`,
+        `• Modality: ${payload.consultationType} Call`,
+        `• Scheduled Time: ${payload.timeSlot} (${payload.dateStr})`,
+        payload.notes ? `• Clinical Notes: ${payload.notes}` : '',
+        ``,
+        `🔗 CLICK TO LOG IN & JOIN CONSULTATION:`,
+        loginUrl,
+        ``,
+        `Please log in 5 minutes before your scheduled appointment time.`
+      ].filter(Boolean).join('\n');
 
   const location = 'Prime Telecare Telehealth Room';
 
@@ -286,15 +310,23 @@ export async function addConsultationToGoogleCalendar(
     payload.durationMinutes || 30
   );
 
+  const isDoctor = payload.targetRole === 'doctor';
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prime-telecare.onrender.com';
   const consultId = payload.consultationId || '';
   const docId = payload.doctorId || '';
-  const loginUrl = `${origin}/?login=true&screen=patient-home${consultId ? `&consultationId=${encodeURIComponent(consultId)}` : ''}${docId ? `&doctor=${encodeURIComponent(docId)}` : ''}`;
+
+  const loginUrl = isDoctor
+    ? `${origin}/?login=true&screen=doctor-home${consultId ? `&consultationId=${encodeURIComponent(consultId)}` : ''}`
+    : `${origin}/?login=true&screen=patient-home${consultId ? `&consultationId=${encodeURIComponent(consultId)}` : ''}${docId ? `&doctor=${encodeURIComponent(docId)}` : ''}`;
+
+  const summary = isDoctor
+    ? `🩺 Telehealth Patient: ${payload.patientName || 'Patient'} (${payload.consultationType})`
+    : `🩺 Telehealth Consult: Dr. ${payload.doctorName} (${payload.consultationType})`;
 
   const eventBody = {
-    summary: `🩺 Telehealth Consult: Dr. ${payload.doctorName} (${payload.consultationType})`,
+    summary,
     description: [
-      `Prime Telecare Telehealth Consultation`,
+      isDoctor ? `Prime Telecare Clinician Appointment` : `Prime Telecare Telehealth Consultation`,
       `• Doctor: Dr. ${payload.doctorName} (${payload.doctorSpecialty || 'General Practice'})`,
       `• Patient: ${payload.patientName || 'Patient'}`,
       `• Modality: ${payload.consultationType} Teleconsultation`,

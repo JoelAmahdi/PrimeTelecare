@@ -17,9 +17,61 @@ export interface AppointmentAlert {
   bookingMode?: 'instant' | 'scheduled';
   status?: 'upcoming' | 'active' | 'completed' | 'cancelled';
   price?: number;
+  rescheduled?: boolean;
+  rescheduleReason?: string;
+  previousDate?: string;
+  previousTime?: string;
+}
+
+export interface RescheduleNotice {
+  id: string;
+  appointmentId: string;
+  doctorId?: string;
+  patientName: string;
+  doctorName: string;
+  doctorSpecialty?: string;
+  doctorAvatar?: string;
+  consultationType: 'Video' | 'Voice' | 'Chat';
+  oldDate: string;
+  oldTime: string;
+  newDate: string;
+  newTime: string;
+  newTimestamp: number;
+  reason?: string;
+  rescheduledAt: number;
+  acknowledged?: boolean;
 }
 
 const STORAGE_KEY = 'prime_telecare_appointment_alerts';
+const RESCHEDULE_STORAGE_KEY = 'prime_telecare_reschedule_notices';
+
+export function getRescheduleNotices(): RescheduleNotice[] {
+  try {
+    const raw = localStorage.getItem(RESCHEDULE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveRescheduleNotice(notice: RescheduleNotice): void {
+  try {
+    const list = getRescheduleNotices().filter((n) => n.id !== notice.id && n.appointmentId !== notice.appointmentId);
+    localStorage.setItem(RESCHEDULE_STORAGE_KEY, JSON.stringify([notice, ...list]));
+    window.dispatchEvent(new CustomEvent('appointment-rescheduled', { detail: notice }));
+    window.dispatchEvent(new Event('reschedule-notices-updated'));
+  } catch {}
+}
+
+export function acknowledgeRescheduleNotice(id: string): void {
+  try {
+    const list = getRescheduleNotices().map((n) =>
+      n.id === id || n.appointmentId === id ? { ...n, acknowledged: true } : n
+    );
+    localStorage.setItem(RESCHEDULE_STORAGE_KEY, JSON.stringify(list));
+    window.dispatchEvent(new Event('reschedule-notices-updated'));
+  } catch {}
+}
 
 export function getStoredAppointmentAlerts(): AppointmentAlert[] {
   try {
@@ -169,6 +221,83 @@ export function completeConsultation(id: string): void {
     a.id === id || a.appointmentId === id ? { ...a, status: 'completed' as const } : a
   );
   saveAppointmentAlerts(updated);
+}
+
+/**
+ * Reschedules an existing consultation to a new date and time and dispatches notification to patient
+ */
+export function rescheduleConsultation(
+  id: string,
+  newDate: string,
+  newTime: string,
+  reason?: string
+): AppointmentAlert | null {
+  const alerts = getStoredAppointmentAlerts();
+  const index = alerts.findIndex((a) => a.id === id || a.appointmentId === id);
+
+  const newTimestamp = parseScheduledTimeToTimestamp(newDate, newTime);
+
+  if (index === -1) {
+    // If not found in local alerts store, create and register notice
+    const notice: RescheduleNotice = {
+      id,
+      appointmentId: id,
+      patientName: 'Patient',
+      doctorName: 'Attending Clinician',
+      consultationType: 'Video',
+      oldDate: 'Previous Date',
+      oldTime: 'Previous Time',
+      newDate,
+      newTime,
+      newTimestamp,
+      reason: reason || 'Clinician schedule update',
+      rescheduledAt: Date.now(),
+      acknowledged: false,
+    };
+    saveRescheduleNotice(notice);
+    return null;
+  }
+
+  const existing = alerts[index];
+  const oldDate = existing.scheduledDate;
+  const oldTime = existing.scheduledTime;
+
+  const updatedAlert: AppointmentAlert = {
+    ...existing,
+    scheduledDate: newDate,
+    scheduledTime: newTime,
+    startTimeTimestamp: newTimestamp,
+    status: 'upcoming',
+    rescheduled: true,
+    rescheduleReason: reason || 'Clinician schedule update',
+    previousDate: oldDate,
+    previousTime: oldTime,
+  };
+
+  alerts[index] = updatedAlert;
+  saveAppointmentAlerts(alerts);
+
+  // Create persistent notification for patient
+  saveRescheduleNotice({
+    id: existing.appointmentId || existing.id,
+    appointmentId: existing.appointmentId || existing.id,
+    doctorId: existing.doctorId,
+    patientName: existing.patientName,
+    doctorName: existing.doctorName,
+    doctorSpecialty: existing.doctorSpecialty,
+    doctorAvatar: existing.doctorAvatar,
+    consultationType: existing.type,
+    oldDate,
+    oldTime,
+    newDate,
+    newTime,
+    newTimestamp,
+    reason: reason || 'Clinician schedule update',
+    rescheduledAt: Date.now(),
+    acknowledged: false,
+  });
+
+  return updatedAlert;
 }
 
 /**

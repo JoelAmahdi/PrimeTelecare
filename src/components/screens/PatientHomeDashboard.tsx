@@ -33,6 +33,9 @@ import {
   getActiveOrUpcomingConsultations,
   getCompletedConsultations,
   cancelConsultation,
+  getRescheduleNotices,
+  acknowledgeRescheduleNotice,
+  RescheduleNotice,
 } from '../../utils/appointmentNotifications';
 import { processJoinOrPayConsultation } from '../../utils/consultationPayment';
 import { showToast } from '../../utils/toast';
@@ -73,6 +76,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [medReminders, setMedReminders] = useState<MedicationReminder[]>(() => getStoredReminders());
   const [purchaseAlerts, setPurchaseAlerts] = useState<DrugPurchaseNotification[]>(() => getStoredDrugPurchaseNotifications());
+  const [rescheduleNotices, setRescheduleNotices] = useState<RescheduleNotice[]>(() => getRescheduleNotices());
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [chartView, setChartView] = useState<'weekly' | 'monthly'>('weekly');
   const [metricView, setMetricView] = useState<'bpm' | 'temp' | 'bp'>('bpm');
@@ -140,17 +144,26 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
       setMedReminders(getStoredReminders());
       setPurchaseAlerts(getStoredDrugPurchaseNotifications());
     };
+    const loadReschedules = () => {
+      setRescheduleNotices(getRescheduleNotices());
+      loadConsultations();
+    };
     loadConsultations();
     loadAlerts();
+    loadReschedules();
     window.addEventListener('appointment-alerts-updated', loadConsultations);
     window.addEventListener('consultation-payment-updated', loadConsultations);
     window.addEventListener('reminders-updated', loadAlerts);
     window.addEventListener('drug-purchase-notifications-updated', loadAlerts);
+    window.addEventListener('appointment-rescheduled', loadReschedules);
+    window.addEventListener('reschedule-notices-updated', loadReschedules);
     return () => {
       window.removeEventListener('appointment-alerts-updated', loadConsultations);
       window.removeEventListener('consultation-payment-updated', loadConsultations);
       window.removeEventListener('reminders-updated', loadAlerts);
       window.removeEventListener('drug-purchase-notifications-updated', loadAlerts);
+      window.removeEventListener('appointment-rescheduled', loadReschedules);
+      window.removeEventListener('reschedule-notices-updated', loadReschedules);
     };
   }, []);
 
@@ -173,6 +186,33 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
     triggerHaptic('medium');
     cancelConsultation(id);
     showToast(`Consultation with ${doctorName} has been cancelled.`);
+  };
+
+  const activeRescheduleNotice = rescheduleNotices.find((n) => !n.acknowledged);
+
+  const handleSaveRescheduledToCalendar = (notice: RescheduleNotice) => {
+    triggerHaptic('selection');
+    const url = createGoogleCalendarWebUrl({
+      doctorName: notice.doctorName,
+      doctorSpecialty: notice.doctorSpecialty,
+      patientName: user.name,
+      consultationType: notice.consultationType,
+      dateStr: notice.newDate,
+      timeSlot: notice.newTime,
+      consultationId: notice.appointmentId,
+      doctorId: notice.doctorId,
+    });
+    window.open(url, '_blank', 'noopener,noreferrer');
+    acknowledgeRescheduleNotice(notice.id);
+    setRescheduleNotices(getRescheduleNotices());
+    showToast('Updated consultation schedule loaded in Google Calendar!', 'success');
+  };
+
+  const handleAcknowledgeReschedule = (id: string) => {
+    triggerHaptic('success');
+    acknowledgeRescheduleNotice(id);
+    setRescheduleNotices(getRescheduleNotices());
+    showToast('Rescheduled appointment time acknowledged.', 'success');
   };
 
   const weeklyVitalsData = [
@@ -268,6 +308,66 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
               <div>
                 <span className="font-extrabold font-outfit text-amber-900 block text-sm">Offline Mode</span>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Active Reschedule Notification Banner */}
+        {activeRescheduleNotice && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-3xl p-5 sm:p-6 shadow-sm space-y-3.5 animate-in fade-in duration-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start space-x-3.5">
+                <div className="p-2.5 bg-amber-500/20 text-amber-900 rounded-2xl shrink-0">
+                  <Calendar className="w-6 h-6 text-amber-700" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-extrabold font-outfit uppercase tracking-widest text-amber-800 bg-amber-200/60 px-2.5 py-0.5 rounded-full inline-block mb-1">
+                    Schedule Update
+                  </span>
+                  <h4 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
+                    Dr. {activeRescheduleNotice.doctorName} Rescheduled Your Consultation
+                  </h4>
+                  <p className="text-xs text-slate-600 font-nunito mt-1">
+                    Your <strong className="text-[#022434]">{activeRescheduleNotice.consultationType} Consultation</strong> previously for <span className="line-through text-slate-400">{activeRescheduleNotice.oldDate} at {activeRescheduleNotice.oldTime}</span> has been moved to:
+                  </p>
+                  <div className="mt-2 inline-flex items-center space-x-2 bg-white/95 border border-amber-300 px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#006c44] shadow-2xs">
+                    <Clock className="w-4 h-4 text-[#006c44]" />
+                    <span>{activeRescheduleNotice.newDate} at {activeRescheduleNotice.newTime}</span>
+                  </div>
+                  {activeRescheduleNotice.reason && (
+                    <p className="text-[11px] text-amber-900/90 font-nunito mt-1.5 italic">
+                      Note from doctor: &ldquo;{activeRescheduleNotice.reason}&rdquo;
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleAcknowledgeReschedule(activeRescheduleNotice.id)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-200/60">
+              <button
+                type="button"
+                onClick={() => handleSaveRescheduledToCalendar(activeRescheduleNotice)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Calendar className="w-3.5 h-3.5 text-blue-200" />
+                <span>Save New Date to Google Calendar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAcknowledgeReschedule(activeRescheduleNotice.id)}
+                className="px-4 py-2 bg-white hover:bg-slate-50 text-[#022434] border border-slate-300 font-bold font-outfit text-xs rounded-xl transition-all cursor-pointer"
+              >
+                Accept &amp; Confirm New Slot
+              </button>
             </div>
           </div>
         )}
@@ -515,6 +615,13 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                                 <span className="inline-flex items-center space-x-1.5 text-slate-500 text-xs font-medium">
                                   <Clock className="w-3.5 h-3.5 text-slate-400" />
                                   <span>{consult.scheduledDate}, {consult.scheduledTime}</span>
+                                </span>
+                              )}
+
+                              {consult.rescheduled && (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold rounded-xl">
+                                  <Clock className="w-3 h-3 text-amber-600" />
+                                  <span>Rescheduled by Clinician</span>
                                 </span>
                               )}
                             </div>
