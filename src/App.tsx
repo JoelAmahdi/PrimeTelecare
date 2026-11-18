@@ -124,7 +124,21 @@ const getDefaultDashboardForRole = (r: UserRole): ScreenId => {
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(() => {
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refDoctor = urlParams.get('refDoctor') || urlParams.get('doctor');
       const savedUser = localStorage.getItem('prime_telecare_user');
+
+      if (refDoctor) {
+        localStorage.setItem('prime_telecare_pending_ref_doctor', refDoctor);
+        // For already signed-in patients, lead directly to the doctor's profile.
+        // For new users, lead to signup.
+        if (savedUser) {
+          return 'doctor-profile';
+        } else {
+          return 'signup';
+        }
+      }
+
       const savedScreen = localStorage.getItem('prime_telecare_screen') as ScreenId;
       if (savedUser) {
         if (savedScreen && !['welcome', 'login', 'signup'].includes(savedScreen)) {
@@ -167,7 +181,16 @@ export default function App() {
     } catch {}
     return false;
   });
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refDoctor = urlParams.get('refDoctor') || urlParams.get('doctor');
+      if (refDoctor) return refDoctor;
+      return localStorage.getItem('prime_telecare_pending_ref_doctor') || '';
+    } catch {
+      return '';
+    }
+  });
   const [currentBookingSummary, setCurrentBookingSummary] = useState<BookingSummary | undefined>(() => {
     try {
       const saved = localStorage.getItem('prime_telecare_current_booking_summary');
@@ -261,6 +284,27 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  // Handle Referral Links (?refDoctor=... or ?doctor=...)
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refDoctor = urlParams.get('refDoctor') || urlParams.get('doctor');
+      if (refDoctor) {
+        localStorage.setItem('prime_telecare_pending_ref_doctor', refDoctor);
+        setSelectedDoctorId(refDoctor);
+        const savedUser = localStorage.getItem('prime_telecare_user');
+        if (savedUser) {
+          setCurrentScreen('doctor-profile');
+          localStorage.setItem('prime_telecare_screen', 'doctor-profile');
+        } else {
+          setCurrentScreen('signup');
+          localStorage.setItem('prime_telecare_screen', 'signup');
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch {}
   }, []);
 
   // Listen for Google OAuth redirect result and active Firebase session
@@ -539,6 +583,21 @@ export default function App() {
 
     const homeScreen = getDefaultDashboardForRole(finalRole);
 
+    // If arriving via doctor referral link, navigate to doctor's profile!
+    const pendingRefDoc = localStorage.getItem('prime_telecare_pending_ref_doctor');
+    if (pendingRefDoc && finalRole === 'patient') {
+      setSelectedDoctorId(pendingRefDoc);
+      localStorage.removeItem('prime_telecare_pending_ref_doctor');
+      try {
+        localStorage.setItem('prime_telecare_screen', 'doctor-profile');
+      } catch {}
+      setCurrentScreen('doctor-profile');
+      if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
+        setShowQuickLoginSetup(true);
+      }
+      return;
+    }
+
     if (finalRole === 'admin' || finalRole === 'doctor' || hasAcceptedTerms) {
       try {
         localStorage.setItem('prime_telecare_screen', homeScreen);
@@ -566,6 +625,20 @@ export default function App() {
       console.error('Failed to save terms acceptance', e);
     }
     const currentRole = (localStorage.getItem('prime_telecare_role') as UserRole) || effectiveRole;
+    const pendingRefDoc = localStorage.getItem('prime_telecare_pending_ref_doctor');
+    if (pendingRefDoc && currentRole === 'patient') {
+      setSelectedDoctorId(pendingRefDoc);
+      localStorage.removeItem('prime_telecare_pending_ref_doctor');
+      try {
+        localStorage.setItem('prime_telecare_screen', 'doctor-profile');
+      } catch {}
+      setCurrentScreen('doctor-profile');
+      if (localStorage.getItem('prime_telecare_quick_login_setup') !== 'true') {
+        setShowQuickLoginSetup(true);
+      }
+      return;
+    }
+
     const targetDashboard = getDefaultDashboardForRole(currentRole);
     try {
       localStorage.setItem('prime_telecare_screen', targetDashboard);
@@ -705,6 +778,13 @@ export default function App() {
                     localStorage.setItem('prime_telecare_user', JSON.stringify(updatedUser));
                     localStorage.setItem('prime_telecare_role', updatedUser.role);
                   } catch {}
+                  const pendingRefDoc = localStorage.getItem('prime_telecare_pending_ref_doctor');
+                  if (pendingRefDoc && updatedUser.role === 'patient') {
+                    setSelectedDoctorId(pendingRefDoc);
+                    localStorage.removeItem('prime_telecare_pending_ref_doctor');
+                    navigateTo('doctor-profile');
+                    return;
+                  }
                   const nextDashboard = getDefaultDashboardForRole(updatedUser.role);
                   navigateTo(nextDashboard);
                 }}

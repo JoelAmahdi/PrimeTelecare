@@ -42,6 +42,7 @@ import { showToast } from '../../utils/toast';
 import { ConnectionRecoveryModal } from '../common/ConnectionRecoveryModal';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
 import { primeApi } from '../../services/apiClient';
+import { completeConsultation, getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
 import { playRingingTone, playConnectedTone, playHangupTone } from '../../utils/audioTones';
 import {
   requestUserMedia,
@@ -1107,6 +1108,33 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       peerConnectionRef.current = null;
     }
     setShowEndConsultationModal(false);
+
+    // Conclude consultation: mark appointment as completed so it reflects under Completed
+    try {
+      const savedRaw = localStorage.getItem('prime_telecare_active_call_session');
+      let aptId = '';
+      if (savedRaw) {
+        const parsed = JSON.parse(savedRaw);
+        aptId = parsed.appointmentId || parsed.consultationId || parsed.id || '';
+      }
+      if (aptId) {
+        completeConsultation(aptId);
+        primeApi.completeAppointment(aptId).catch(() => {});
+      } else {
+        const upcoming = getActiveOrUpcomingConsultations();
+        if (upcoming.length > 0) {
+          completeConsultation(upcoming[0].id);
+          if (upcoming[0].appointmentId) {
+            completeConsultation(upcoming[0].appointmentId);
+            primeApi.completeAppointment(upcoming[0].appointmentId).catch(() => {});
+          }
+        }
+      }
+      localStorage.removeItem('prime_telecare_incoming_call');
+      localStorage.removeItem('prime_telecare_active_call');
+      window.dispatchEvent(new Event('appointment-alerts-updated'));
+    } catch {}
+
     onNavigate('post-consultation-journey');
   };
 

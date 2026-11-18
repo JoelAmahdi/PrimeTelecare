@@ -62,20 +62,37 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
 
   useEffect(() => {
     let isMounted = true;
-    primeApi
-      .getDoctors()
-      .then((docs) => {
+    const loadDoctor = async () => {
+      if (doctorId) {
+        try {
+          const direct = await primeApi.getDoctorById(doctorId);
+          if (direct && isMounted) {
+            setCurrentDoctor(direct);
+            setIsLoadingDoctor(false);
+            return;
+          }
+        } catch {}
+      }
+      try {
+        const docs = await primeApi.getDoctors();
         if (!isMounted) return;
         const list = Array.isArray(docs) ? docs : [];
-        const match = doctorId ? list.find((d) => d.id === doctorId) : list[0];
+        const match = doctorId
+          ? list.find(
+              (d) =>
+                d.id === doctorId ||
+                d.id === `doc-${doctorId}` ||
+                (doctorId.startsWith('doc-') && d.id === doctorId.replace('doc-', ''))
+            )
+          : list[0];
         if (match) {
           setCurrentDoctor(match);
         }
-      })
-      .catch(() => {})
-      .finally(() => {
+      } catch {} finally {
         if (isMounted) setIsLoadingDoctor(false);
-      });
+      }
+    };
+    loadDoctor();
     return () => {
       isMounted = false;
     };

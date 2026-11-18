@@ -25,12 +25,13 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
-import { ScreenId, User, BookingSummary, Doctor } from '../../types';
+import { ScreenId, User, BookingSummary, Doctor, StructuredClinicalRecord } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { useOfflineStatus } from '../../utils/useOfflineStatus';
 import {
   AppointmentAlert,
   getActiveOrUpcomingConsultations,
+  getCompletedConsultations,
   cancelConsultation,
 } from '../../utils/appointmentNotifications';
 import { processJoinOrPayConsultation } from '../../utils/consultationPayment';
@@ -39,6 +40,7 @@ import { primeApi } from '../../services/apiClient';
 import { AddDoctorModal } from '../common/AddDoctorModal';
 import { CareJourneyPatientWidget } from '../common/CareJourneyPatientWidget';
 import { PostConsultationNotificationsWidget } from '../common/PostConsultationNotificationsWidget';
+import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
 import {
   getStoredReminders,
   getStoredDrugPurchaseNotifications,
@@ -64,6 +66,10 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
   const [isInstantModalOpen, setIsInstantModalOpen] = useState(false);
   const [onlineDoctors, setOnlineDoctors] = useState<Doctor[]>([]);
   const [consultations, setConsultations] = useState<AppointmentAlert[]>([]);
+  const [completedConsultations, setCompletedConsultations] = useState<AppointmentAlert[]>([]);
+  const [consultationTab, setConsultationTab] = useState<'booked' | 'completed'>('booked');
+  const [selectedRecordForSummary, setSelectedRecordForSummary] = useState<StructuredClinicalRecord | null>(null);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [medReminders, setMedReminders] = useState<MedicationReminder[]>(() => getStoredReminders());
   const [purchaseAlerts, setPurchaseAlerts] = useState<DrugPurchaseNotification[]>(() => getStoredDrugPurchaseNotifications());
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
@@ -125,7 +131,9 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
   useEffect(() => {
     const loadConsultations = () => {
       const active = getActiveOrUpcomingConsultations();
+      const completed = getCompletedConsultations();
       setConsultations(active);
+      setCompletedConsultations(completed);
     };
     const loadAlerts = () => {
       setMedReminders(getStoredReminders());
@@ -426,78 +434,188 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             {/* After-Consultation Notifications (Drug Purchase & Prescription Administration Alerts) */}
             <PostConsultationNotificationsWidget user={user} onNavigate={onNavigate} />
 
-            {/* Upcoming / Active Bookings Section */}
+            {/* Consultations Section: Active/Booked vs Completed */}
             <div className="space-y-3.5">
-              <div className="flex items-center justify-between">
-                <h3 className="font-extrabold font-outfit text-[#022434] text-lg sm:text-xl">
-                  Active & Upcoming Consultations
-                </h3>
-                {consultations.length > 0 && (
-                  <span className="px-2.5 py-1 bg-emerald-100 text-[#006c44] font-bold text-xs rounded-xl font-mono">
-                    {consultations.length} Scheduled
-                  </span>
-                )}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setConsultationTab('booked');
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl font-bold font-outfit text-xs sm:text-sm transition-all cursor-pointer ${
+                      consultationTab === 'booked'
+                        ? 'bg-[#022434] text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Active & Booked ({consultations.length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setConsultationTab('completed');
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl font-bold font-outfit text-xs sm:text-sm transition-all cursor-pointer ${
+                      consultationTab === 'completed'
+                        ? 'bg-[#006c44] text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Completed ({completedConsultations.length})
+                  </button>
+                </div>
               </div>
 
-              {consultations.length > 0 ? (
-                <div className="space-y-4">
-                  {consultations.map((consult) => {
-                    const diffMs = consult.startTimeTimestamp - currentTime;
-                    const isStartingSoon = diffMs <= 15 * 60 * 1000 && diffMs >= -45 * 60 * 1000;
-                    
-                    let countdownLabel = `${consult.scheduledDate} • ${consult.scheduledTime}`;
-                    if (diffMs <= 0 && diffMs >= -45 * 60 * 1000) {
-                      countdownLabel = 'Live Now • Room Ready';
-                    } else if (diffMs > 0 && diffMs <= 15 * 60 * 1000) {
-                      const totalSecs = Math.floor(diffMs / 1000);
-                      const mins = Math.floor(totalSecs / 60);
-                      const secs = totalSecs % 60;
-                      countdownLabel = `Starts in ${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
-                    }
+              {consultationTab === 'booked' ? (
+                consultations.length > 0 ? (
+                  <div className="space-y-4">
+                    {consultations.map((consult) => {
+                      const diffMs = consult.startTimeTimestamp - currentTime;
+                      const isStartingSoon = diffMs <= 15 * 60 * 1000 && diffMs >= -45 * 60 * 1000;
+                      
+                      let countdownLabel = `${consult.scheduledDate} • ${consult.scheduledTime}`;
+                      if (diffMs <= 0 && diffMs >= -45 * 60 * 1000) {
+                        countdownLabel = 'Live Now • Room Ready';
+                      } else if (diffMs > 0 && diffMs <= 15 * 60 * 1000) {
+                        const totalSecs = Math.floor(diffMs / 1000);
+                        const mins = Math.floor(totalSecs / 60);
+                        const secs = totalSecs % 60;
+                        countdownLabel = `Starts in ${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+                      }
 
-                    return (
+                      return (
+                        <motion.div
+                          key={consult.id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-white rounded-3xl p-5 sm:p-6 shadow-xs border border-slate-200/90 hover:border-slate-300 transition-all space-y-4"
+                        >
+                          {/* Top Meta Bar */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                              <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl">
+                                {consult.type === 'Chat' ? (
+                                  <MessageSquare className="w-3.5 h-3.5 text-[#006c44]" />
+                                ) : consult.type === 'Voice' ? (
+                                  <Phone className="w-3.5 h-3.5 text-[#006c44]" />
+                                ) : (
+                                  <Video className="w-3.5 h-3.5 text-[#006c44]" />
+                                )}
+                                <span>{consult.type} Call</span>
+                              </span>
+
+                              {isStartingSoon ? (
+                                <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 text-[#006c44] border border-emerald-200/80 text-xs font-bold rounded-xl">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                  <span>{countdownLabel}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center space-x-1.5 text-slate-500 text-xs font-medium">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{consult.scheduledDate}, {consult.scheduledTime}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() => handleCancelConsultation(consult.id, consult.doctorName)}
+                              className="text-xs text-slate-400 hover:text-rose-600 font-medium transition-colors px-1 py-0.5 shrink-0"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+
+                          {/* Doctor Details */}
+                          <div className="flex items-center space-x-4">
+                            <img
+                              src={consult.doctorAvatar}
+                              alt={consult.doctorName}
+                              className="w-14 h-14 rounded-2xl object-cover border border-slate-100 shadow-2xs shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-bold font-outfit text-base sm:text-lg text-[#022434] leading-snug">
+                                {consult.doctorName}
+                              </h4>
+                              <p className="text-xs sm:text-sm text-slate-500 font-nunito mt-0.5">
+                                {consult.doctorSpecialty}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* CTA Button */}
+                          <button
+                            onClick={() => handleJoinConsultation(consult)}
+                            className="w-full py-3.5 px-5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-2xl shadow-xs hover:shadow-sm transition-all active:scale-[0.99] flex items-center justify-center space-x-2 cursor-pointer"
+                          >
+                            {consult.type === 'Chat' ? (
+                              <MessageSquare className="w-4 h-4" />
+                            ) : consult.type === 'Voice' ? (
+                              <Phone className="w-4 h-4" />
+                            ) : (
+                              <Video className="w-4 h-4" />
+                            )}
+                            <span>{isStartingSoon ? 'Join Consultation Room' : 'Enter Consultation'}</span>
+                          </button>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* When there are no active consultations or booked consultations: show 'book a consultation now' */
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-3xl p-8 sm:p-10 shadow-xs border border-slate-200/90 flex flex-col items-center justify-center text-center space-y-4"
+                  >
+                    <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-[#006c44] border border-emerald-100">
+                      <Calendar className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-1.5 max-w-md">
+                      <h4 className="text-base sm:text-lg font-bold font-outfit text-[#022434]">
+                        No active or scheduled consultations
+                      </h4>
+                    </div>
+                    <button
+                      onClick={() => {
+                        triggerHaptic('medium');
+                        onNavigate('book-consultation');
+                      }}
+                      className="w-full max-w-sm py-3.5 px-6 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-2xl shadow-sm transition-all active:scale-[0.98] flex items-center justify-center space-x-2 cursor-pointer"
+                    >
+                      <span>Book a consultation now</span>
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
+                  </motion.div>
+                )
+              ) : (
+                completedConsultations.length > 0 ? (
+                  <div className="space-y-4">
+                    {completedConsultations.map((consult) => (
                       <motion.div
                         key={consult.id}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="bg-white rounded-3xl p-5 sm:p-6 shadow-xs border border-slate-200/90 hover:border-slate-300 transition-all space-y-4"
                       >
-                        {/* Top Meta Bar */}
                         <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                            <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl">
-                              {consult.type === 'Chat' ? (
-                                <MessageSquare className="w-3.5 h-3.5 text-[#006c44]" />
-                              ) : consult.type === 'Voice' ? (
-                                <Phone className="w-3.5 h-3.5 text-[#006c44]" />
-                              ) : (
-                                <Video className="w-3.5 h-3.5 text-[#006c44]" />
-                              )}
-                              <span>{consult.type} Call</span>
-                            </span>
-
-                            {isStartingSoon ? (
-                              <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 text-[#006c44] border border-emerald-200/80 text-xs font-bold rounded-xl">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <span>{countdownLabel}</span>
-                              </span>
+                          <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl">
+                            {consult.type === 'Chat' ? (
+                              <MessageSquare className="w-3.5 h-3.5 text-[#006c44]" />
+                            ) : consult.type === 'Voice' ? (
+                              <Phone className="w-3.5 h-3.5 text-[#006c44]" />
                             ) : (
-                              <span className="inline-flex items-center space-x-1.5 text-slate-500 text-xs font-medium">
-                                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                <span>{consult.scheduledDate}, {consult.scheduledTime}</span>
-                              </span>
+                              <Video className="w-3.5 h-3.5 text-[#006c44]" />
                             )}
-                          </div>
+                            <span>{consult.type} Call</span>
+                          </span>
 
-                          <button
-                            onClick={() => handleCancelConsultation(consult.id, consult.doctorName)}
-                            className="text-xs text-slate-400 hover:text-rose-600 font-medium transition-colors px-1 py-0.5 shrink-0"
-                          >
-                            Cancel
-                          </button>
+                          <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/60 text-xs font-bold rounded-xl">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Completed</span>
+                          </span>
                         </div>
 
-                        {/* Doctor Details */}
                         <div className="flex items-center space-x-4">
                           <img
                             src={consult.doctorAvatar}
@@ -509,55 +627,61 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                               {consult.doctorName}
                             </h4>
                             <p className="text-xs sm:text-sm text-slate-500 font-nunito mt-0.5">
-                              {consult.doctorSpecialty}
+                              {consult.doctorSpecialty} • {consult.scheduledDate}
                             </p>
                           </div>
                         </div>
 
-                        {/* CTA Button */}
-                        <button
-                          onClick={() => handleJoinConsultation(consult)}
-                          className="w-full py-3.5 px-5 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-2xl shadow-xs hover:shadow-sm transition-all active:scale-[0.99] flex items-center justify-center space-x-2 cursor-pointer"
-                        >
-                          {consult.type === 'Chat' ? (
-                            <MessageSquare className="w-4 h-4" />
-                          ) : consult.type === 'Voice' ? (
-                            <Phone className="w-4 h-4" />
-                          ) : (
-                            <Video className="w-4 h-4" />
-                          )}
-                          <span>{isStartingSoon ? 'Join Consultation Room' : 'Enter Consultation'}</span>
-                        </button>
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
+                          <button
+                            onClick={() => {
+                              triggerHaptic('selection');
+                              const structuredRecord: StructuredClinicalRecord = {
+                                id: consult.appointmentId || consult.id,
+                                patientId: user.id || '',
+                                patientName: user.name || consult.patientName || 'Patient',
+                                doctorName: consult.doctorName,
+                                doctorSpecialty: consult.doctorSpecialty,
+                                doctorLicense: 'MDCN Verified',
+                                dateStr: consult.scheduledDate || 'Completed',
+                                timestamp: consult.startTimeTimestamp || Date.now(),
+                                markdownNotes: `## Telehealth Consultation Summary\n- **Modality**: ${consult.type} Call\n- **Consultant**: ${consult.doctorName} (${consult.doctorSpecialty})\n- **Status**: Completed & Concluded\n- **Care Continuity**: Clinical encounter archived under confidential health records.`,
+                              };
+                              setSelectedRecordForSummary(structuredRecord);
+                              setIsSummaryModalOpen(true);
+                            }}
+                            className="flex-1 py-3 px-4 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200/80 font-bold font-outfit text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                          >
+                            <FileText className="w-4 h-4 text-blue-700" />
+                            <span>EHR Summary</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              triggerHaptic('selection');
+                              onNavigate('health-records');
+                            }}
+                            className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold font-outfit text-xs sm:text-sm rounded-xl transition-all cursor-pointer"
+                          >
+                            Medical Records
+                          </button>
+                        </div>
                       </motion.div>
-                    );
-                  })}
-                </div>
-              ) : (
-                /* When there are no active consultations or booked consultations: show 'book a consultation now' */
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white rounded-3xl p-8 sm:p-10 shadow-xs border border-slate-200/90 flex flex-col items-center justify-center text-center space-y-4"
-                >
-                  <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-[#006c44] border border-emerald-100">
-                    <Calendar className="w-8 h-8" />
+                    ))}
                   </div>
-                  <div className="space-y-1.5 max-w-md">
-                    <h4 className="text-base sm:text-lg font-bold font-outfit text-[#022434]">
-                      No active or scheduled consultations
-                    </h4>
-                  </div>
-                  <button
-                    onClick={() => {
-                      triggerHaptic('medium');
-                      onNavigate('book-consultation');
-                    }}
-                    className="w-full max-w-sm py-3.5 px-6 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-sm rounded-2xl shadow-sm transition-all active:scale-[0.98] flex items-center justify-center space-x-2 cursor-pointer"
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white rounded-3xl p-8 sm:p-10 shadow-xs border border-slate-200/90 flex flex-col items-center justify-center text-center space-y-3"
                   >
-                    <span>Book a consultation now</span>
-                    <ArrowUpRight className="w-4 h-4" />
-                  </button>
-                </motion.div>
+                    <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <h4 className="text-base sm:text-lg font-bold font-outfit text-[#022434]">
+                      No completed consultations yet
+                    </h4>
+                  </motion.div>
+                )
               )}
             </div>
 
@@ -922,6 +1046,16 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
           </div>
         </div>
       )}
+      {/* Consultation Summary PDF Modal for Concluded Sessions */}
+      <ConsultationSummaryPDFModal
+        isOpen={isSummaryModalOpen}
+        user={user}
+        consultationRecord={selectedRecordForSummary}
+        onClose={() => {
+          setIsSummaryModalOpen(false);
+          setSelectedRecordForSummary(null);
+        }}
+      />
     </div>
   );
 };

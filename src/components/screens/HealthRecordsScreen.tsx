@@ -33,7 +33,7 @@ import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFMod
 import { PrescriptionPrintModal } from '../common/PrescriptionPrintModal';
 import { primeApi } from '../../services/apiClient';
 import { getStoredPrescriptions } from '../../utils/prescriptionStore';
-import { getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
+import { getStoredAppointmentAlerts } from '../../utils/appointmentNotifications';
 import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
 import { BiometricAuthModal } from '../common/BiometricAuthModal';
@@ -154,7 +154,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
         ]);
 
         const localRxs = getStoredPrescriptions();
-        const localApts = getActiveOrUpcomingConsultations();
+        const localApts = getStoredAppointmentAlerts();
 
         // Merge & deduplicate prescriptions
         const rxMap = new Map<string, Prescription>();
@@ -207,17 +207,17 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
             doctorSpecialty: a.doctorSpecialty || 'General Practice',
             doctorAvatar: a.doctorAvatar,
             date: a.scheduledDate || a.date || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            timeSlot: a.timeSlot || 'Scheduled',
+            timeSlot: a.status === 'completed' ? 'Completed' : (a.timeSlot || 'Booked'),
             type: (a.type as 'Video' | 'Voice' | 'Chat') || 'Video',
             notes: a.notes,
           })),
           ...localApts.map((a) => ({
-            id: a.id,
+            id: a.appointmentId || a.id,
             doctorName: a.doctorName && a.doctorName !== 'Attending Physician' ? a.doctorName : 'Doctor',
             doctorSpecialty: a.doctorSpecialty || 'General Practice',
             doctorAvatar: a.doctorAvatar,
             date: a.scheduledDate || new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            timeSlot: a.scheduledTime || 'Scheduled',
+            timeSlot: a.status === 'completed' ? 'Completed' : (a.scheduledTime ? `${a.scheduledTime} (Booked)` : 'Booked'),
             type: a.type || 'Video',
             notes: undefined,
           })),

@@ -1946,7 +1946,7 @@ export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
 
             <div className="p-3.5 bg-slate-50 rounded-xl space-y-2 text-xs font-nunito">
               <div className="flex justify-between">
-                <span className="text-slate-500">Attending Physician:</span>
+                <span className="text-slate-500">Consulting Doctor:</span>
                 <strong className="text-slate-800">{selectedLiveSession.doctorName}</strong>
               </div>
               <div className="flex justify-between">

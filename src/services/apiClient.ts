@@ -254,6 +254,30 @@ export const primeApi = {
     }
   },
 
+  async updateAppointment(id: string, updates: Partial<Appointment>): Promise<Appointment | null> {
+    try {
+      const res = await request<{ success: boolean; appointment: Appointment }>(`/appointments/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+      return res.appointment;
+    } catch {
+      return null;
+    }
+  },
+
+  async completeAppointment(id: string): Promise<boolean> {
+    try {
+      await request(`/appointments/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'completed' }),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   // --- Real-time Online Telehealth Calls ---
   async startCall(payload: {
     consultationId?: string;

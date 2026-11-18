@@ -9,7 +9,7 @@ import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { NextAppointmentBanner } from '../common/NextAppointmentBanner';
 import { ClinicalDocumentationModal } from '../common/ClinicalDocumentationModal';
 import { useOfflineStatus } from '../../utils/useOfflineStatus';
-import { getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
+import { getActiveOrUpcomingConsultations, completeConsultation } from '../../utils/appointmentNotifications';
 import { primeApi } from '../../services/apiClient';
 
 interface DoctorHomeDashboardProps {
@@ -79,7 +79,8 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
 
   const handleShareBookingLink = async () => {
     triggerHaptic('selection');
-    const doctorBookingUrl = `${window.location.origin}/?doctor=${user.id || 'doc-1'}&book=true`;
+    const targetDocId = user?.id ? (user.id.startsWith('doc-') ? user.id : `doc-${user.id}`) : 'doc-1';
+    const doctorBookingUrl = `${window.location.origin}/?refDoctor=${encodeURIComponent(targetDocId)}`;
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
@@ -98,7 +99,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
     try {
       await navigator.clipboard.writeText(doctorBookingUrl);
       setCopiedLink(true);
-      showToast('Doctor booking link copied! Share it with patients to book sessions directly.', 'success');
+      showToast('Doctor booking link copied! New patients will be guided to sign up and view your profile.', 'success');
       setTimeout(() => setCopiedLink(false), 3000);
     } catch {
       showToast('Booking URL: ' + doctorBookingUrl, 'info');
@@ -131,6 +132,14 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
     }
   });
 
+  const handleConcludeConsultation = async (patientId: string, patientName: string) => {
+    triggerHaptic('success');
+    completeConsultation(patientId);
+    await primeApi.completeAppointment(patientId).catch(() => {});
+    showToast(`Consultation with ${patientName} concluded and archived under Completed.`, 'success');
+    window.dispatchEvent(new Event('appointment-alerts-updated'));
+  };
+
   useEffect(() => {
     let isMounted = true;
     const loadQueue = async () => {
@@ -150,7 +159,8 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
         const res = await primeApi.getAppointments();
         const apiAppointments: any[] = Array.isArray(res) ? res : (res as any)?.appointments || (res as any)?.data || [];
         if (isMounted && apiAppointments.length > 0) {
-          const apiItems = apiAppointments.map((a: any) => ({
+          const activeOnly = apiAppointments.filter((a: any) => a.status !== 'completed' && a.status !== 'cancelled');
+          const apiItems = activeOnly.map((a: any) => ({
             id: a.id,
             name: a.patientName || 'Patient',
             time: a.timeSlot || 'Scheduled',
@@ -705,6 +715,9 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                               localStorage.setItem(
                                 'prime_telecare_active_call_session',
                                 JSON.stringify({
+                                  id: patient.id,
+                                  appointmentId: patient.id,
+                                  consultationId: patient.id,
                                   doctorId: user.id,
                                   doctorName: user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`,
                                   doctorSpecialty: user.doctorSpecialty || '',
@@ -720,6 +733,15 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                         >
                           <Video className="w-3.5 h-3.5 text-emerald-300" />
                           <span>Start Session</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleConcludeConsultation(patient.id, patient.name)}
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#006c44] border border-emerald-200/80 font-bold font-outfit text-xs rounded-xl transition-all flex items-center space-x-1 cursor-pointer"
+                          title="Mark Consultation Completed"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Conclude</span>
                         </button>
                       </div>
                     </div>

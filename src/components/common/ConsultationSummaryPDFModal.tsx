@@ -276,7 +276,7 @@ ${activeRecord.warningSigns || 'N/A'}
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div>
-                  <span className="text-slate-500 block">Attending Physician:</span>
+                  <span className="text-slate-500 block">Consulting Doctor:</span>
                   <div className="flex items-center space-x-2 mt-0.5">
                     <Stethoscope className="w-4 h-4 text-[#006c44]" />
                     <strong className="text-sm text-[#022434]">{doctorName}</strong>
@@ -589,7 +589,7 @@ ${activeRecord.warningSigns || 'N/A'}
                 {/* Doctor Column */}
                 <div className="space-y-1 sm:border-l sm:border-slate-200 sm:pl-4">
                   <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
-                    Attending Physician
+                    Consulting Doctor
                   </span>
                   <h4 className="text-sm font-extrabold text-[#022434]">{doctorName}</h4>
                   <p className="text-slate-600">{doctorSpecialty}</p>

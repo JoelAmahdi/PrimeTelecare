@@ -17,6 +17,7 @@ import { NotificationsDrawer } from '../common/NotificationsDrawer';
 import { processJoinOrPayConsultation, isConsultationPaid } from '../../utils/consultationPayment';
 import { CollapsibleSection } from '../common/CollapsibleSection';
 import { primeApi } from '../../services/apiClient';
+import { getStoredAppointmentAlerts, completeConsultation } from '../../utils/appointmentNotifications';
 
 interface ConsultationItem {
   id: string;
@@ -53,30 +54,77 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   const [consultationsList, setConsultationsList] = useState<ConsultationItem[]>([]);
   const [isLoadingConsultations, setIsLoadingConsultations] = useState(true);
 
-  // Load live appointments from backend
+  // Load live appointments from backend & persistent consultations store
   const loadConsultations = async () => {
     try {
-      const apts = await primeApi.getAppointments();
-      const mapped: ConsultationItem[] = (apts || []).map((a) => ({
+      const [remoteApts, localAlerts] = await Promise.all([
+        primeApi.getAppointments().catch(() => []),
+        Promise.resolve(getStoredAppointmentAlerts()),
+      ]);
+
+      const remoteItems: ConsultationItem[] = (remoteApts || []).map((a: any) => ({
         id: a.id,
         patientName: a.patientName || 'Patient',
         patientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
-        doctorName: a.doctorName,
+        doctorName: a.doctorName && a.doctorName !== 'Attending Physician' ? a.doctorName : 'Doctor',
         doctorAvatar: a.doctorAvatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=150&q=80',
         specialty: a.doctorSpecialty || 'General Practice',
         type: (a.type as any) || 'Chat',
-        dateTimeStr: `${a.scheduledDate}, ${a.timeSlot}`,
-        rawDate: new Date().toISOString(),
-        sortTimestamp: Date.now(),
-        status: (a.status as any) || 'upcoming',
-        chiefComplaint: a.notes || 'General Telehealth Consult',
+        dateTimeStr: `${a.scheduledDate || 'Today'}, ${a.timeSlot || 'Scheduled'}`,
+        rawDate: a.scheduledDate || new Date().toISOString(),
+        sortTimestamp: a.createdAt ? new Date(a.createdAt).getTime() : Date.now(),
+        status: a.status === 'completed' ? 'completed' : a.status === 'cancelled' ? 'cancelled' : 'upcoming',
+        chiefComplaint: a.notes || 'Telehealth Consultation',
         price: a.price || 10000,
       }));
-      setConsultationsList(mapped);
+
+      const localItems: ConsultationItem[] = (localAlerts || []).map((a) => ({
+        id: a.appointmentId || a.id,
+        patientName: a.patientName || 'Patient',
+        patientAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+        doctorName: a.doctorName && a.doctorName !== 'Attending Physician' ? a.doctorName : 'Doctor',
+        doctorAvatar: a.doctorAvatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=150&q=80',
+        specialty: a.doctorSpecialty || 'General Practice',
+        type: a.type || 'Chat',
+        dateTimeStr: `${a.scheduledDate}, ${a.scheduledTime}`,
+        rawDate: a.scheduledDate,
+        sortTimestamp: a.startTimeTimestamp || Date.now(),
+        status: a.status === 'completed' ? 'completed' : a.status === 'cancelled' ? 'cancelled' : 'upcoming',
+        chiefComplaint: `${a.type} Consultation with ${a.doctorName}`,
+        price: a.price || 10000,
+      }));
+
+      // Merge and deduplicate: if either source marks it completed, status is completed!
+      const map = new Map<string, ConsultationItem>();
+      for (const item of [...remoteItems, ...localItems]) {
+        if (!map.has(item.id)) {
+          map.set(item.id, item);
+        } else {
+          const existing = map.get(item.id)!;
+          if (item.status === 'completed') {
+            existing.status = 'completed';
+          }
+        }
+      }
+
+      setConsultationsList(Array.from(map.values()));
     } catch {
       setConsultationsList([]);
     } finally {
       setIsLoadingConsultations(false);
+    }
+  };
+
+  const handleEndChatConsultation = async () => {
+    if (!activeSession) return;
+    triggerHaptic('heavy');
+    completeConsultation(activeSession.id);
+    await primeApi.completeAppointment(activeSession.id).catch(() => {});
+    showToast('Consultation concluded and archived under Completed.', 'success');
+    window.dispatchEvent(new Event('appointment-alerts-updated'));
+    setActiveSession(null);
+    if (role === 'patient') {
+      onNavigate('post-consultation-journey');
     }
   };
 
@@ -367,8 +415,14 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
               >
                 <Phone className="w-5 h-5" />
               </button>
-              <button className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer">
-                <MoreHorizontal className="w-5 h-5" />
+              <button
+                type="button"
+                onClick={handleEndChatConsultation}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 font-bold font-outfit text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center space-x-1"
+                title="Conclude Consultation"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>End</span>
               </button>
             </div>
           </div>

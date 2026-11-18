@@ -57,6 +57,14 @@ export function getActiveOrUpcomingConsultations(): AppointmentAlert[] {
 }
 
 /**
+ * Returns all concluded/completed consultations
+ */
+export function getCompletedConsultations(): AppointmentAlert[] {
+  const alerts = getStoredAppointmentAlerts();
+  return alerts.filter((a) => a.status === 'completed');
+}
+
+/**
  * Books a new consultation into the persistent appointments store
  */
 export function bookNewConsultation(booking: {
@@ -114,7 +122,7 @@ export function bookNewConsultation(booking: {
 export function cancelConsultation(id: string): void {
   const alerts = getStoredAppointmentAlerts();
   const updated = alerts.map((a) =>
-    a.id === id ? { ...a, dismissed: true, status: 'cancelled' as const } : a
+    a.id === id || a.appointmentId === id ? { ...a, dismissed: true, status: 'cancelled' as const } : a
   );
   saveAppointmentAlerts(updated);
 }
@@ -125,7 +133,7 @@ export function cancelConsultation(id: string): void {
 export function completeConsultation(id: string): void {
   const alerts = getStoredAppointmentAlerts();
   const updated = alerts.map((a) =>
-    a.id === id ? { ...a, dismissed: true, status: 'completed' as const } : a
+    a.id === id || a.appointmentId === id ? { ...a, status: 'completed' as const } : a
   );
   saveAppointmentAlerts(updated);
 }
@@ -146,6 +154,7 @@ export function getActive15MinAppointmentAlert(): AppointmentAlert | null {
 
   for (const alert of alerts) {
     if (alert.dismissed) continue;
+    if (alert.status === 'completed' || alert.status === 'cancelled') continue;
     if (alert.snoozedUntil && now < alert.snoozedUntil) continue;
 
     const diffMs = alert.startTimeTimestamp - now;
