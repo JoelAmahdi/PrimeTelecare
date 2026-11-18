@@ -264,6 +264,19 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       try {
         localStorage.setItem('prime_telecare_incoming_call', JSON.stringify(callData));
         localStorage.setItem('prime_telecare_active_call', JSON.stringify(callData));
+        localStorage.setItem(
+          'prime_telecare_active_call_session',
+          JSON.stringify({
+            doctorId: doctor.id || 'doc-1',
+            doctorName: doctor.fullNameWithTitle || doctor.name,
+            doctorSpecialty: doctor.specialty || '',
+            doctorAvatar: doctor.avatarUrl || '',
+            patientName: patientDisplayName,
+            type: consultationType,
+            consultationId: consultId,
+          })
+        );
+        window.dispatchEvent(new Event('active-call-session-updated'));
         window.dispatchEvent(new CustomEvent('incoming-doctor-call', { detail: callData }));
       } catch {}
 

@@ -192,6 +192,22 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
     
     if (isPaid || item.status === 'live' || item.status === 'completed') {
       if (item.type === 'Video' || item.type === 'Voice') {
+        try {
+          localStorage.setItem(
+            'prime_telecare_active_call_session',
+            JSON.stringify({
+              appointmentId: item.id,
+              consultationId: item.id,
+              doctorId: item.id || 'doc-attending',
+              doctorName: item.doctorName,
+              doctorSpecialty: item.specialty,
+              doctorAvatar: item.doctorAvatar,
+              patientName: item.patientName || '',
+              type: item.type,
+            })
+          );
+          window.dispatchEvent(new Event('active-call-session-updated'));
+        } catch {}
         onNavigate('video-call');
       } else {
         setActiveSession(item);
@@ -401,20 +417,6 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                   <span className="hidden sm:inline">Issue Rx</span>
                 </button>
               )}
-              <button 
-                onClick={() => onNavigate('video-call')}
-                className="p-2 rounded-xl hover:bg-emerald-50 text-emerald-600 transition-colors cursor-pointer"
-                title="Start Video Consultation"
-              >
-                <Video className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={() => onNavigate('video-call')}
-                className="p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-                title="Start Voice Consultation"
-              >
-                <Phone className="w-5 h-5" />
-              </button>
               <button
                 type="button"
                 onClick={handleEndChatConsultation}
@@ -525,17 +527,6 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
               >
                 <Paperclip className="w-5 h-5" />
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('light');
-                  fileInputRef.current?.click();
-                }}
-                className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 hidden sm:block cursor-pointer"
-                title="Capture Photo with Device Camera"
-              >
-                <Camera className="w-5 h-5" />
-              </button>
               {role === 'doctor' && (
                 <button
                   type="button"
@@ -555,31 +546,22 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                   type="text"
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder={isRecordingAudio ? "Recording live microphone audio..." : "Type your message..."}
+                  placeholder="Type your message..."
                   className="flex-1 bg-transparent border-none focus:outline-none text-sm sm:text-base text-[#022434] py-2 placeholder-slate-400 font-nunito"
                 />
               </div>
-              {chatMessage.trim() ? (
-                <button
-                  type="submit"
-                  className="p-3 sm:p-3.5 bg-[#77daa4] hover:bg-[#006c44] text-[#022434] hover:text-white rounded-full transition-all active:scale-95 shadow-sm shrink-0 cursor-pointer"
-                >
-                  <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleToggleVoiceRecording}
-                  className={`p-3 sm:p-3.5 rounded-full transition-all shrink-0 cursor-pointer ${
-                    isRecordingAudio
-                      ? 'bg-red-500 text-white animate-pulse shadow-md ring-4 ring-red-200'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
-                  title={isRecordingAudio ? "Tap to Stop & Send Voice Note" : "Record Voice Note with Microphone"}
-                >
-                  <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              )}
+              <button
+                type="submit"
+                disabled={!chatMessage.trim()}
+                className={`p-3 sm:p-3.5 rounded-full transition-all shrink-0 ${
+                  chatMessage.trim()
+                    ? 'bg-[#77daa4] hover:bg-[#006c44] text-[#022434] hover:text-white shadow-sm cursor-pointer active:scale-95'
+                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                }`}
+                title="Send Message"
+              >
+                <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5" />
+              </button>
             </form>
           </div>
         </div>
@@ -786,12 +768,24 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                             >
                               Open Chat
                             </button>
-                            <button
-                              onClick={() => handleStartConsultationCall(item)}
-                              className="px-5 py-2.5 bg-[#77daa4] hover:bg-[#006c44] hover:text-white text-[#022434] font-bold font-outfit text-xs rounded-xl shadow-xs transition-all active:scale-95 shrink-0"
-                            >
-                              Start Call
-                            </button>
+                            {item.type !== 'Chat' && (
+                              <button
+                                onClick={() => handleStartConsultationCall(item)}
+                                className="px-5 py-2.5 bg-[#77daa4] hover:bg-[#006c44] hover:text-white text-[#022434] font-bold font-outfit text-xs rounded-xl shadow-xs transition-all active:scale-95 shrink-0 flex items-center space-x-1.5"
+                              >
+                                {item.type === 'Voice' ? (
+                                  <>
+                                    <Phone className="w-3.5 h-3.5" />
+                                    <span>Start Voice Call</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Video className="w-3.5 h-3.5" />
+                                    <span>Start Video Call</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

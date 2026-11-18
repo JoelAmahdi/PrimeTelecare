@@ -224,6 +224,7 @@ export default function App() {
     doctorSpecialty?: string;
     doctorAvatar?: string;
     patientName?: string;
+    type?: 'Video' | 'Voice' | 'Chat';
   } | null>(() => {
     try {
       const saved = localStorage.getItem('prime_telecare_active_call_session');
@@ -935,6 +936,11 @@ export default function App() {
                     ? activeCallSession?.patientName || ''
                     : activeUser.name
                 }
+                consultationType={
+                  (activeCallSession?.type ||
+                    currentBookingSummary?.consultationType ||
+                    'Video') as 'Video' | 'Voice' | 'Chat'
+                }
               />
             )}
 
@@ -1106,6 +1112,7 @@ export default function App() {
               doctorSpecialty: activeUser.doctorSpecialty || '',
               doctorAvatar: activeUser.avatarUrl || '',
               patientName: call.patientName || '',
+              type: call.type,
             };
             setActiveCallSession(sessionPayload);
             try {

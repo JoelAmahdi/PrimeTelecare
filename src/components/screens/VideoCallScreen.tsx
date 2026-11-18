@@ -62,6 +62,7 @@ interface VideoCallScreenProps {
   doctorSpecialty?: string;
   doctorAvatar?: string;
   patientName?: string;
+  consultationType?: 'Video' | 'Voice' | 'Chat';
 }
 
 interface InCallMessage {
@@ -84,7 +85,36 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   doctorSpecialty = '',
   doctorAvatar = '',
   patientName = '',
+  consultationType,
 }) => {
+  // Determine if this session is strictly an audio / voice consultation (NO camera access)
+  const [resolvedConsultationType, setResolvedConsultationType] = useState<'Video' | 'Voice' | 'Chat'>(() => {
+    if (consultationType) return consultationType;
+    try {
+      const savedSession = localStorage.getItem('prime_telecare_active_call_session');
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        if (parsed.type === 'Voice' || parsed.type === 'voice' || parsed.type === 'Audio' || parsed.type === 'audio') return 'Voice';
+        if (parsed.type === 'Video' || parsed.type === 'video') return 'Video';
+      }
+      const savedBooking = localStorage.getItem('prime_telecare_current_booking_summary');
+      if (savedBooking) {
+        const parsed = JSON.parse(savedBooking);
+        if (parsed.consultationType === 'Voice' || parsed.consultationType === 'voice' || parsed.consultationType === 'Audio' || parsed.consultationType === 'audio') return 'Voice';
+        if (parsed.consultationType === 'Video' || parsed.consultationType === 'video') return 'Video';
+      }
+      const savedCall = localStorage.getItem('prime_telecare_active_call') || localStorage.getItem('prime_telecare_incoming_call');
+      if (savedCall) {
+        const parsed = JSON.parse(savedCall);
+        if (parsed.type === 'Voice' || parsed.type === 'voice' || parsed.type === 'Audio' || parsed.type === 'audio') return 'Voice';
+        if (parsed.type === 'Video' || parsed.type === 'video') return 'Video';
+      }
+    } catch {}
+    return 'Video';
+  });
+
+  const isStrictlyAudio = resolvedConsultationType === 'Voice';
+
   // Active Patient Profile Info (Primary or Family Dependent)
   const activeProfile = getActiveProfileInfo(user);
 
@@ -142,9 +172,20 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         if (isDoctorAccount && !patientName && call.patientName) {
           setResolvedPatientName(call.patientName);
         }
+        if (call.type) {
+          if (call.type === 'Voice' || call.type === 'voice' || call.type === 'Audio' || call.type === 'audio') {
+            setResolvedConsultationType('Voice');
+          }
+        }
       })
       .catch(() => {});
   }, [doctorName, doctorAvatar, patientName, isDoctorAccount, ownFormattedDoctorName]);
+
+  useEffect(() => {
+    if (consultationType) {
+      setResolvedConsultationType(consultationType);
+    }
+  }, [consultationType]);
 
   const displayDoctorName = resolvedDoctorName || 'Doctor';
   const displayPatientName = resolvedPatientName || 'Patient';
@@ -480,7 +521,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     setIsAcquiringMedia(true);
     setMediaError(null);
     try {
-      const media = await requestUserMedia(true, true, mode);
+      const shouldRequestVideo = !isStrictlyAudio && !isAudioOnlyMode;
+      const media = await requestUserMedia(shouldRequestVideo, true, mode);
       if (media.stream) {
         if (localStreamRef.current && localStreamRef.current !== media.stream) {
           localStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -490,12 +532,12 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           t.enabled = !isMuted;
         });
         media.stream.getVideoTracks().forEach((t) => {
-          t.enabled = !isVideoOff;
+          t.enabled = !isVideoOff && shouldRequestVideo;
         });
 
         localStreamRef.current = media.stream;
         setLocalStream(media.stream);
-        setHasCamera(media.hasCamera);
+        setHasCamera(shouldRequestVideo ? media.hasCamera : false);
         setHasMicrophone(media.hasMicrophone);
         if (media.error) {
           setMediaError(media.error);
@@ -508,6 +550,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           const transceivers = pc.getTransceivers();
 
           for (const track of media.stream.getTracks()) {
+            if (isStrictlyAudio && track.kind === 'video') continue;
             const matchingTransceiver = transceivers.find(
               (t) =>
                 t.sender?.track?.kind === track.kind ||
@@ -538,7 +581,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       } else {
         setHasCamera(false);
         setHasMicrophone(false);
-        setMediaError(media.error || 'Camera/microphone permission denied. Tap Enable Camera to retry.');
+        setMediaError(media.error || (isStrictlyAudio ? 'Microphone permission denied. Tap to retry.' : 'Camera/microphone permission denied. Tap Enable Camera to retry.'));
         return null;
       }
     } finally {
@@ -617,7 +660,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           pc.addTrack(track, stream);
         });
       }
-      if (!hasVideoSender) {
+      if (!isStrictlyAudio && !hasVideoSender) {
         pc.addTransceiver('video', { direction: 'recvonly' });
       }
       if (!hasAudioSender) {
@@ -1360,7 +1403,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                   className="mt-0.5 accent-[#77daa4] w-4 h-4 rounded"
                 />
                 <span className="text-slate-200 leading-tight">
-                  I consent to encrypted video/audio medical examination and clinical data logging for this session.
+                  I consent to encrypted {isStrictlyAudio ? 'audio' : 'video/audio'} medical examination and clinical data logging for this session.
                 </span>
               </label>
 
@@ -1399,8 +1442,16 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               }}
               className="w-full py-4 bg-[#77daa4] disabled:bg-slate-700 disabled:text-slate-500 hover:bg-emerald-300 text-[#022434] font-extrabold font-outfit text-sm rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 active:scale-[0.98] cursor-pointer"
             >
-              <Video className="w-5 h-5" />
-              <span>{isAcquiringMedia ? 'Starting Camera & Mic...' : 'Join Consultation'}</span>
+              {isStrictlyAudio ? <PhoneCall className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+              <span>
+                {isAcquiringMedia
+                  ? isStrictlyAudio
+                    ? 'Connecting Audio...'
+                    : 'Starting Camera & Mic...'
+                  : isStrictlyAudio
+                  ? 'Join Audio Consultation'
+                  : 'Join Consultation'}
+              </span>
             </button>
           </div>
         </div>
@@ -1409,7 +1460,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       {/* ========================================================================= */}
       {/* 2. MAIN CONSULTATION CANVAS (LIVE WEBRTC VIDEO OR AUDIO FALLBACK)         */}
       {/* ========================================================================= */}
-      {!isAudioOnlyMode ? (
+      {!isAudioOnlyMode && !isStrictlyAudio ? (
         /* Video Mode Stream */
         <div className="absolute inset-0 z-0 bg-slate-950" onClick={audioBlocked ? handleUnblockAudio : undefined}>
           <video
@@ -1529,11 +1580,14 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
           <div className="space-y-1">
             <span className="text-xs font-extrabold font-outfit text-[#77daa4] uppercase tracking-wider bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-400/30">
-              Audio Mode
+              {isStrictlyAudio ? 'Strictly Audio Consultation' : 'Audio Mode'}
             </span>
             <h2 className="text-2xl font-extrabold font-outfit text-white">
               {myRole === 'doctor' ? displayPatientName : displayDoctorName}
             </h2>
+            <p className="text-xs text-slate-400">
+              {isStrictlyAudio ? 'Encrypted Live Voice Feed' : 'Network-optimized audio channel'}
+            </p>
           </div>
 
           {/* Active Voice Waveform */}
@@ -1552,46 +1606,48 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       {/* ========================================================================= */}
       {/* 3. FLOATING PIP SELF PREVIEW & VISUAL MIC/CAM STATUS                      */}
       {/* ========================================================================= */}
-      <div
-        onClick={() => {
-          triggerHaptic('selection');
-          if (!hasCamera && !swappedPiP) {
-            acquireLocalMedia(facingMode);
-            return;
-          }
-          setSwappedPiP(!swappedPiP);
-        }}
-        className="absolute top-18 sm:top-20 right-3 sm:right-5 z-20 w-24 h-36 sm:w-28 sm:h-40 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/40 shadow-2xl bg-slate-900 group cursor-pointer hover:border-emerald-400 transition-colors"
-        title={!hasCamera && !swappedPiP ? 'Tap to enable camera' : 'Tap to swap main and preview cameras'}
-      >
-        {!isVideoOff && !isAudioOnlyMode && (swappedPiP || hasCamera) ? (
-          <div className="relative w-full h-full">
-            <video
-              ref={swappedPiP ? remoteVideoRef : localVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className={`w-full h-full object-cover ${!swappedPiP ? 'scale-x-[-1]' : ''}`}
-            />
-            {/* Visual Green Camera Active Dot */}
-            <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-black" title="Camera Streaming" />
-          </div>
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-slate-900/90 text-center space-y-1">
-            <VideoOff className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
-            <span className="text-[9px] sm:text-[10px] text-slate-200 font-extrabold font-outfit leading-tight">
-              {isAudioOnlyMode ? 'Audio Only' : !hasCamera ? 'Tap for Camera' : 'Camera Off'}
-            </span>
-          </div>
-        )}
+      {!isStrictlyAudio && (
+        <div
+          onClick={() => {
+            triggerHaptic('selection');
+            if (!hasCamera && !swappedPiP) {
+              acquireLocalMedia(facingMode);
+              return;
+            }
+            setSwappedPiP(!swappedPiP);
+          }}
+          className="absolute top-18 sm:top-20 right-3 sm:right-5 z-20 w-24 h-36 sm:w-28 sm:h-40 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/40 shadow-2xl bg-slate-900 group cursor-pointer hover:border-emerald-400 transition-colors"
+          title={!hasCamera && !swappedPiP ? 'Tap to enable camera' : 'Tap to swap main and preview cameras'}
+        >
+          {!isVideoOff && !isAudioOnlyMode && (swappedPiP || hasCamera) ? (
+            <div className="relative w-full h-full">
+              <video
+                ref={swappedPiP ? remoteVideoRef : localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover ${!swappedPiP ? 'scale-x-[-1]' : ''}`}
+              />
+              {/* Visual Green Camera Active Dot */}
+              <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-black" title="Camera Streaming" />
+            </div>
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-slate-900/90 text-center space-y-1">
+              <VideoOff className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
+              <span className="text-[9px] sm:text-[10px] text-slate-200 font-extrabold font-outfit leading-tight">
+                {isAudioOnlyMode ? 'Audio Only' : !hasCamera ? 'Tap for Camera' : 'Camera Off'}
+              </span>
+            </div>
+          )}
 
-        {/* Visual Muted Overlay on PIP */}
-        {isMuted && (
-          <div className="absolute inset-0 bg-red-950/60 backdrop-blur-xs flex items-center justify-center">
-            <MicOff className="w-5 h-5 sm:w-6 sm:h-6 text-red-400 animate-bounce" />
-          </div>
-        )}
-      </div>
+          {/* Visual Muted Overlay on PIP */}
+          {isMuted && (
+            <div className="absolute inset-0 bg-red-950/60 backdrop-blur-xs flex items-center justify-center">
+              <MicOff className="w-5 h-5 sm:w-6 sm:h-6 text-red-400 animate-bounce" />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Calling Doctor Overlay */}
       {isConnectingCall && (
@@ -1667,29 +1723,41 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               className="w-full py-3 bg-[#77daa4] hover:bg-emerald-300 text-[#022434] font-extrabold font-outfit text-xs rounded-xl shadow-lg flex items-center justify-center space-x-1.5"
             >
               <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Reconnect Call Feed</span>
+              <span>{isStrictlyAudio ? 'Reconnect Audio Feed' : 'Reconnect Call Feed'}</span>
             </button>
-            <div className="flex gap-2">
+            {!isStrictlyAudio ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    triggerHaptic('success');
+                    setIsReconnecting(false);
+                  }}
+                  className="w-1/2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-outfit text-[11px] rounded-xl"
+                >
+                  Force Rejoin
+                </button>
+                <button
+                  onClick={() => {
+                    triggerHaptic('medium');
+                    setIsAudioOnlyMode(true);
+                    setIsReconnecting(false);
+                  }}
+                  className="w-1/2 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-bold rounded-xl"
+                >
+                  Audio Mode
+                </button>
+              </div>
+            ) : (
               <button
                 onClick={() => {
                   triggerHaptic('success');
                   setIsReconnecting(false);
                 }}
-                className="w-1/2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-outfit text-[11px] rounded-xl"
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-outfit text-[11px] rounded-xl"
               >
-                Force Rejoin
+                Force Rejoin Audio
               </button>
-              <button
-                onClick={() => {
-                  triggerHaptic('medium');
-                  setIsAudioOnlyMode(true);
-                  setIsReconnecting(false);
-                }}
-                className="w-1/2 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-bold rounded-xl"
-              >
-                Audio Mode
-              </button>
-            </div>
+            )}
             <button
               onClick={() => {
                 triggerHaptic('heavy');
@@ -1709,7 +1777,14 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       {/* ========================================================================= */}
       <div className="relative z-20 px-4 sm:px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-2 space-y-3">
         {/* Visual Warnings / Mode Banners */}
-        {isAudioOnlyMode && (
+        {isStrictlyAudio ? (
+          <div className="bg-emerald-950/80 backdrop-blur-md border border-emerald-500/40 text-emerald-300 text-xs p-2.5 rounded-2xl flex items-center justify-center max-w-md mx-auto shadow-sm">
+            <div className="flex items-center space-x-2">
+              <Volume2 className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
+              <span className="font-bold">Strictly Audio Consultation (Voice Only)</span>
+            </div>
+          </div>
+        ) : isAudioOnlyMode ? (
           <div className="bg-emerald-950/80 backdrop-blur-md border border-emerald-500/40 text-emerald-300 text-xs p-2.5 rounded-2xl flex items-center justify-between max-w-md mx-auto">
             <div className="flex items-center space-x-2">
               <Volume2 className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
@@ -1722,7 +1797,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               Switch to Video
             </button>
           </div>
-        )}
+        ) : null}
 
         <div className="bg-white/95 backdrop-blur-xl rounded-full p-2.5 sm:p-3 shadow-2xl flex items-center justify-center border border-white/50 max-w-sm sm:max-w-md mx-auto px-4 sm:px-6 gap-3 sm:gap-4">
           {/* Microphone Mute Toggle */}
@@ -1738,18 +1813,20 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5 text-slate-700" />}
           </button>
 
-          {/* Camera Video Toggle */}
-          <button
-            onClick={handleToggleVideo}
-            className={`p-3 sm:p-3.5 rounded-full border transition-all cursor-pointer ${
-              isVideoOff
-                ? 'bg-rose-600 text-white border-rose-600 ring-2 ring-rose-400/50'
-                : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
-            }`}
-            title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
-          >
-            {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5 text-slate-700" />}
-          </button>
+          {/* Camera Video Toggle — Hidden during Strictly Audio Consultation */}
+          {!isStrictlyAudio && (
+            <button
+              onClick={handleToggleVideo}
+              className={`p-3 sm:p-3.5 rounded-full border transition-all cursor-pointer ${
+                isVideoOff
+                  ? 'bg-rose-600 text-white border-rose-600 ring-2 ring-rose-400/50'
+                  : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
+              }`}
+              title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
+            >
+              {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5 text-slate-700" />}
+            </button>
+          )}
 
           {/* Audio Output Route Switcher (Speakerphone, Bluetooth, Headset) */}
           <button

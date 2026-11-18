@@ -89,10 +89,48 @@ export function processJoinOrPayConsultation(opts: JoinConsultationOptions) {
   } = opts;
 
   const isPaid = isConsultationPaid(id);
+  const normType = (type === 'Text' ? 'Chat' : type === 'Audio' ? 'Voice' : type) as 'Video' | 'Voice' | 'Chat';
 
   if (isPaid) {
     triggerHaptic('success');
-    if (type === 'Chat' || type === 'Text') {
+    const summary: BookingSummary = {
+      doctorId,
+      doctorName,
+      doctorSpecialty,
+      doctorAvatar,
+      consultationType: normType,
+      date: 'Today',
+      timeSlot: '10:30 AM',
+      duration: '30 Minutes',
+      baseFee: price,
+      serviceFee: 500,
+      totalFee: price + 500,
+      connectionMethod: normType === 'Video' ? 'Encrypted HD Video Call' : normType === 'Voice' ? 'Encrypted Audio Call' : 'Secured Chat',
+      uploadedFiles: [],
+      reminderPreferences: { sms: true, email: true, push: true, whatsapp: false },
+      timeZone: 'WAT (GMT+1)',
+      cancellationPolicy: '100% full refund up to 2 hours before start.',
+      reschedulePolicy: 'Free instant reschedule.',
+      consultationId: id,
+    };
+    try {
+      localStorage.setItem('prime_telecare_current_booking_summary', JSON.stringify(summary));
+      localStorage.setItem('prime_telecare_active_call_session', JSON.stringify({
+        appointmentId: id,
+        consultationId: id,
+        doctorId,
+        doctorName,
+        doctorSpecialty,
+        doctorAvatar,
+        patientName: '',
+        type: normType,
+      }));
+      window.dispatchEvent(new Event('active-call-session-updated'));
+    } catch {}
+    if (onSaveBookingSummary) {
+      onSaveBookingSummary(summary);
+    }
+    if (normType === 'Chat') {
       onNavigate('active-chat');
     } else {
       onNavigate('video-call');
@@ -100,7 +138,6 @@ export function processJoinOrPayConsultation(opts: JoinConsultationOptions) {
   } else {
     // Not paid yet -> direct to Payment screen first
     triggerHaptic('medium');
-    const normType = (type === 'Text' ? 'Chat' : type === 'Audio' ? 'Voice' : type) as 'Video' | 'Voice' | 'Chat';
     
     const summary: BookingSummary = {
       doctorId,

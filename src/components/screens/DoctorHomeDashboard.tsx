@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
-import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle, Calendar } from 'lucide-react';
+import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle, Calendar, Phone, MessageSquare } from 'lucide-react';
 import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
@@ -476,6 +476,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                       doctorSpecialty: user.doctorSpecialty || '',
                       doctorAvatar: user.avatarUrl || '',
                       patientName: liveConsultationAlert.patientName || '',
+                      type: liveConsultationAlert.type,
                     };
                     setLiveConsultationAlert(null);
                     try {
@@ -491,8 +492,20 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                   }}
                   className="px-5 py-3 bg-white hover:bg-emerald-50 text-[#006c44] font-extrabold font-outfit text-xs sm:text-sm rounded-xl shadow-md transition-all active:scale-95 flex items-center space-x-2 cursor-pointer"
                 >
-                  <Video className="w-4 h-4 text-[#006c44]" />
-                  <span>Start Consultation Now</span>
+                  {liveConsultationAlert.type === 'Voice' ? (
+                    <Phone className="w-4 h-4 text-[#006c44]" />
+                  ) : liveConsultationAlert.type === 'Chat' ? (
+                    <MessageSquare className="w-4 h-4 text-[#006c44]" />
+                  ) : (
+                    <Video className="w-4 h-4 text-[#006c44]" />
+                  )}
+                  <span>
+                    {liveConsultationAlert.type === 'Voice'
+                      ? 'Start Audio Consultation'
+                      : liveConsultationAlert.type === 'Chat'
+                      ? 'Open Chat Consultation'
+                      : 'Start Video Consultation'}
+                  </span>
                 </button>
                 <button
                   onClick={() => {
@@ -854,6 +867,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                                   doctorSpecialty: user.doctorSpecialty || '',
                                   doctorAvatar: user.avatarUrl || '',
                                   patientName: patient.name || '',
+                                  type: patient.type,
                                 })
                               );
                               window.dispatchEvent(new Event('active-call-session-updated'));
@@ -862,8 +876,14 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                           }}
                           className="px-3.5 py-1.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
                         >
-                          <Video className="w-3.5 h-3.5 text-emerald-300" />
-                          <span>Start Session</span>
+                          {patient.type === 'Voice' ? (
+                            <Phone className="w-3.5 h-3.5 text-emerald-300" />
+                          ) : patient.type === 'Chat' ? (
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-300" />
+                          ) : (
+                            <Video className="w-3.5 h-3.5 text-emerald-300" />
+                          )}
+                          <span>{patient.type === 'Chat' ? 'Open Chat' : 'Start Session'}</span>
                         </button>
 
                         <button
