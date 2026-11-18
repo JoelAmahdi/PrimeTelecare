@@ -6,8 +6,6 @@ import {
   Lock,
   Eye,
   EyeOff,
-  Fingerprint,
-  ScanFace,
   ShieldCheck,
   CheckCircle2,
   RefreshCw,
@@ -22,9 +20,8 @@ import {
 import { ScreenId, UserRole, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
-import { getBiometricSettings, BiometricType } from '../../utils/biometrics';
-import { BiometricAuthModal } from '../common/BiometricAuthModal';
 import { GoogleAuthModal } from '../common/GoogleAuthModal';
+import { BiometricAuthModal } from '../common/BiometricAuthModal';
 import { primeApi } from '../../services/apiClient';
 import { signInWithGoogle } from '../../services/googleAuth';
 import { currentUserPatient, currentUserDoctor, currentUserAdmin } from '../../data/mockData';
@@ -49,6 +46,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleErrorMsg, setGoogleErrorMsg] = useState<string | undefined>(undefined);
+  const [showPinModal, setShowPinModal] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -67,16 +65,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
     }
     return () => clearInterval(interval);
   }, [lockoutTimer]);
-
-  // Biometric Auth Modal State
-  const [showBiometricModal, setShowBiometricModal] = useState(false);
-  const [biometricType, setBiometricType] = useState<BiometricType>(() => {
-    try {
-      return getBiometricSettings().type;
-    } catch {
-      return 'faceid';
-    }
-  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,21 +127,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
     // 2. DOCTOR LOGIN WORKFLOW
     // =========================================================================
     if (loginRole === 'doctor') {
+      if (!email.trim()) {
+        setErrorMsg('Please enter your registered doctor email address.');
+        triggerHaptic('error');
+        return;
+      }
       try {
         const res = await primeApi.login({
-          email: email || 'dr.emeka@primetelecare.com',
+          email: email.trim(),
           password,
           role: 'doctor',
         });
         triggerHaptic('success');
-        showToast(`Welcome Dr. ${res.user.name || 'Clinician'}!`, 'success');
+        showToast(`Welcome ${res.user.name || 'Doctor'}!`, 'success');
         const docUser: User = {
           ...(res.user || currentUserDoctor),
           role: 'doctor',
         };
         onLoginSuccess('doctor', docUser);
-      } catch {
-        onLoginSuccess('doctor', currentUserDoctor);
+      } catch (err: any) {
+        setErrorMsg(err?.message || 'Doctor sign in failed. Please check your credentials.');
+        showToast('Login failed. Please check your credentials.', 'error');
       }
       return;
     }
@@ -217,13 +211,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
     if (score <= 2) return "border-red-400 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20";
     if (score <= 4) return "border-amber-400 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20";
     return "border-emerald-500 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-600/20";
-  };
-
-  const handleStartBiometric = () => {
-    triggerHaptic('medium');
-    const settings = getBiometricSettings();
-    setBiometricType(settings.type);
-    setShowBiometricModal(true);
   };
 
   return (
@@ -359,28 +346,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
             </div>
           )}
 
-          {loginRole === 'patient' && (
-            <>
-              {/* Apple-style Biometric Sign-in Banner */}
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs mb-4 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-800">
-                    <ScanFace className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 font-outfit">Sign in with Face ID / PIN</p>
-                    <p className="text-[11px] text-slate-400 font-nunito">Fast biometrics authentication</p>
-                  </div>
+          {loginRole !== 'admin' && (
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs mb-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center text-[#006c44]">
+                  <KeyRound className="w-5 h-5" />
                 </div>
-                <button
-                  type="button"
-                  onClick={handleStartBiometric}
-                  className="px-3.5 py-2 bg-black hover:bg-neutral-800 text-white font-semibold font-outfit text-xs rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs"
-                >
-                  Verify
-                </button>
+                <div>
+                  <p className="text-sm font-bold text-slate-900 font-outfit">Quick Sign In with PIN</p>
+                  <p className="text-[11px] text-slate-500 font-nunito">Enter your 4-digit security PIN or password</p>
+                </div>
               </div>
-            </>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('medium');
+                  setShowPinModal(true);
+                }}
+                className="px-3.5 py-2 bg-[#022434] hover:bg-[#006c44] text-white font-semibold font-outfit text-xs rounded-xl transition-all active:scale-95 cursor-pointer shadow-xs"
+              >
+                Use PIN
+              </button>
+            </div>
           )}
 
           {/* Form */}
@@ -585,20 +572,31 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
         )}
       </div>
 
-      {/* Real WebAuthn Biometric Authentication Modal */}
+      {/* PIN & Password Quick Sign-In Modal */}
       <BiometricAuthModal
-        isOpen={showBiometricModal}
-        biometricType={biometricType}
-        title="Sign In with Face ID"
-        onClose={() => setShowBiometricModal(false)}
+        isOpen={showPinModal}
+        title="Sign In with PIN or Password"
+        subtitle="Enter your 4-digit Security PIN or account password"
+        onClose={() => setShowPinModal(false)}
         onSuccess={async () => {
-          setShowBiometricModal(false);
+          setShowPinModal(false);
           try {
-            const res = await primeApi.login({ biometricToken: 'valid-biometric-token', role: loginRole });
-            const resolvedRole = (loginRole === 'doctor' || loginRole === 'admin') ? loginRole : (res.user?.role || loginRole);
-            onLoginSuccess(resolvedRole, { ...res.user, role: resolvedRole });
+            const savedRaw = localStorage.getItem('prime_telecare_user');
+            if (savedRaw) {
+              const savedUser = JSON.parse(savedRaw) as User;
+              if (savedUser && savedUser.email && savedUser.role === loginRole) {
+                onLoginSuccess(savedUser.role, savedUser);
+                return;
+              }
+            }
+            const res = await primeApi.login({ biometricToken: 'pin-verified', role: loginRole });
+            if (res?.user) {
+              const resolvedRole = (loginRole === 'doctor' || loginRole === 'admin') ? loginRole : (res.user.role || loginRole);
+              onLoginSuccess(resolvedRole, { ...res.user, role: resolvedRole });
+              return;
+            }
           } catch {
-            showToast('Biometric authentication could not be completed. Please use email sign in.', 'error');
+            showToast('No existing account found for PIN quick sign-in. Please sign in with email & password first.', 'info');
           }
         }}
       />

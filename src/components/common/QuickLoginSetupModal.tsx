@@ -1,27 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
   Lock,
-  ScanFace,
   KeyRound,
   ShieldCheck,
   Check,
   X,
-  Sparkles,
   RefreshCw,
   AlertCircle,
   Eye,
   EyeOff,
-  ArrowRight,
-  Fingerprint,
 } from 'lucide-react';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import {
-  getBiometricSettings,
   saveBiometricSettings,
   updateSecurityPin,
-  BiometricType,
-  isPlatformAuthenticatorAvailable,
 } from '../../utils/biometrics';
 
 interface QuickLoginSetupModalProps {
@@ -48,17 +41,10 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
   isOpen,
   onClose,
   onComplete,
-  userRole = 'patient',
-  userName = 'User',
 }) => {
-  const currentBiometrics = getBiometricSettings();
-
-  // Step state: 'enter_pin' | 'confirm_pin' | 'complete'
   const [step, setStep] = useState<'enter_pin' | 'confirm_pin' | 'complete'>('enter_pin');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [faceIdEnabled, setFaceIdEnabled] = useState<boolean>(true);
-  const [biometricType, setBiometricType] = useState<BiometricType>('faceid');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [shake, setShake] = useState(false);
   const [showMasked, setShowMasked] = useState(true);
@@ -72,13 +58,9 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
       setErrorMsg(null);
       setShake(false);
       setIsSaving(false);
-      const settings = getBiometricSettings();
-      setFaceIdEnabled(settings.enabled);
-      setBiometricType(settings.type || 'faceid');
     }
   }, [isOpen]);
 
-  // Physical keyboard listener
   useEffect(() => {
     if (!isOpen) return;
 
@@ -147,7 +129,6 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
       if (confirmPin.length > 0) {
         setConfirmPin((prev) => prev.slice(0, -1));
       } else {
-        // Go back to step 1
         setStep('enter_pin');
         setPin('');
       }
@@ -173,29 +154,24 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
     triggerHaptic('medium');
 
     try {
-      // 1. Update PIN fallback
       updateSecurityPin(pin);
-
-      // 2. Save biometric settings
       saveBiometricSettings({
-        enabled: faceIdEnabled,
-        type: biometricType,
+        enabled: true,
         isEnrolled: true,
         requireBiometricOnAppResume: true,
       });
-
-      // 3. Flag that quick login setup has been completed
+      localStorage.setItem('prime_telecare_quick_pin', pin);
       localStorage.setItem('prime_telecare_quick_login_setup', 'true');
 
       triggerHaptic('success');
-      showToast('Quick PIN & Face ID unlock activated successfully!', 'success');
+      showToast('4-digit Security PIN activated successfully!', 'success');
 
       setTimeout(() => {
         setIsSaving(false);
         onComplete();
-      }, 400);
+      }, 350);
     } catch (err) {
-      console.error('Failed to configure quick login:', err);
+      console.error('Failed to configure PIN:', err);
       setIsSaving(false);
       showToast('Configuration failed. Please try again.', 'error');
     }
@@ -204,7 +180,7 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
   const handleSkip = () => {
     triggerHaptic('light');
     localStorage.setItem('prime_telecare_quick_login_setup', 'true');
-    showToast('Quick unlock skipped. You can configure a PIN anytime in Settings.', 'info');
+    showToast('PIN setup skipped. You can configure a PIN anytime in Settings.', 'info');
     onClose();
   };
 
@@ -227,10 +203,10 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
           </div>
 
           <h3 className="text-xl font-bold font-outfit text-white">
-            Set Up Quick Login
+            Set Up Security PIN
           </h3>
           <p className="text-xs text-slate-200 font-nunito mt-1 leading-relaxed">
-            Create a 4-digit PIN for instant access on return or idle timeouts, and toggle Face ID for biometric sign-in.
+            Create a 4-digit PIN for quick unlock on return or idle timeouts. You can also unlock with your account password anytime.
           </p>
         </div>
 
@@ -253,7 +229,7 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
               <button
                 type="button"
                 onClick={handleResetPin}
-                className="text-[11px] text-[#006c44] hover:underline font-bold"
+                className="text-[11px] text-[#006c44] hover:underline font-bold cursor-pointer"
               >
                 Change PIN
               </button>
@@ -274,7 +250,7 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
                 ? 'Enter a 4-digit numeric code'
                 : step === 'confirm_pin'
                 ? 'Re-enter your 4 digits to confirm'
-                : 'Your PIN has been configured!'}
+                : 'Your Security PIN is ready!'}
             </p>
 
             {/* 4 Pin Boxes / Dots */}
@@ -334,7 +310,7 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
             )}
           </div>
 
-          {/* Interactive Numeric Keypad (Active during PIN entry/confirmation) */}
+          {/* Interactive Numeric Keypad */}
           {step !== 'complete' && (
             <div className="w-full max-w-[280px] mx-auto grid grid-cols-3 gap-2.5 pt-1">
               {KEYPAD_KEYS.map((k) => (
@@ -353,7 +329,6 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
                 </button>
               ))}
 
-              {/* Clear / Reset */}
               <button
                 type="button"
                 onClick={handleResetPin}
@@ -362,7 +337,6 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
                 Clear
               </button>
 
-              {/* Digit 0 */}
               <button
                 type="button"
                 onClick={() => handleDigitInput('0')}
@@ -371,7 +345,6 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
                 0
               </button>
 
-              {/* Backspace */}
               <button
                 type="button"
                 onClick={handleBackspace}
@@ -383,55 +356,11 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
             </div>
           )}
 
-          {/* SECTION 2: BIOMETRIC / FACE ID TOGGLE */}
-          <div className="pt-2 border-t border-slate-100">
-            <div className="bg-emerald-50/70 border border-emerald-200/90 rounded-2xl p-4 flex items-center justify-between space-x-3">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-[#006c44] text-white flex items-center justify-center shrink-0 shadow-sm">
-                  <ScanFace className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center space-x-1.5">
-                    <span className="font-bold text-sm text-[#022434] font-outfit">
-                      Enable Face ID / Biometrics
-                    </span>
-                    <span
-                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                        faceIdEnabled
-                          ? 'bg-emerald-200 text-emerald-800'
-                          : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      {faceIdEnabled ? 'ON' : 'OFF'}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-slate-500 font-nunito block leading-snug">
-                    Unlock with Face ID instantly; fallback to your 4-digit PIN anytime.
-                  </span>
-                </div>
-              </div>
-
-              {/* Toggle Switch */}
-              <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={faceIdEnabled}
-                  onChange={(e) => {
-                    triggerHaptic('selection');
-                    setFaceIdEnabled(e.target.checked);
-                  }}
-                />
-                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#006c44]" />
-              </label>
-            </div>
-          </div>
-
           {/* Security Notice */}
-          <div className="flex items-start space-x-2 text-[11px] text-slate-400 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+          <div className="flex items-start space-x-2 text-[11px] text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">
             <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <span className="leading-snug">
-              Protected by NDPA & ISO 27001 data protection protocols. Your PIN and biometrics never leave this device.
+              Protected by NDPA & ISO 27001 protocols. Use your 4-digit PIN or account password to unlock sensitive medical records.
             </span>
           </div>
         </div>
@@ -459,12 +388,12 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
             {isSaving ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Activating Security...</span>
+                <span>Activating PIN...</span>
               </>
             ) : (
               <>
                 <Check className="w-4 h-4" />
-                <span>Save & Activate Quick Login</span>
+                <span>Save & Activate Security PIN</span>
               </>
             )}
           </button>
@@ -473,4 +402,3 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
     </div>
   );
 };
-

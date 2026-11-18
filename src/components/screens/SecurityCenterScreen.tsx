@@ -13,15 +13,12 @@ import {
   Database,
   GlobeLock,
   CheckCircle2,
-  ScanFace,
-  Fingerprint,
-  Sparkles
 } from 'lucide-react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
 import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
-import { getBiometricSettings, saveBiometricSettings, BiometricType } from '../../utils/biometrics';
+import { getBiometricSettings, saveBiometricSettings } from '../../utils/biometrics';
 import { showToast } from '../../utils/toast';
 import { QuickLoginSetupModal } from '../common/QuickLoginSetupModal';
 
@@ -34,49 +31,35 @@ export const SecurityCenterScreen: React.FC<SecurityCenterScreenProps> = ({ user
   const [mfaEnabled, setMfaEnabled] = useState(true);
   const [sessionTimeout, setSessionTimeout] = useState('15');
   const [showPinSetupModal, setShowPinSetupModal] = useState(false);
-  
-  // Biometric authentication state
-  const [biometricEnabled, setBiometricEnabled] = useState<boolean>(true);
-  const [biometricType, setBiometricType] = useState<BiometricType>('faceid');
+
+  // PIN & Password lock state
+  const [pinLockEnabled, setPinLockEnabled] = useState<boolean>(true);
 
   useEffect(() => {
     const settings = getBiometricSettings();
-    setBiometricEnabled(settings.enabled);
-    setBiometricType(settings.type);
+    setPinLockEnabled(settings.enabled);
 
     const handleUpdate = () => {
       const updated = getBiometricSettings();
-      setBiometricEnabled(updated.enabled);
-      setBiometricType(updated.type);
+      setPinLockEnabled(updated.enabled);
     };
 
     window.addEventListener('biometric-settings-updated', handleUpdate);
     return () => window.removeEventListener('biometric-settings-updated', handleUpdate);
   }, []);
 
-  const handleToggleBiometric = () => {
+  const handleTogglePinLock = () => {
     triggerHaptic('medium');
-    const nextState = !biometricEnabled;
-    setBiometricEnabled(nextState);
+    const nextState = !pinLockEnabled;
+    setPinLockEnabled(nextState);
     saveBiometricSettings({
       enabled: nextState,
-      type: biometricType,
     });
     showToast(
       nextState
-        ? `Biometric Security Enabled (${biometricType === 'faceid' ? 'Face ID' : 'Finger Touch'})`
-        : 'Biometric Security Disabled'
+        ? 'PIN & Password Lock Enabled'
+        : 'PIN & Password Lock Disabled'
     );
-  };
-
-  const handleSelectBiometricType = (type: BiometricType) => {
-    triggerHaptic('selection');
-    setBiometricType(type);
-    saveBiometricSettings({
-      enabled: biometricEnabled,
-      type,
-    });
-    showToast(`Switched authentication method to ${type === 'faceid' ? 'Face ID' : 'Finger Touch'}`);
   };
 
   const handleToggleMFA = () => {
@@ -126,84 +109,44 @@ export const SecurityCenterScreen: React.FC<SecurityCenterScreenProps> = ({ user
               <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-1 rounded-md font-bold">Active</span>
             </div>
 
-            {/* Biometric Authentication Method (Face ID & Finger Touch) */}
+            {/* PIN & Password Protection Lock */}
             <div className="border-b border-slate-100 pb-3 pt-1 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <span className="font-bold text-sm text-slate-800 block">Biometric Authentication</span>
+                    <span className="font-bold text-sm text-slate-800 block">PIN & Password Lock</span>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-outfit border ${
-                        biometricEnabled
+                        pinLockEnabled
                           ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                           : 'bg-slate-100 text-slate-500 border-slate-200'
                       }`}
                     >
-                      {biometricEnabled ? 'ENABLED' : 'DISABLED'}
+                      {pinLockEnabled ? 'ENABLED' : 'DISABLED'}
                     </span>
                   </div>
                   <span className="text-xs text-slate-500">
-                    Use Face ID or Finger Touch for sign-in and unlocking records
+                    Require your 4-digit PIN or account password to unlock records and idle sessions
                   </span>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only peer" 
-                    checked={biometricEnabled} 
-                    onChange={handleToggleBiometric}
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={pinLockEnabled}
+                    onChange={handleTogglePinLock}
                   />
                   <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#006c44]"></div>
                 </label>
               </div>
-
-              {biometricEnabled && (
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 space-y-2.5 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-600 font-semibold font-outfit">Selected Authentication Method:</span>
-                    <span className="text-[#006c44] font-bold flex items-center space-x-1 font-outfit">
-                      <Sparkles className="w-3 h-3" />
-                      <span>Hardware Active</span>
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectBiometricType('faceid')}
-                      className={`py-2 px-3 rounded-xl font-bold font-outfit text-xs flex items-center justify-center space-x-2 transition-all ${
-                        biometricType === 'faceid'
-                          ? 'bg-[#022434] text-white shadow-xs'
-                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      <ScanFace className="w-4 h-4" />
-                      <span>Face ID</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSelectBiometricType('fingerprint')}
-                      className={`py-2 px-3 rounded-xl font-bold font-outfit text-xs flex items-center justify-center space-x-2 transition-all ${
-                        biometricType === 'fingerprint'
-                          ? 'bg-[#022434] text-white shadow-xs'
-                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      <Fingerprint className="w-4 h-4" />
-                      <span>Finger Touch</span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Quick Unlock 4-Digit Security PIN */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <span className="font-bold text-sm text-slate-800 block">Quick Unlock Security PIN</span>
+                <span className="font-bold text-sm text-slate-800 block">4-Digit Security PIN</span>
                 <span className="text-xs text-slate-500">
-                  Used for returning logins and 15m idle unlocks. Fallback for Face ID.
+                  Used alongside your account password for returning logins, idle unlocks, and Health Records.
                 </span>
               </div>
               <button
@@ -212,7 +155,7 @@ export const SecurityCenterScreen: React.FC<SecurityCenterScreenProps> = ({ user
                   triggerHaptic('light');
                   setShowPinSetupModal(true);
                 }}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#022434] font-bold text-xs font-outfit transition-colors shrink-0"
+                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-[#022434] font-bold text-xs font-outfit transition-colors shrink-0 cursor-pointer"
               >
                 Change PIN
               </button>

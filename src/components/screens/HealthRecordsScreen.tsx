@@ -24,8 +24,6 @@ import {
   BadgeCheck,
   X,
   Lock,
-  ScanFace,
-  Fingerprint,
   KeyRound,
   Plus,
 } from 'lucide-react';
@@ -996,12 +994,11 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
         }}
       />
 
-      {/* Biometric Verification Modal for Accessing Health Records */}
+      {/* PIN & Password Verification Modal for Accessing Health Records */}
       <BiometricAuthModal
         isOpen={showBiometricModal}
-        biometricType={biometricSettings.type}
         title="Unlock Health Records"
-        subtitle="Confirm your identity to access confidential medical records"
+        subtitle="Enter your 4-digit PIN or password to access confidential medical records"
         onClose={() => {
           setShowBiometricModal(false);
           if (!isUnlocked) {

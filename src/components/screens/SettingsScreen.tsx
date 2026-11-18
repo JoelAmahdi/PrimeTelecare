@@ -20,10 +20,7 @@ import {
   Trash2,
   Share2,
   Info,
-  ScanFace,
-  Fingerprint,
   CheckCircle2,
-  Sparkles,
   KeyRound,
 } from 'lucide-react';
 import { ScreenId, User } from '../../types';
@@ -31,12 +28,11 @@ import { triggerHaptic } from '../../utils/haptics';
 import {
   getBiometricSettings,
   saveBiometricSettings,
-  BiometricType,
 } from '../../utils/biometrics';
 import { GoogleCalendarSyncModal } from '../common/GoogleCalendarSyncModal';
+import { QuickLoginSetupModal } from '../common/QuickLoginSetupModal';
 import {
   isGoogleCalendarConnected,
-  getGoogleCalendarUser,
 } from '../../services/googleCalendar';
 
 interface SettingsScreenProps {
@@ -50,15 +46,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(isGoogleCalendarConnected());
 
-  // Biometric state
-  const [biometricEnabled, setBiometricEnabled] = useState<boolean>(true);
-  const [biometricType, setBiometricType] = useState<BiometricType>('faceid');
+  // Security PIN Lock state
+  const [pinLockEnabled, setPinLockEnabled] = useState<boolean>(true);
+  const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const loadSettings = () => {
     const settings = getBiometricSettings();
-    setBiometricEnabled(settings.enabled);
-    setBiometricType(settings.type);
+    setPinLockEnabled(settings.enabled);
     setCalendarConnected(isGoogleCalendarConnected());
   };
 
@@ -80,27 +75,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  const handleToggleBiometric = () => {
+  const handleTogglePinLock = () => {
     triggerHaptic('medium');
-    const nextState = !biometricEnabled;
-    setBiometricEnabled(nextState);
+    const nextState = !pinLockEnabled;
+    setPinLockEnabled(nextState);
     saveBiometricSettings({
       enabled: nextState,
     });
     showToast(
       nextState
-        ? `Biometric Lock Enabled for Sign In & Health Records`
-        : 'Biometric Lock Disabled'
+        ? 'PIN & Password Security Lock Enabled'
+        : 'PIN & Password Security Lock Disabled'
     );
-  };
-
-  const handleSelectBiometricType = (type: BiometricType) => {
-    triggerHaptic('selection');
-    setBiometricType(type);
-    saveBiometricSettings({
-      type,
-    });
-    showToast(`Switched biometric method to ${type === 'faceid' ? 'Face ID' : 'Touch ID / Fingerprint'}`);
   };
 
   return (
@@ -155,87 +141,61 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
             </span>
           </div>
 
-          {/* Biometric Security Card */}
+          {/* PIN & Password Security Card */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
             <div className="flex items-start justify-between">
               <div className="flex items-start space-x-3.5">
                 <div className="p-2.5 rounded-2xl bg-emerald-50 text-[#006c44] border border-emerald-100 shrink-0 mt-0.5">
-                  {biometricType === 'faceid' ? (
-                    <ScanFace className="w-5 h-5" />
-                  ) : (
-                    <Fingerprint className="w-5 h-5" />
-                  )}
+                  <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
                     <h3 className="font-bold font-outfit text-[#022434] text-sm">
-                      Biometric Security Lock
+                      PIN & Password Lock
                     </h3>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-outfit border ${
-                        biometricEnabled
+                        pinLockEnabled
                           ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                           : 'bg-slate-100 text-slate-500 border-slate-200'
                       }`}
                     >
-                      {biometricEnabled ? 'ACTIVE' : 'DISABLED'}
+                      {pinLockEnabled ? 'ACTIVE' : 'DISABLED'}
                     </span>
                   </div>
+                  <p className="text-xs text-slate-500 font-nunito mt-0.5">
+                    Protect sign-in resumes and Health Records with your 4-digit PIN or password.
+                  </p>
                 </div>
               </div>
 
-              {/* Toggle Switch */}
               <button
                 type="button"
-                onClick={handleToggleBiometric}
-                className={`w-12 h-6.5 rounded-full p-1 transition-colors duration-200 flex items-center shrink-0 ml-2 ${
-                  biometricEnabled ? 'bg-[#006c44] justify-end' : 'bg-slate-200 justify-start'
+                onClick={handleTogglePinLock}
+                className={`w-12 h-6.5 rounded-full p-1 transition-colors duration-200 flex items-center shrink-0 ml-2 cursor-pointer ${
+                  pinLockEnabled ? 'bg-[#006c44] justify-end' : 'bg-slate-200 justify-start'
                 }`}
-                title="Toggle biometric authentication"
+                title="Toggle PIN & password lock"
               >
                 <span className="w-4.5 h-4.5 bg-white rounded-full shadow-md transform transition-transform" />
               </button>
             </div>
 
-            {/* Biometric Method Selector & Test Scan */}
-            {biometricEnabled && (
-              <div className="pt-2 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between text-xs font-outfit">
-                  <span className="text-slate-600 font-semibold">Authentication Method:</span>
-                  <span className="text-[#006c44] font-bold flex items-center space-x-1">
-                    <Sparkles className="w-3 h-3" />
-                    <span>Active for Login & Records</span>
-                  </span>
-                </div>
-
-                {/* Method Selector Pills: Face ID & Finger Touch */}
-                <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectBiometricType('faceid')}
-                    className={`py-2 px-3 rounded-xl font-bold font-outfit text-xs flex items-center justify-center space-x-2 transition-all ${
-                      biometricType === 'faceid'
-                        ? 'bg-[#022434] text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <ScanFace className="w-4 h-4" />
-                    <span>Face ID</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSelectBiometricType('fingerprint')}
-                    className={`py-2 px-3 rounded-xl font-bold font-outfit text-xs flex items-center justify-center space-x-2 transition-all ${
-                      biometricType === 'fingerprint'
-                        ? 'bg-[#022434] text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Fingerprint className="w-4 h-4" />
-                    <span>Touch ID / Fingerprint</span>
-                  </button>
-                </div>
+            {pinLockEnabled && (
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-600 font-semibold font-outfit">
+                  4-Digit Security PIN
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setIsPinModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-[#022434] hover:bg-[#006c44] text-white font-bold font-outfit text-xs transition-colors cursor-pointer"
+                >
+                  Set / Change PIN
+                </button>
               </div>
             )}
           </div>
@@ -606,6 +566,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
       <GoogleCalendarSyncModal
         isOpen={isCalendarModalOpen}
         onClose={() => setIsCalendarModalOpen(false)}
+      />
+
+      {/* Security PIN Setup Modal */}
+      <QuickLoginSetupModal
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
+        onComplete={() => {
+          setIsPinModalOpen(false);
+          showToast('Security PIN updated successfully!');
+        }}
+        userRole={user?.role}
+        userName={user?.name}
       />
     </div>
   );
