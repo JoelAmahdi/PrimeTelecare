@@ -103,12 +103,12 @@ export interface HealthRecordAuditLog {
   id: string;
   timestamp: string;
   accessedBy: string;
-  accessorRole: 'Doctor' | 'System Administrator' | 'Lab Technician';
+  accessorRole: 'Doctor' | 'System Administrator' | 'Lab Technician' | 'Patient / Guardian' | 'Physician / Clinician';
   accessorTitle?: string;
   accessorLicenseOrDept?: string;
   recordAccessed: string;
   accessReason: string;
-  actionType: 'Viewed' | 'Exported' | 'Updated' | 'Shared for Referral';
+  actionType: 'Viewed' | 'Exported' | 'Updated' | 'Shared for Referral' | 'Created';
   ipAddress?: string;
   accessLocation?: string;
   isFlagged?: boolean;
@@ -170,13 +170,13 @@ export interface BookingSummary {
   duration: string;
   baseFee: number;
   serviceFee: number;
-  totalFee: number;
-  connectionMethod: string;
-  uploadedFiles: { id: string; name: string; size: string }[];
-  reminderPreferences: { sms: boolean; email: boolean; push: boolean; whatsapp: boolean };
+  totalFee?: number;
+  connectionMethod?: string;
+  uploadedFiles?: { id: string; name: string; size: string }[];
+  reminderPreferences?: { sms: boolean; email: boolean; push: boolean; whatsapp: boolean };
   timeZone: string;
-  cancellationPolicy: string;
-  reschedulePolicy: string;
+  cancellationPolicy?: string;
+  reschedulePolicy?: string;
   consultationId?: string;
   exportAuthorization?: RecordExportAuthorization;
 }
@@ -214,8 +214,8 @@ export interface Doctor {
   verification?: DoctorVerification;
   reviewPolicy?: ReviewPolicy;
   reviewsList?: DoctorReview[];
-  availableDates: string[];
-  availableTimeSlots: string[];
+  availableDates?: string[];
+  availableTimeSlots?: string[];
   prices: {
     chat: number;
     voice: number;
@@ -232,10 +232,12 @@ export interface Appointment {
   patientName: string;
   patientAvatar?: string;
   date: string;
+  scheduledDate?: string;
   timeSlot: string;
   type: 'Chat' | 'Voice' | 'Video';
   status: 'upcoming' | 'completed' | 'cancelled';
   price: number;
+  notes?: string;
 }
 
 export interface Medication {
@@ -268,8 +270,8 @@ export interface Prescription {
   referenceNo: string;
   date: string;
   patientName: string;
-  patientDob: string;
-  patientId: string;
+  patientDob?: string;
+  patientId?: string;
   patientAgeGender?: string;
   patientAllergies?: string[];
   doctorName: string;

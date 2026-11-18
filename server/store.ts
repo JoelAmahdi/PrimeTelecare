@@ -309,13 +309,16 @@ class MemoryStore {
   }
 
   // --- Appointments ---
-  getAppointments(filter?: { patientName?: string; doctorId?: string }): Appointment[] {
+  getAppointments(filter?: { patientName?: string; doctorId?: string; status?: string }): Appointment[] {
     let list = this.state.appointments;
     if (filter?.patientName) {
       list = list.filter((a) => a.patientName.toLowerCase().includes(filter.patientName!.toLowerCase()));
     }
     if (filter?.doctorId) {
       list = list.filter((a) => a.doctorId === filter.doctorId);
+    }
+    if (filter?.status) {
+      list = list.filter((a) => a.status === filter.status);
     }
     return list;
   }

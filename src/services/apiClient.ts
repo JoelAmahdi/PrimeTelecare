@@ -233,8 +233,9 @@ export const primeApi = {
         doctorId: booking.doctorId,
         doctorName: doc?.name || 'Dr. Specialist',
         doctorSpecialty: doc?.specialty || 'General Practice',
-        doctorAvatar: doc?.avatarUrl,
+        doctorAvatar: doc?.avatarUrl || '',
         patientName: booking.patientName,
+        date: booking.scheduledDate || 'Today',
         scheduledDate: booking.scheduledDate,
         timeSlot: booking.timeSlot,
         type: (booking.type as any) || 'Video',
@@ -333,10 +334,10 @@ export const primeApi = {
   // --- Clinical Triage ---
   async evaluateTriage(triageData: {
     patientName: string;
-    patientAge: number;
-    gender: string;
+    patientAge?: number;
+    gender?: string;
     vitals: { temp?: string; hr?: string; spo2?: string; systolicBp?: string };
-    redFlags: Record<string, boolean>;
+    redFlags?: Record<string, boolean>;
   }) {
     try {
       const res = await request<{ success: boolean; triageCase: any }>('/triage/evaluate', {

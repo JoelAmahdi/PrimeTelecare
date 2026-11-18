@@ -22,7 +22,7 @@ import {
   HeartPulse,
   Thermometer,
 } from 'lucide-react';
-import { ScreenId, Doctor, UserRole, BookingSummary } from '../../types';
+import { ScreenId, Doctor, UserRole, BookingSummary, User } from '../../types';
 import { primeApi } from '../../services/apiClient';
 import { currentUserPatient } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';

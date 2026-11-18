@@ -59,7 +59,7 @@ interface AdminDoctor {
   name: string;
   specialty: string;
   licenseNo: string;
-  mdcnStatus: 'verified' | 'unverified';
+  mdcnStatus: 'verified' | 'unverified' | 'pending';
   hospitalAffiliation: string;
   graduatedFrom: string;
   status: 'verified' | 'pending' | 'suspended';

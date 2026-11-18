@@ -231,7 +231,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
   useEffect(() => {
     let isMounted = true;
     const loadQueue = async () => {
-      const local = getActiveOrUpcomingConsultations().map((c) => ({
+      const local: PatientQueueItem[] = getActiveOrUpcomingConsultations().map((c) => ({
         id: c.id,
         name: c.patientName || 'Patient',
         time: c.scheduledTime || 'Scheduled',
@@ -254,7 +254,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
         const apiAppointments: any[] = Array.isArray(res) ? res : (res as any)?.appointments || (res as any)?.data || [];
         if (isMounted && apiAppointments.length > 0) {
           const activeOnly = apiAppointments.filter((a: any) => a.status !== 'completed' && a.status !== 'cancelled');
-          const apiItems = activeOnly.map((a: any) => ({
+          const apiItems: PatientQueueItem[] = activeOnly.map((a: any) => ({
             id: a.id,
             name: a.patientName || 'Patient',
             time: a.timeSlot || 'Scheduled',
@@ -270,7 +270,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             doctorSpecialty: a.doctorSpecialty,
           }));
           const ids = new Set(local.map((l) => l.id));
-          const merged = [...local];
+          const merged: PatientQueueItem[] = [...local];
           for (const item of apiItems) {
             if (!ids.has(item.id)) {
               merged.push(item);

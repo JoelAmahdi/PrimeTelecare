@@ -62,6 +62,7 @@ appointmentsRouter.post('/', (req: Request, res: Response) => {
     doctorSpecialty: doctor.specialty,
     doctorAvatar: doctor.avatarUrl,
     patientName,
+    date: scheduledDate,
     scheduledDate,
     timeSlot,
     type: type || 'Video',
