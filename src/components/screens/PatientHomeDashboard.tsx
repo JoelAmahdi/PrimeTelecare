@@ -353,9 +353,6 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                         <span>{onlineDoctors.length} Live</span>
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 font-nunito">
-                      Available clinicians ready for instant consultation
-                    </p>
                   </div>
                 </div>
                 <button
@@ -418,7 +415,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                 </div>
               ) : (
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-center text-xs text-slate-500">
-                  No doctors are currently online. As soon as a registered doctor signs in, they will appear here automatically.
+                  No doctors online.
                 </div>
               )}
             </div>

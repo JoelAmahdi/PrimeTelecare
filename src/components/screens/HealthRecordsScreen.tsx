@@ -463,11 +463,8 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h3 className="text-base font-extrabold font-outfit text-[#022434]">
-                Search Medical & Consultation History
+                Search Consultations
               </h3>
-              <p className="text-xs text-slate-500 font-nunito">
-                Filter consultations by date, doctor specialty, and consultation type
-              </p>
             </div>
 
             <div className="flex items-center space-x-2 self-start sm:self-auto">
@@ -574,7 +571,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by doctor name, diagnosis, medication, or reference..."
+              placeholder="Search consultations"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-9 py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-nunito text-[#022434] placeholder:text-slate-400 focus:outline-none focus:border-[#006c44] focus:bg-white"
@@ -627,10 +624,7 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
             <div className="w-16 h-16 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-center mx-auto text-[#006c44]">
               <FileText className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-bold font-outfit text-[#022434]">No Consultation History Yet</h3>
-            <p className="text-sm text-slate-500 font-nunito max-w-md mx-auto leading-relaxed">
-              Once you book or complete consultations, your encounter history, clinical diagnoses, and e-prescriptions will appear here and be searchable by date, doctor specialty, and consultation type.
-            </p>
+            <h3 className="text-xl font-bold font-outfit text-[#022434]">No Consultation History</h3>
             <button
               type="button"
               onClick={() => {

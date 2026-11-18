@@ -353,8 +353,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-900 font-outfit">Quick Sign In with PIN</p>
-                  <p className="text-[11px] text-slate-500 font-nunito">Enter your 4-digit security PIN or password</p>
+                  <p className="text-sm font-bold text-slate-900 font-outfit">Sign In with PIN</p>
                 </div>
               </div>
               <button

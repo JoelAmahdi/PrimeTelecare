@@ -163,9 +163,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
                       {pinLockEnabled ? 'ACTIVE' : 'DISABLED'}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 font-nunito mt-0.5">
-                    Protect sign-in resumes and Health Records with your 4-digit PIN or password.
-                  </p>
                 </div>
               </div>
 
@@ -215,9 +212,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
                     Trust & Security Center
                   </h3>
                 </div>
-                <p className="text-xs text-slate-500 font-nunito mt-0.5 truncate">
-                  View encryption details, privacy policies, MFA & data retention.
-                </p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
@@ -240,13 +234,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
                   <h3 className="font-bold font-outfit text-[#022434] text-sm group-hover:text-[#006c44] transition-colors truncate">
                     Health Record Access Audit Trail
                   </h3>
-                  <span className="bg-emerald-100 text-[#006c44] text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 font-outfit shrink-0">
-                    READ-ONLY LOG
-                  </span>
                 </div>
-                <p className="text-xs text-slate-500 font-nunito mt-0.5 truncate">
-                  View read-only NDPA log of health record access history in Health Records.
-                </p>
               </div>
             </div>
 
@@ -301,7 +289,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
               </div>
               <div>
                 <span className="font-semibold font-outfit text-[#022434] text-sm block">SMS Appointment Reminders</span>
-                <span className="text-[11px] text-slate-400 font-nunito">Text messages for unreliable internet</span>
               </div>
             </div>
             <button
@@ -361,9 +348,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
                   {calendarConnected ? 'CONNECTED' : 'DISCONNECTED'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-nunito mt-0.5 truncate">
-                Sync appointments, manage clinical slots & receive 15m/1h Google reminders.
-              </p>
             </div>
           </div>
 

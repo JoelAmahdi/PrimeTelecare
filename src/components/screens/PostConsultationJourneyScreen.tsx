@@ -207,19 +207,6 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 w-full max-w-2xl mx-auto space-y-6 pb-28">
-        {/* Continuous Care Banner */}
-        <div className="bg-white p-5 rounded-3xl border border-emerald-100 shadow-sm flex items-start space-x-4">
-          <div className="p-3 bg-emerald-50 rounded-2xl shrink-0">
-            <ShieldCheck className="w-6 h-6 text-emerald-600" />
-          </div>
-          <div>
-            <h2 className="font-extrabold font-outfit text-[#022434] text-base">Continuous Care Activated</h2>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Your consultation with <strong className="text-slate-800 font-semibold">{doctorName}</strong> has concluded. Review your doctor-approved care journey steps below and set drug purchase & administration alerts on your dashboard.
-            </p>
-          </div>
-        </div>
-
         {/* Care Journey Recovery To-Do List */}
         {!plan || plan.status !== 'approved_by_doctor' ? (
           <div className="bg-white rounded-3xl p-6 border border-amber-200/80 shadow-xs space-y-4">
@@ -229,17 +216,13 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
               </div>
               <div>
                 <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
-                  Care Journey Plan: Pending Doctor Decision
+                  Care Journey Plan
                 </h3>
                 <span className="text-xs font-bold text-amber-700 uppercase tracking-wider block">
-                  Physician Review in Progress
+                  Pending Doctor Approval
                 </span>
               </div>
             </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed font-nunito">
-              Your attending physician ({doctorName}) will decide your Drug Prescription check, Laboratory Investigation check, Follow-Up Visit setup, Follow-Up Date (if needed), and Follow-Up Plan Note. Once approved, it will appear here and on your dashboard.
-            </p>
 
             {role === 'doctor' && (
               <button

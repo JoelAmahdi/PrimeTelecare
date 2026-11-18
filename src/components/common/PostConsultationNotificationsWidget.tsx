@@ -454,11 +454,8 @@ export const PostConsultationNotificationsWidget: React.FC<PostConsultationNotif
           </div>
           <div>
             <h3 className="font-extrabold font-outfit text-base sm:text-lg text-[#022434]">
-              After-Consultation Notifications
+              Medication Notifications
             </h3>
-            <p className="text-xs text-slate-500 font-nunito">
-              Set alerts for drug purchase & prescription administration
-            </p>
           </div>
         </div>
 
@@ -527,10 +524,7 @@ export const PostConsultationNotificationsWidget: React.FC<PostConsultationNotif
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-emerald-50/60 border border-emerald-100 rounded-2xl p-3">
                 <div className="text-xs text-emerald-950">
                   <span className="font-extrabold font-outfit block">
-                    Active Prescription Medications ({prescribedDrugs.length})
-                  </span>
-                  <span className="text-[11px] text-slate-600">
-                    Schedule dose reminders directly from your doctor's digital prescription.
+                    Prescribed Medications ({prescribedDrugs.length})
                   </span>
                 </div>
                 <button
@@ -668,10 +662,7 @@ export const PostConsultationNotificationsWidget: React.FC<PostConsultationNotif
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-bold font-outfit text-[#022434]">
-                  No Prescribed Medications Yet
-                </p>
-                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                  Drug administration notifications are pulled directly from your doctor's digital prescription after consultation.
+                  No Active Prescriptions
                 </p>
               </div>
               <button
@@ -766,7 +757,7 @@ export const PostConsultationNotificationsWidget: React.FC<PostConsultationNotif
                     type="text"
                     value={customDrugInput}
                     onChange={(e) => setCustomDrugInput(e.target.value)}
-                    placeholder="Add drug or item to purchase list..."
+                    placeholder="Drug name"
                     className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
                   />
                   <button
@@ -873,25 +864,25 @@ export const PostConsultationNotificationsWidget: React.FC<PostConsultationNotif
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 font-outfit block mb-1">
-                    Pharmacy Name (Optional)
+                    Pharmacy
                   </label>
                   <input
                     type="text"
                     value={pharmacyName}
                     onChange={(e) => setPharmacyName(e.target.value)}
-                    placeholder="e.g., HealthPlus / MedPlus Pharmacy"
+                    placeholder="Pharmacy name"
                     className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 font-outfit block mb-1">
-                    Note (Optional)
+                    Note
                   </label>
                   <input
                     type="text"
                     value={purchaseNote}
                     onChange={(e) => setPurchaseNote(e.target.value)}
-                    placeholder="e.g., Show e-prescription reference"
+                    placeholder="Note"
                     className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
                   />
                 </div>

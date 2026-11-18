@@ -632,25 +632,40 @@ export const primeApi = {
   },
 
   // --- WebRTC Video Signaling ---
-  async sendVideoSignal(sessionId: string, signal: { sender: string; type: string; data: any }) {
+  async sendVideoSignal(
+    sessionId: string,
+    signal: { sender: string; peerId?: string; type: string; data?: any }
+  ) {
     try {
-      return await request<{ success: boolean; signalId: string }>(`/video/${sessionId}/signal`, {
-        method: 'POST',
-        body: JSON.stringify(signal),
-      });
+      return await request<{ success: boolean; signalId: string; seq: number }>(
+        `/video/${sessionId}/signal`,
+        {
+          method: 'POST',
+          body: JSON.stringify(signal),
+        }
+      );
     } catch {
-      return { success: false };
+      return { success: false, signalId: '', seq: 0 };
     }
   },
 
-  async getVideoSignals(sessionId: string, since: number = 0, excludeSender?: string) {
+  async getVideoSignals(
+    sessionId: string,
+    afterSeq: number = 0,
+    excludePeerId?: string
+  ): Promise<{ signals: any[]; latestSeq: number }> {
     try {
-      const q = new URLSearchParams({ since: String(since) });
-      if (excludeSender) q.set('excludeSender', excludeSender);
-      const res = await request<{ success: boolean; signals: any[] }>(`/video/${sessionId}/signal?${q.toString()}`);
-      return res.signals || [];
+      const q = new URLSearchParams({ afterSeq: String(afterSeq) });
+      if (excludePeerId) q.set('excludePeerId', excludePeerId);
+      const res = await request<{ success: boolean; signals: any[]; latestSeq: number }>(
+        `/video/${sessionId}/signal?${q.toString()}`
+      );
+      return {
+        signals: res.signals || [],
+        latestSeq: typeof res.latestSeq === 'number' ? res.latestSeq : afterSeq,
+      };
     } catch {
-      return [];
+      return { signals: [], latestSeq: afterSeq };
     }
   },
 };

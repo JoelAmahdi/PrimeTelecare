@@ -272,19 +272,10 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
           </button>
         </div>
 
-        {/* Clinical Instructions Banner */}
-        <div className="px-5 py-3 bg-emerald-50/80 border-b border-emerald-100 text-xs text-emerald-950 flex items-start space-x-2">
-          <ShieldCheck className="w-4 h-4 text-[#006c44] shrink-0 mt-0.5" />
-          <p>
-            <strong>Doctor Clinical Sign-Off:</strong> Check the care items required for this patient, set an optional follow-up date, and enter your follow-up plan note before publishing.
-          </p>
-        </div>
-
         {/* Scrollable Checklist Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="flex items-center justify-between text-xs font-bold text-slate-500 font-outfit uppercase tracking-wider">
-            <span>Clinical Care Checks ({selectedCount} Selected)</span>
-            <span>Check to Include</span>
+            <span>Care Checks ({selectedCount})</span>
           </div>
 
           <div className="space-y-2.5">
@@ -347,7 +338,7 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
                       type="text"
                       value={labInvestigationDetails}
                       onChange={(e) => setLabInvestigationDetails(e.target.value)}
-                      placeholder="e.g., Full Blood Count (FBC), Malaria Parasite, Urinalysis"
+                      placeholder="Lab tests"
                       className="w-full px-3 py-2 text-xs border border-purple-200 bg-purple-50/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-[#022434]"
                     />
                   </div>
@@ -422,11 +413,7 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
                   })}
                 </div>
               </div>
-            ) : (
-              <p className="text-[11px] text-slate-500">
-                No specific follow-up date set. Check "Set Date" above if a scheduled return visit date is needed.
-              </p>
-            )}
+            ) : null}
           </div>
 
           {/* Follow-Up Plan Note */}
@@ -438,7 +425,7 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
               rows={3}
               value={followUpPlanNote}
               onChange={(e) => setFollowUpPlanNote(e.target.value)}
-              placeholder="Write the clinical follow-up plan, expected recovery milestones, medication guidance, and warning signs to watch for..."
+              placeholder="Follow-up plan note"
               className="w-full p-3 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006c44] text-[#022434]"
             />
           </div>
@@ -446,14 +433,14 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
           {/* Add Custom Task Form */}
           <form onSubmit={handleAddItem} className="pt-1">
             <label className="block text-xs font-bold text-slate-700 font-outfit mb-1.5">
-              Add Additional Care Task (Optional):
+              Add Care Task
             </label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="e.g., Monitor morning BP daily"
+                placeholder="New task"
                 className="flex-1 px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006c44]"
               />
               <select

@@ -260,6 +260,30 @@ async function testBackend() {
     'GET /api/records/care-journey retrieves care journey plan with all clinical fields'
   );
 
+  // 15. WebRTC Live Video Token & Sequence Signaling Hub
+  const videoToken = await req('/video/room-webrtc-test/token?role=patient');
+  assert(
+    videoToken.status === 200 &&
+      videoToken.data.success &&
+      Array.isArray(videoToken.data.iceServers) &&
+      videoToken.data.iceServers.some((s: any) => JSON.stringify(s.urls).includes('turn:')),
+    'GET /api/video/:sessionId/token returns STUN and TURN ICE relay servers'
+  );
+
+  const sigReady = await req('/video/room-webrtc-test/signal', {
+    method: 'POST',
+    body: JSON.stringify({ sender: 'doctor', peerId: 'doc-peer-1', type: 'ready', data: { role: 'doctor' } }),
+  });
+  assert(sigReady.status === 200 && sigReady.data.success && sigReady.data.seq >= 1, 'POST /api/video/:sessionId/signal stores peer ready signal with monotonic seq');
+
+  const sigPoll = await req('/video/room-webrtc-test/signal?afterSeq=0&excludePeerId=pat-peer-1');
+  assert(
+    sigPoll.status === 200 &&
+      sigPoll.data.success &&
+      sigPoll.data.signals.some((s: any) => s.peerId === 'doc-peer-1' && s.type === 'ready'),
+    'GET /api/video/:sessionId/signal delivers peer signals via sequence counter'
+  );
+
   console.log(`\n--- Test Results: ${passed} Passed, ${failed} Failed ---`);
   server.close(() => {
     process.exit(failed > 0 ? 1 : 0);

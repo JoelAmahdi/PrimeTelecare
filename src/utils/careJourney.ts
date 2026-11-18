@@ -4,7 +4,6 @@ export const DEFAULT_CARE_JOURNEY_ITEMS: CareJourneyItem[] = [
   {
     id: 'item-rx',
     title: 'Drug Prescription Check',
-    description: 'Confirm prescribed medications, purchase from pharmacy, and adhere to dosage schedule.',
     category: 'medication',
     checkedByDoctor: true,
     completedByPatient: false,
@@ -12,7 +11,6 @@ export const DEFAULT_CARE_JOURNEY_ITEMS: CareJourneyItem[] = [
   {
     id: 'item-lab',
     title: 'Laboratory Investigation Check',
-    description: 'Complete ordered laboratory diagnostic tests and upload results for doctor evaluation.',
     category: 'diagnostic',
     checkedByDoctor: false,
     completedByPatient: false,
@@ -20,7 +18,6 @@ export const DEFAULT_CARE_JOURNEY_ITEMS: CareJourneyItem[] = [
   {
     id: 'item-followup',
     title: 'Follow-Up Visit Set Up Check',
-    description: 'Schedule and attend your follow-up consultation to review progress and recovery.',
     category: 'followup',
     checkedByDoctor: true,
     completedByPatient: false,

@@ -3,11 +3,42 @@ import crypto from 'crypto';
 
 export const videoRouter = Router();
 
+function getIceServers() {
+  const servers: Array<{ urls: string | string[]; username?: string; credential?: string }> = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    // Public OpenRelay / Metered TURN relays for cellular & symmetric NAT traversal
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+  ];
+
+  // Optional custom TURN relay from environment variables
+  if (process.env.TURN_URL) {
+    servers.unshift({
+      urls: process.env.TURN_URL,
+      username: process.env.TURN_USERNAME || undefined,
+      credential: process.env.TURN_CREDENTIAL || undefined,
+    });
+  }
+
+  return servers;
+}
+
 // GET /api/video/:sessionId/token
 videoRouter.get('/:sessionId/token', (req: Request, res: Response) => {
   const sessionId = req.params.sessionId;
   const role = (req.query.role as string) || 'patient';
-  const userName = (req.query.userName as string) || 'Patient';
 
   const roomToken = crypto
     .createHmac('sha256', 'prime-video-secret')
@@ -18,15 +49,7 @@ videoRouter.get('/:sessionId/token', (req: Request, res: Response) => {
     success: true,
     sessionId,
     roomToken,
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      {
-        urls: 'turn:turn.primetelecare.com:3478',
-        username: `prime-user-${role}`,
-        credential: roomToken.slice(0, 16),
-      },
-    ],
+    iceServers: getIceServers(),
     allocatedDurationMinutes: 30,
     mediaConstraints: {
       video: {
@@ -45,7 +68,7 @@ videoRouter.get('/:sessionId/token', (req: Request, res: Response) => {
 
 // POST /api/video/:sessionId/quality
 videoRouter.post('/:sessionId/quality', (req: Request, res: Response) => {
-  const { latencyMs, packetLoss, resolution, audioOnlyMode } = req.body;
+  const { latencyMs, packetLoss, audioOnlyMode } = req.body;
   let status: 'excellent' | 'good' | 'poor' = 'excellent';
 
   if (audioOnlyMode || (latencyMs && latencyMs > 250) || (packetLoss && packetLoss > 5)) {
@@ -75,60 +98,103 @@ videoRouter.post('/:sessionId/reconnect', (req: Request, res: Response) => {
   });
 });
 
-// In-memory WebRTC signaling hub for multi-device peer discovery
+// In-memory WebRTC signaling hub with server-side monotonic sequence numbers (zero clock skew!)
 interface WebRTCSignal {
   id: string;
+  seq: number;
   sender: string;
-  type: 'offer' | 'answer' | 'candidate' | 'joined' | 'leave';
+  peerId: string;
+  type: 'ready' | 'offer' | 'answer' | 'candidate' | 'leave';
   data: any;
   timestamp: number;
 }
 
-const activeSignals: Record<string, WebRTCSignal[]> = {};
+interface RoomState {
+  nextSeq: number;
+  signals: WebRTCSignal[];
+}
+
+const rooms: Record<string, RoomState> = {};
+
+function getRoom(sessionId: string): RoomState {
+  if (!rooms[sessionId]) {
+    rooms[sessionId] = { nextSeq: 1, signals: [] };
+  }
+  return rooms[sessionId];
+}
 
 // POST /api/video/:sessionId/signal
 videoRouter.post('/:sessionId/signal', (req: Request, res: Response) => {
   const { sessionId } = req.params;
-  const { sender, type, data } = req.body;
+  const { sender, peerId, type, data } = req.body;
 
   if (!sender || !type) {
     return res.status(400).json({ success: false, error: 'Sender and signal type required' });
   }
 
-  if (!activeSignals[sessionId]) {
-    activeSignals[sessionId] = [];
+  const room = getRoom(sessionId);
+  const resolvedPeerId = peerId || sender;
+  const now = Date.now();
+
+  // Prune signals older than 2 minutes so dead prior calls never poison new calls
+  room.signals = room.signals.filter((s) => now - s.timestamp < 120_000);
+
+  // If a peer sends a fresh 'offer', discard older offers/answers/candidates from previous handshakes
+  if (type === 'offer') {
+    room.signals = room.signals.filter(
+      (s) => s.type === 'ready' || (s.peerId === resolvedPeerId && s.type === 'ready')
+    );
+  }
+
+  // Keep only the latest 'ready' heartbeat per peerId so room doesn't fill up
+  if (type === 'ready') {
+    room.signals = room.signals.filter(
+      (s) => !(s.peerId === resolvedPeerId && s.type === 'ready')
+    );
   }
 
   const signal: WebRTCSignal = {
-    id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: `sig-${now}-${Math.random().toString(36).slice(2, 7)}`,
+    seq: room.nextSeq++,
     sender,
+    peerId: resolvedPeerId,
     type,
-    data,
-    timestamp: Date.now(),
+    data: data ?? null,
+    timestamp: now,
   };
 
-  activeSignals[sessionId].push(signal);
+  room.signals.push(signal);
 
-  // Keep latest 100 signals per consultation room
-  if (activeSignals[sessionId].length > 100) {
-    activeSignals[sessionId].shift();
+  // Cap total signals per room
+  if (room.signals.length > 200) {
+    room.signals = room.signals.slice(-200);
   }
 
-  return res.json({ success: true, signalId: signal.id });
+  return res.json({ success: true, signalId: signal.id, seq: signal.seq });
 });
 
-// GET /api/video/:sessionId/signal?since=<timestamp>&excludeSender=<roleOrId>
+// GET /api/video/:sessionId/signal?afterSeq=<n>&excludePeerId=<id>&excludeSender=<role>
 videoRouter.get('/:sessionId/signal', (req: Request, res: Response) => {
   const { sessionId } = req.params;
+  const afterSeq = parseInt(req.query.afterSeq as string, 10) || 0;
   const since = parseInt(req.query.since as string, 10) || 0;
+  const excludePeerId = req.query.excludePeerId as string;
   const excludeSender = req.query.excludeSender as string;
 
-  const signals = (activeSignals[sessionId] || []).filter((s) => {
-    const isNew = s.timestamp > since;
-    const notSelf = !excludeSender || s.sender !== excludeSender;
-    return isNew && notSelf;
+  const room = getRoom(sessionId);
+  const now = Date.now();
+
+  // Prune expired signals (> 2 minutes old)
+  room.signals = room.signals.filter((s) => now - s.timestamp < 120_000);
+
+  const signals = room.signals.filter((s) => {
+    const isNew = afterSeq > 0 ? s.seq > afterSeq : since > 0 ? s.timestamp > since : true;
+    const notSelfPeer = !excludePeerId || s.peerId !== excludePeerId;
+    const notSelfSender = excludePeerId ? true : !excludeSender || s.sender !== excludeSender;
+    return isNew && notSelfPeer && notSelfSender;
   });
 
-  return res.json({ success: true, signals });
-});
+  const latestSeq = room.signals.length > 0 ? room.signals[room.signals.length - 1].seq : afterSeq;
 
+  return res.json({ success: true, latestSeq, signals });
+});

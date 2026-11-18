@@ -133,14 +133,9 @@ export const CareJourneyPatientWidget: React.FC<CareJourneyPatientWidgetProps> =
           </span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/70 text-xs text-amber-950 space-y-1.5">
-          <div className="flex items-center space-x-1.5 font-bold">
-            <Stethoscope className="w-4 h-4 text-[#006c44]" />
-            <span>Doctor deciding your care journey</span>
-          </div>
-          <p className="text-slate-600 font-nunito leading-relaxed">
-            Your attending physician ({plan?.doctorName || 'Attending Physician'}) will check your drug prescription, laboratory investigations, follow-up visit setup, and follow-up plan note. Once approved, it will appear here automatically.
-          </p>
+        <div className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-200/70 text-xs text-amber-950 flex items-center space-x-2 font-bold">
+          <Stethoscope className="w-4 h-4 text-[#006c44] shrink-0" />
+          <span>Pending doctor approval</span>
         </div>
       </div>
     );

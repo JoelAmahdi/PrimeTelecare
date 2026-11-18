@@ -66,7 +66,7 @@ interface InCallMessage {
 export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   onNavigate,
   user = currentUserPatient,
-  doctorName = 'Dr. Sarah Johnson',
+  doctorName = 'Attending Physician',
 }) => {
   // Active Patient Profile Info (Primary or Family Dependent)
   const activeProfile = getActiveProfileInfo(user);
@@ -83,7 +83,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const [isAudioOnlyMode, setIsAudioOnlyMode] = useState(false); // Easy Switch from Video to Audio
 
   // Timer State (30 mins session)
-  const [elapsedSeconds, setElapsedSeconds] = useState(384); // Starts at 06:24
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const totalAllocatedMins = 30;
 
   // Network & Connection Quality State
@@ -99,27 +99,65 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
   // In-Call Messaging Drawer State
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const isChatOpenRef = useRef(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [isCareJourneyModalOpen, setIsCareJourneyModalOpen] = useState(false);
 
   useEffect(() => {
-    primeApi.getVideoToken('c-1', 'patient').catch(() => {});
-  }, []);
+    isChatOpenRef.current = isChatOpen;
+    if (isChatOpen) {
+      setUnreadChatCount(0);
+    }
+  }, [isChatOpen]);
 
   const [messages, setMessages] = useState<InCallMessage[]>([]);
   const [newMessageText, setNewMessageText] = useState('');
   const [attachedFile, setAttachedFile] = useState<{ name: string; url: string; type: 'image' | 'document' } | null>(null);
+  const hasLoadedInitialChatRef = useRef(false);
+  const seenMsgIdsRef = useRef<Set<string>>(new Set());
 
   // Real-time two-way synchronization of in-call messages between doctor and patient
   useEffect(() => {
     let isMounted = true;
     const roomChatSession = 'consultation-live-room';
+    const currentSenderRole = user?.role === 'doctor' ? 'doctor' : 'patient';
+
+    const ingestIncomingMessages = (incomingList: InCallMessage[], isInitialLoad: boolean) => {
+      const fresh = incomingList.filter((m) => {
+        const sigKey = `${m.sender}::${m.text}::${m.timestamp}`;
+        return !seenMsgIdsRef.current.has(m.id) && !seenMsgIdsRef.current.has(sigKey);
+      });
+      if (fresh.length === 0) return;
+
+      fresh.forEach((m) => {
+        seenMsgIdsRef.current.add(m.id);
+        seenMsgIdsRef.current.add(`${m.sender}::${m.text}::${m.timestamp}`);
+      });
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const existingSigs = new Set(prev.map((p) => `${p.sender}::${p.text}::${p.timestamp}`));
+        const toAppend = fresh.filter(
+          (m) => !existingIds.has(m.id) && !existingSigs.has(`${m.sender}::${m.text}::${m.timestamp}`)
+        );
+        return toAppend.length > 0 ? [...prev, ...toAppend] : prev;
+      });
+
+      if (!isInitialLoad && !isChatOpenRef.current) {
+        const fromOther = fresh.filter((m) => m.sender !== currentSenderRole);
+        if (fromOther.length > 0) {
+          setUnreadChatCount((c) => c + fromOther.length);
+          triggerHaptic('medium');
+          const latest = fromOther[fromOther.length - 1];
+          showToast(`New message from ${latest.senderName}`, 'info');
+        }
+      }
+    };
 
     const syncMessages = async () => {
       try {
         const serverMsgs = await primeApi.getChatMessages(roomChatSession);
-        if (serverMsgs && serverMsgs.length > 0 && isMounted) {
+        if (serverMsgs && isMounted) {
           const mapped: InCallMessage[] = serverMsgs.map((m) => ({
             id: m.id,
             sender: m.sender,
@@ -128,22 +166,15 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             timestamp: m.timestamp,
             attachment: m.imageUrl ? { name: 'Attachment', type: 'image', url: m.imageUrl } : undefined,
           }));
-
-          setMessages((prev) => {
-            if (prev.length === 0) return mapped;
-            const existingIds = new Set(prev.map((p) => p.id));
-            const newOnes = mapped.filter((m) => !existingIds.has(m.id));
-            if (newOnes.length > 0) {
-              return [...prev, ...newOnes];
-            }
-            return prev;
-          });
+          const isInitial = !hasLoadedInitialChatRef.current;
+          hasLoadedInitialChatRef.current = true;
+          ingestIncomingMessages(mapped, isInitial);
         }
       } catch {}
     };
 
     syncMessages();
-    const pollTimer = setInterval(syncMessages, 2000);
+    const pollTimer = setInterval(syncMessages, 1500);
 
     // Cross-tab / cross-window instant broadcast listener
     let channel: BroadcastChannel | null = null;
@@ -151,11 +182,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       channel = new BroadcastChannel('prime_consultation_chat');
       channel.onmessage = (event) => {
         if (event.data && isMounted) {
-          const incoming = event.data as InCallMessage;
-          setMessages((prev) => {
-            if (prev.some((p) => p.id === incoming.id)) return prev;
-            return [...prev, incoming];
-          });
+          ingestIncomingMessages([event.data as InCallMessage], false);
         }
       };
     } catch {}
@@ -165,11 +192,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         try {
           const parsed = JSON.parse(e.newValue);
           if (parsed && parsed.msg) {
-            const incoming = parsed.msg as InCallMessage;
-            setMessages((prev) => {
-              if (prev.some((p) => p.id === incoming.id)) return prev;
-              return [...prev, incoming];
-            });
+            ingestIncomingMessages([parsed.msg as InCallMessage], false);
           }
         } catch {}
       }
@@ -182,7 +205,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       if (channel) channel.close();
       window.removeEventListener('storage', handleStorage);
     };
-  }, []);
+  }, [user?.role]);
 
   // Support Drawer & End Consultation Modal
   const [isSupportDrawerOpen, setIsSupportDrawerOpen] = useState(false);
@@ -191,24 +214,76 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   // Live Media Hardware Streams & Devices
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream>(new MediaStream());
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [hasCamera, setHasCamera] = useState<boolean>(false);
   const [hasMicrophone, setHasMicrophone] = useState<boolean>(false);
   const [isConnectingCall, setIsConnectingCall] = useState<boolean>(false);
   const [isPeerConnected, setIsPeerConnected] = useState<boolean>(false);
+  const isPeerConnectedRef = useRef<boolean>(false);
+  const [iceStatus, setIceStatus] = useState<string>('waiting');
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [swappedPiP, setSwappedPiP] = useState<boolean>(false);
   const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const iceServersRef = useRef<RTCIceServer[]>([
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+  ]);
   const sessionId = 'consultation-live-room';
   const myRole = user?.role === 'doctor' ? 'doctor' : 'patient';
+  const peerIdRef = useRef<string>(`${myRole}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+  const lastOfferSentAtRef = useRef<number>(0);
 
   // Live Mic Waveform activity pulse
   const [audioLevel, setAudioLevel] = useState<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep video/audio DOM elements reliably bound whenever streams or layout swap
+  useEffect(() => {
+    const localEl = localVideoRef.current;
+    if (localEl && localStream) {
+      if (localEl.srcObject !== localStream) {
+        localEl.srcObject = localStream;
+      }
+      localEl.muted = true;
+      localEl.play().catch(() => {});
+    }
+
+    const remoteEl = remoteVideoRef.current;
+    if (remoteEl && remoteStream) {
+      if (remoteEl.srcObject !== remoteStream) {
+        remoteEl.srcObject = remoteStream;
+      }
+      remoteEl.play().catch(() => {});
+    }
+
+    const audioEl = remoteAudioRef.current;
+    if (audioEl && remoteStream) {
+      if (audioEl.srcObject !== remoteStream) {
+        audioEl.srcObject = remoteStream;
+      }
+      audioEl.play().catch(() => {});
+    }
+  }, [localStream, remoteStream, swappedPiP, isVideoOff, isAudioOnlyMode, hasConfirmedConsent]);
 
   // Active Call Timer Loop
   useEffect(() => {
@@ -219,158 +294,348 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     return () => clearInterval(timer);
   }, [hasConfirmedConsent, isReconnecting]);
 
-  // Live WebRTC PeerConnection & Media Device Lifecycle
+  // Acquire local camera/mic (can be triggered directly inside user click gesture for iOS Safari)
+  const acquireLocalMedia = async (mode: 'user' | 'environment' = facingMode) => {
+    setMediaError(null);
+    const media = await requestUserMedia(true, true, mode);
+    if (media.stream) {
+      if (localStreamRef.current && localStreamRef.current !== media.stream) {
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      localStreamRef.current = media.stream;
+      setLocalStream(media.stream);
+      setHasCamera(media.hasCamera);
+      setHasMicrophone(media.hasMicrophone);
+      if (media.error) {
+        setMediaError(media.error);
+      }
+      // If peer connection already exists, replace or add tracks live
+      const pc = peerConnectionRef.current;
+      if (pc && pc.signalingState !== 'closed') {
+        const senders = pc.getSenders();
+        media.stream.getTracks().forEach((track) => {
+          const existingSender = senders.find((s) => s.track?.kind === track.kind);
+          if (existingSender) {
+            existingSender.replaceTrack(track).catch(() => {});
+          } else {
+            pc.addTrack(track, media.stream!);
+          }
+        });
+      }
+      return media.stream;
+    } else {
+      setMediaError(media.error || 'Camera/microphone permission denied. Tap Enable Camera to retry.');
+      return null;
+    }
+  };
+
+  // Live WebRTC PeerConnection & Order-Independent 2-Way Signaling Lifecycle
   useEffect(() => {
     if (!hasConfirmedConsent) return;
 
+    let isMounted = true;
     let stopAudioAnalyser: (() => void) | null = null;
-    let cancelRing: (() => void) | null = null;
-    let signalPollTimer: any = null;
+    let signalPollTimer: ReturnType<typeof setInterval> | null = null;
+    let readyHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let signalChannel: BroadcastChannel | null = null;
+    let lastSeq = 0;
 
-    setIsConnectingCall(true);
-    cancelRing = playRingingTone();
+    const myPeerId = peerIdRef.current;
 
-    const initCall = async () => {
-      if (cancelRing) cancelRing();
-      playConnectedTone();
-      setIsConnectingCall(false);
+    const sendSignal = async (type: 'ready' | 'offer' | 'answer' | 'candidate' | 'leave', data?: any) => {
+      const payload = { sender: myRole, peerId: myPeerId, type, data };
+      try {
+        signalChannel?.postMessage({ sessionId, ...payload });
+      } catch {}
+      await primeApi.sendVideoSignal(sessionId, payload);
+    };
 
-      // 1. Request real device camera & microphone
-      const media = await requestUserMedia(!isVideoOff, !isMuted, facingMode);
-      if (media.stream) {
-        setLocalStream(media.stream);
-        setHasCamera(media.hasCamera);
-        setHasMicrophone(media.hasMicrophone);
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = media.stream;
-          localVideoRef.current.play().catch(() => {});
-        }
-
-        stopAudioAnalyser = setupAudioAnalyser(media.stream, (lvl) => {
-          setAudioLevel(lvl);
-        });
-
-        // 2. Initialize RTCPeerConnection for real 2-way WebRTC video/audio
+    const drainPendingCandidates = async (pc: RTCPeerConnection) => {
+      if (!pc.remoteDescription || pendingCandidatesRef.current.length === 0) return;
+      const queued = [...pendingCandidatesRef.current];
+      pendingCandidatesRef.current = [];
+      for (const cand of queued) {
         try {
-          const pc = new RTCPeerConnection({
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun1.l.google.com:19302' },
-            ],
-          });
-          peerConnectionRef.current = pc;
-
-          // Add local tracks to peer connection
-          media.stream.getTracks().forEach((track) => pc.addTrack(track, media.stream!));
-
-          // Listen for remote peer audio and video tracks
-          pc.ontrack = (event) => {
-            console.log('[WebRTC] Received remote peer stream:', event.streams);
-            if (remoteVideoRef.current && event.streams[0]) {
-              remoteVideoRef.current.srcObject = event.streams[0];
-              remoteVideoRef.current.play().catch(() => {});
-              setIsPeerConnected(true);
-              showToast('Peer connected via live WebRTC!');
-            }
-          };
-
-          // Send ICE candidates to signaling hub
-          pc.onicecandidate = (event) => {
-            if (event.candidate) {
-              primeApi.sendVideoSignal(sessionId, {
-                sender: myRole,
-                type: 'candidate',
-                data: event.candidate,
-              });
-            }
-          };
-
-          // If caller, generate offer
-          if (myRole === 'patient') {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            await primeApi.sendVideoSignal(sessionId, {
-              sender: myRole,
-              type: 'offer',
-              data: offer,
-            });
-          }
-
-          // 3. Poll signaling messages to exchange offer, answer, and ICE candidates
-          let lastCheck = Date.now() - 5000;
-          signalPollTimer = setInterval(async () => {
-            try {
-              const signals = await primeApi.getVideoSignals(sessionId, lastCheck, myRole);
-              for (const sig of signals) {
-                lastCheck = Math.max(lastCheck, sig.timestamp);
-                if (sig.type === 'offer' && pc.signalingState !== 'closed') {
-                  await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
-                  const answer = await pc.createAnswer();
-                  await pc.setLocalDescription(answer);
-                  await primeApi.sendVideoSignal(sessionId, {
-                    sender: myRole,
-                    type: 'answer',
-                    data: answer,
-                  });
-                } else if (sig.type === 'answer' && pc.signalingState === 'have-local-offer') {
-                  await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
-                  setIsPeerConnected(true);
-                } else if (sig.type === 'candidate' && pc.remoteDescription) {
-                  await pc.addIceCandidate(new RTCIceCandidate(sig.data)).catch(() => {});
-                }
-              }
-            } catch (err) {
-              // Non-blocking poll error
-            }
-          }, 1500);
-
-        } catch (webrtcErr) {
-          console.warn('[WebRTC] PeerConnection notice:', webrtcErr);
-        }
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch {}
       }
     };
 
-    const timer = setTimeout(initCall, 1200);
+    const buildPeerConnection = (): RTCPeerConnection => {
+      if (peerConnectionRef.current) {
+        try {
+          peerConnectionRef.current.ontrack = null;
+          peerConnectionRef.current.onicecandidate = null;
+          peerConnectionRef.current.oniceconnectionstatechange = null;
+          peerConnectionRef.current.onconnectionstatechange = null;
+          peerConnectionRef.current.close();
+        } catch {}
+      }
+
+      pendingCandidatesRef.current = [];
+      remoteStreamRef.current = new MediaStream();
+
+      const pc = new RTCPeerConnection({
+        iceServers: iceServersRef.current,
+        iceCandidatePoolSize: 4,
+      });
+      peerConnectionRef.current = pc;
+
+      // Attach local camera & mic tracks, or recvonly transceivers so remote video ALWAYS streams
+      const stream = localStreamRef.current;
+      let hasVideoSender = false;
+      let hasAudioSender = false;
+      if (stream) {
+        stream.getTracks().forEach((track) => {
+          if (track.kind === 'video') hasVideoSender = true;
+          if (track.kind === 'audio') hasAudioSender = true;
+          pc.addTrack(track, stream);
+        });
+      }
+      if (!hasVideoSender) {
+        pc.addTransceiver('video', { direction: 'recvonly' });
+      }
+      if (!hasAudioSender) {
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+      }
+
+      // Accumulate incoming remote tracks safely across Chrome, Android, and iOS Safari
+      pc.ontrack = (event) => {
+        if (!isMounted) return;
+        const incomingTracks: MediaStreamTrack[] = [];
+        if (event.streams && event.streams[0]) {
+          event.streams[0].getTracks().forEach((t) => incomingTracks.push(t));
+        }
+        if (event.track) {
+          incomingTracks.push(event.track);
+        }
+
+        const existingIds = new Set(remoteStreamRef.current.getTracks().map((t) => t.id));
+        incomingTracks.forEach((t) => {
+          if (!existingIds.has(t.id)) {
+            remoteStreamRef.current.addTrack(t);
+            existingIds.add(t.id);
+          }
+        });
+
+        const freshStream = new MediaStream(remoteStreamRef.current.getTracks());
+        setRemoteStream(freshStream);
+        isPeerConnectedRef.current = true;
+        setIsPeerConnected(true);
+        setIceStatus('connected');
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          sendSignal('candidate', event.candidate.toJSON());
+        }
+      };
+
+      const handleStateUpdate = () => {
+        if (!isMounted) return;
+        const state = pc.iceConnectionState || pc.connectionState;
+        setIceStatus(state);
+        if (state === 'connected' || state === 'completed') {
+          isPeerConnectedRef.current = true;
+          setIsPeerConnected(true);
+          playConnectedTone();
+        } else if (state === 'failed') {
+          isPeerConnectedRef.current = false;
+          setIsPeerConnected(false);
+          // Self-heal failed ICE by re-announcing ready
+          sendSignal('ready', { restart: true });
+        } else if (state === 'disconnected') {
+          setTimeout(() => {
+            if (isMounted && pc.iceConnectionState === 'disconnected') {
+              isPeerConnectedRef.current = false;
+              setIsPeerConnected(false);
+              sendSignal('ready', { restart: true });
+            }
+          }, 3000);
+        }
+      };
+
+      pc.oniceconnectionstatechange = handleStateUpdate;
+      pc.onconnectionstatechange = handleStateUpdate;
+
+      return pc;
+    };
+
+    const createAndSendOffer = async () => {
+      const now = Date.now();
+      if (now - lastOfferSentAtRef.current < 2500) return;
+      lastOfferSentAtRef.current = now;
+
+      try {
+        const pc = buildPeerConnection();
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+        });
+        await pc.setLocalDescription(offer);
+        await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
+      } catch (err) {
+        console.warn('[WebRTC] Offer creation error:', err);
+      }
+    };
+
+    const handleIncomingSignal = async (sig: {
+      sender: string;
+      peerId?: string;
+      type: string;
+      data: any;
+    }) => {
+      if (!isMounted) return;
+      if (sig.peerId && sig.peerId === myPeerId) return;
+      if (!sig.peerId && sig.sender === myRole) return;
+
+      try {
+        if (sig.type === 'ready') {
+          // Patient always initiates a fresh SDP Offer whenever Doctor announces ready
+          if (myRole === 'patient') {
+            const pc = peerConnectionRef.current;
+            const alreadyLive =
+              pc &&
+              (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') &&
+              !sig.data?.restart;
+            if (!alreadyLive) {
+              await createAndSendOffer();
+            }
+          }
+        } else if (sig.type === 'offer') {
+          // Answerer (typically Doctor, or fallback if roles differ) handles incoming Offer
+          const pc = buildPeerConnection();
+          await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
+          await drainPendingCandidates(pc);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await sendSignal('answer', { type: answer.type, sdp: answer.sdp });
+        } else if (sig.type === 'answer') {
+          const pc = peerConnectionRef.current;
+          if (pc && pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
+            await drainPendingCandidates(pc);
+          }
+        } else if (sig.type === 'candidate' && sig.data) {
+          const pc = peerConnectionRef.current;
+          if (pc && pc.remoteDescription) {
+            await pc.addIceCandidate(new RTCIceCandidate(sig.data)).catch(() => {});
+          } else {
+            pendingCandidatesRef.current.push(sig.data);
+          }
+        } else if (sig.type === 'leave') {
+          isPeerConnectedRef.current = false;
+          setIsPeerConnected(false);
+          setRemoteStream(null);
+          showToast('The other participant left the call room.', 'info');
+        }
+      } catch (err) {
+        console.warn('[WebRTC] Signal handling error:', err);
+      }
+    };
+
+    const initCall = async () => {
+      setIsConnectingCall(false);
+
+      // 1. Fetch fresh STUN + TURN ICE servers from backend
+      try {
+        const tokenRes = await primeApi.getVideoToken(sessionId, myRole);
+        if (tokenRes?.iceServers && tokenRes.iceServers.length > 0) {
+          iceServersRef.current = tokenRes.iceServers;
+        }
+      } catch {}
+
+      // 2. Ensure local media is acquired (if not already captured during the Enter button click)
+      let activeLocalStream = localStreamRef.current;
+      if (!activeLocalStream) {
+        activeLocalStream = await acquireLocalMedia(facingMode);
+      }
+
+      if (activeLocalStream && isMounted) {
+        stopAudioAnalyser = setupAudioAnalyser(activeLocalStream, (lvl) => {
+          setAudioLevel(lvl);
+        });
+      }
+
+      if (!isMounted) return;
+
+      // 3. Open same-browser BroadcastChannel for instant local testing
+      try {
+        signalChannel = new BroadcastChannel('prime_webrtc_signal');
+        signalChannel.onmessage = (event) => {
+          if (event.data?.sessionId === sessionId) {
+            handleIncomingSignal(event.data);
+          }
+        };
+      } catch {}
+
+      // 4. Prepare PeerConnection and announce presence immediately
+      buildPeerConnection();
+      await sendSignal('ready', { role: myRole });
+
+      // If patient, also send an immediate initial offer so waiting doctor connects instantly
+      if (myRole === 'patient') {
+        await createAndSendOffer();
+      }
+
+      // 5. Heartbeat 'ready' every 3.5s while waiting so late-joining peers always establish a fresh handshake
+      readyHeartbeatTimer = setInterval(() => {
+        if (!isMounted) return;
+        if (!isPeerConnectedRef.current) {
+          sendSignal('ready', { role: myRole });
+        }
+      }, 3500);
+
+      // 6. Poll server signaling queue every 900ms using monotonic server seq (zero clock skew!)
+      const pollSignals = async () => {
+        if (!isMounted) return;
+        try {
+          const { signals, latestSeq } = await primeApi.getVideoSignals(sessionId, lastSeq, myPeerId);
+          if (latestSeq > lastSeq) {
+            lastSeq = latestSeq;
+          }
+          for (const sig of signals) {
+            await handleIncomingSignal(sig);
+          }
+        } catch {}
+      };
+
+      await pollSignals();
+      signalPollTimer = setInterval(pollSignals, 900);
+    };
+
+    initCall();
 
     return () => {
-      clearTimeout(timer);
-      if (cancelRing) cancelRing();
+      isMounted = false;
+      isPeerConnectedRef.current = false;
       if (signalPollTimer) clearInterval(signalPollTimer);
+      if (readyHeartbeatTimer) clearInterval(readyHeartbeatTimer);
+      if (signalChannel) {
+        try {
+          signalChannel.postMessage({ sessionId, sender: myRole, peerId: myPeerId, type: 'leave' });
+          signalChannel.close();
+        } catch {}
+      }
+      primeApi.sendVideoSignal(sessionId, { sender: myRole, peerId: myPeerId, type: 'leave' }).catch(() => {});
       if (stopAudioAnalyser) stopAudioAnalyser();
       if (peerConnectionRef.current) {
         peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
       }
-      if (localStream) {
-        localStream.getTracks().forEach((t) => t.stop());
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
       }
     };
-  }, [hasConfirmedConsent, facingMode]);
+  }, [hasConfirmedConsent]);
 
   const handleSwitchCamera = async () => {
     triggerHaptic('medium');
     const nextFacing = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextFacing);
-
-    if (localStream) {
-      localStream.getTracks().forEach((t) => t.stop());
-    }
-
-    const media = await requestUserMedia(!isVideoOff, !isMuted, nextFacing);
-    if (media.stream) {
-      setLocalStream(media.stream);
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = media.stream;
-        localVideoRef.current.play().catch(() => {});
-      }
-      if (peerConnectionRef.current) {
-        const videoTrack = media.stream.getVideoTracks()[0];
-        const senders = peerConnectionRef.current.getSenders();
-        const videoSender = senders.find((s) => s.track?.kind === 'video');
-        if (videoSender && videoTrack) {
-          videoSender.replaceTrack(videoTrack);
-        }
-      }
+    const stream = await acquireLocalMedia(nextFacing);
+    if (stream) {
       showToast(`Switched to ${nextFacing === 'user' ? 'Front' : 'Back'} Camera`);
     }
   };
@@ -462,8 +727,13 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const handleHangup = () => {
     triggerHaptic('heavy');
     playHangupTone();
-    if (localStream) {
-      localStream.getTracks().forEach((t) => t.stop());
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
     }
     setShowEndConsultationModal(false);
     onNavigate('post-consultation-journey');
@@ -537,6 +807,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       attachment: attachedFile ? { ...attachedFile } : undefined,
     };
 
+    seenMsgIdsRef.current.add(msg.id);
+    seenMsgIdsRef.current.add(`${msg.sender}::${msg.text}::${msg.timestamp}`);
     setMessages((prev) => [...prev, msg]);
     setNewMessageText('');
     setAttachedFile(null);
@@ -587,6 +859,9 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     <div className="relative h-[100dvh] w-full bg-slate-950 overflow-hidden text-white flex flex-col justify-between font-nunito select-none">
       <StatusBar dark className="relative z-20 w-full" />
 
+      {/* Hidden Remote Audio Element (ensures clear voice playback across all modes & iOS Safari) */}
+      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+
       {/* Hidden File Input for Document & Image Upload */}
       <input
         type="file"
@@ -603,18 +878,12 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         <div className="absolute inset-0 z-50 bg-[#022434]/95 backdrop-blur-xl p-5 flex flex-col justify-between overflow-y-auto font-nunito">
           <div className="max-w-md mx-auto w-full space-y-5 my-auto py-6">
             <div className="text-center space-y-2">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-[#77daa4] border-2 border-[#77daa4] mx-auto flex items-center justify-center shadow-lg animate-pulse">
+              <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-[#77daa4] border-2 border-[#77daa4] mx-auto flex items-center justify-center shadow-lg">
                 <ShieldCheck className="w-8 h-8" />
               </div>
-              <span className="text-xs font-extrabold font-outfit text-[#77daa4] uppercase tracking-wider block">
-                Secure Telehealth Session Entry
-              </span>
               <h2 className="text-2xl font-extrabold font-outfit text-white">
-                Clinical Pre-Session Consent & Verification
+                Session Consent
               </h2>
-              <p className="text-xs text-slate-300">
-                Please verify practitioner identity and confirm informed patient consent prior to video consultation.
-              </p>
             </div>
 
             {/* Identity Confirmation Card */}
@@ -626,19 +895,18 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               {/* Doctor Details */}
               <div className="flex items-center space-x-3 bg-white/5 p-3 rounded-2xl border border-white/10">
                 <img
-                  src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200"
-                  alt="Dr. Sarah Johnson"
+                  src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200"
+                  alt={doctorName}
                   className="w-12 h-12 rounded-full object-cover border-2 border-[#77daa4]"
                 />
                 <div className="text-left">
                   <div className="flex items-center space-x-1.5">
-                    <span className="font-extrabold font-outfit text-sm text-white">Dr. Sarah Johnson</span>
+                    <span className="font-extrabold font-outfit text-sm text-white">{doctorName}</span>
                     <span className="text-[10px] font-extrabold bg-emerald-500/30 text-[#77daa4] px-2 py-0.5 rounded-full border border-emerald-400/40">
                       Verified Practitioner
                     </span>
                   </div>
-                  <p className="text-xs text-slate-300">Pediatrics • MD License #NG-MD-88392</p>
-                  <p className="text-[10px] text-slate-400">Lagos University Teaching Hospital Affiliate</p>
+                  <p className="text-xs text-slate-300">MDCN Registered Telehealth Clinician</p>
                 </div>
               </div>
 
@@ -707,14 +975,15 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             {/* Entry Button */}
             <button
               disabled={!consentCheck1 || !consentCheck2 || !consentCheck3}
-              onClick={() => {
+              onClick={async () => {
                 triggerHaptic('heavy');
+                await acquireLocalMedia(facingMode);
                 setHasConfirmedConsent(true);
               }}
-              className="w-full py-4 bg-[#77daa4] disabled:bg-slate-700 disabled:text-slate-500 hover:bg-emerald-300 text-[#022434] font-extrabold font-outfit text-sm rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 active:scale-[0.98]"
+              className="w-full py-4 bg-[#77daa4] disabled:bg-slate-700 disabled:text-slate-500 hover:bg-emerald-300 text-[#022434] font-extrabold font-outfit text-sm rounded-2xl shadow-xl transition-all flex items-center justify-center space-x-2 active:scale-[0.98] cursor-pointer"
             >
               <Video className="w-5 h-5" />
-              <span>Confirm & Enter Consultation Stream</span>
+              <span>Join Consultation</span>
             </button>
           </div>
         </div>
@@ -737,21 +1006,32 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/85 pointer-events-none" />
 
-          {/* Waiting for Peer / Multi-device join banner */}
+          {/* Waiting for Peer Banner */}
           {!isPeerConnected && (
-            <div className="absolute top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-20 max-w-md bg-black/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-emerald-500/40 text-white shadow-2xl text-center space-y-2.5">
+            <div className="absolute top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-20 max-w-sm bg-black/80 backdrop-blur-md p-4 rounded-2xl border border-emerald-500/40 text-white shadow-2xl text-center space-y-2.5">
               <div className="flex items-center justify-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                 <span className="text-xs font-bold font-outfit text-emerald-300 uppercase tracking-wider">
-                  Live Consultation Room Active
+                  {iceStatus === 'checking'
+                    ? 'Connecting Live Video...'
+                    : myRole === 'patient'
+                    ? `Calling ${doctorName}...`
+                    : 'Waiting for Patient...'}
                 </span>
               </div>
-              <p className="text-xs text-slate-200 font-nunito">
-                {myRole === 'patient'
-                  ? `Your camera & audio are active. Calling ${doctorName}... ringing on doctor's device.`
-                  : 'Your clinical room is open. Waiting for patient peer stream to connect...'}
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              {mediaError && (
+                <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-400/40 text-[11px] text-amber-200 space-y-1.5">
+                  <p>{mediaError}</p>
+                  <button
+                    type="button"
+                    onClick={() => acquireLocalMedia(facingMode)}
+                    className="px-3 py-1 bg-amber-400 text-slate-950 font-bold rounded-lg text-[11px] cursor-pointer"
+                  >
+                    Enable Camera & Mic
+                  </button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 {myRole === 'patient' && (
                   <button
                     type="button"
@@ -759,7 +1039,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                     className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
                   >
                     <PhoneCall className="w-3.5 h-3.5 animate-bounce" />
-                    <span>Ring Doctor Again</span>
+                    <span>Ring Doctor</span>
                   </button>
                 )}
                 <button
@@ -768,7 +1048,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                   className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
                 >
                   {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedLink ? 'Link Copied!' : 'Copy Room Link'}</span>
+                  <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
                 </button>
               </div>
             </div>
@@ -794,8 +1074,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           <div className="relative">
             <div className="w-32 h-32 rounded-full border-4 border-emerald-400/40 p-1 shadow-2xl relative">
               <img
-                src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=400"
-                alt="Dr. Sarah Johnson Audio Stream"
+                src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400"
+                alt={doctorName}
                 className="w-full h-full rounded-full object-cover"
               />
               <span className="absolute bottom-1 right-1 bg-emerald-500 text-[#022434] p-2 rounded-full border-2 border-[#022434]">
@@ -808,10 +1088,9 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
           <div className="space-y-1">
             <span className="text-xs font-extrabold font-outfit text-[#77daa4] uppercase tracking-wider bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-400/30">
-              Low Bandwidth Audio Fallback Active
+              Audio Mode
             </span>
-            <h2 className="text-2xl font-extrabold font-outfit text-white">Dr. Sarah Johnson</h2>
-            <p className="text-xs text-slate-300">Pediatrician • Medical Audio Consultation</p>
+            <h2 className="text-2xl font-extrabold font-outfit text-white">{doctorName}</h2>
           </div>
 
           {/* Active Voice Waveform */}
@@ -824,10 +1103,6 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               />
             ))}
           </div>
-
-          <p className="text-[11px] text-slate-400 max-w-xs">
-            Audio mode saves up to 85% bandwidth while keeping crystal clear voice communication with your doctor.
-          </p>
         </div>
       )}
 
@@ -897,12 +1172,20 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* 4. TOP BAR: PRACTITIONER NAME AT TOP ONLY                                 */}
+      {/* 4. TOP BAR: PRACTITIONER NAME & LIVE STATUS                               */}
       {/* ========================================================================= */}
       <div className="relative z-20 px-5 pt-3 pb-2 flex items-center justify-center">
-        <div className="bg-black/60 backdrop-blur-md px-5 py-2 rounded-full border border-white/20 shadow-lg flex items-center justify-center">
+        <div className="bg-black/60 backdrop-blur-md px-5 py-2 rounded-full border border-white/20 shadow-lg flex items-center space-x-2.5">
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${
+              isPeerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'
+            }`}
+          />
           <span className="text-sm sm:text-base font-extrabold font-outfit text-white tracking-wide">
-            {doctorName}
+            {myRole === 'doctor' ? activeProfile.displayName || 'Patient' : doctorName}
+          </span>
+          <span className="text-[11px] font-mono text-emerald-300 font-bold">
+            {formatTime(elapsedSeconds)}
           </span>
         </div>
       </div>
@@ -1021,7 +1304,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5 text-slate-700" />}
           </button>
 
-          {/* In-Call Text Chat Toggle */}
+          {/* In-Call Text Chat Toggle — Highlights brightly when new message arrives */}
           <button
             onClick={() => {
               triggerHaptic('light');
@@ -1031,14 +1314,16 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             className={`p-3 sm:p-3.5 rounded-full border transition-all relative cursor-pointer ${
               isChatOpen
                 ? 'bg-[#006c44] text-white border-[#006c44]'
+                : unreadChatCount > 0
+                ? 'bg-emerald-500 text-white border-emerald-400 ring-4 ring-emerald-400/60 shadow-lg shadow-emerald-500/40 animate-pulse'
                 : 'bg-white text-[#022434] border-slate-300 hover:bg-slate-100'
             }`}
-            title="In-Call Clinical Chat"
+            title={unreadChatCount > 0 ? `${unreadChatCount} new message(s)` : 'In-Call Chat'}
           >
             <MessageSquare className="w-5 h-5" />
             {unreadChatCount > 0 && !isChatOpen && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                {unreadChatCount}
+              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 bg-rose-500 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-bounce">
+                {unreadChatCount > 9 ? '9+' : unreadChatCount}
               </span>
             )}
           </button>
@@ -1094,17 +1379,11 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <MessageSquare className="w-5 h-5 text-[#77daa4]" />
-              <div>
-                <h4 className="font-extrabold font-outfit text-white text-sm">In-Call Clinical Chat</h4>
-                <p className="text-[10px] text-emerald-400 flex items-center space-x-1">
-                  <Lock className="w-3 h-3" />
-                  <span>256-Bit Encrypted Medical Records</span>
-                </p>
-              </div>
+              <h4 className="font-extrabold font-outfit text-white text-sm">Chat</h4>
             </div>
             <button
               onClick={() => setIsChatOpen(false)}
-              className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400"
+              className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1326,29 +1605,34 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         onClose={() => setIsPrescriptionModalOpen(false)}
         patientInfo={{
           name: activeProfile.displayName || user?.name || 'Patient',
-          allergies: ['Penicillin', 'Sulfa drugs'],
+          allergies: user?.allergies || [],
         }}
         consultationType="Video"
         doctorInfo={{
           name: doctorName,
-          license: 'MDCN/2019/98765',
-          specialty: 'Consultant Telehealth Physician',
+          license: user?.doctorLicenseNo || 'MDCN Verified',
+          specialty: user?.doctorSpecialty || 'Telehealth Physician',
           clinic: 'Prime Telecare Clinical Suite',
         }}
         onPrescriptionSaved={(rx) => {
           setIsPrescriptionModalOpen(false);
           triggerHaptic('success');
-          showToast(`E-Prescription #${rx.referenceNo} issued successfully for ${rx.patientName}!`, 'success');
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `rx-${Date.now()}`,
-              sender: 'doctor',
-              senderName: doctorName,
-              text: `📄 Official E-Prescription #${rx.referenceNo} issued for ${rx.diagnosis}.\nMedications: ${rx.medications.map((m) => `${m.drugName} (${m.dosage}, ${m.frequency})`).join('; ')}. Instructions: ${rx.doctorNotes || 'Follow regimen.'}`,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-          ]);
+          showToast(`E-Prescription #${rx.referenceNo} issued for ${rx.patientName}`, 'success');
+          const rxMsg: InCallMessage = {
+            id: `rx-${Date.now()}`,
+            sender: 'doctor',
+            senderName: doctorName,
+            text: `E-Prescription #${rx.referenceNo}: ${rx.medications.map((m) => `${m.drugName} (${m.dosage}, ${m.frequency})`).join('; ')}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          seenMsgIdsRef.current.add(rxMsg.id);
+          seenMsgIdsRef.current.add(`${rxMsg.sender}::${rxMsg.text}::${rxMsg.timestamp}`);
+          setMessages((prev) => [...prev, rxMsg]);
+          primeApi.sendChatMessage(sessionId, {
+            sender: 'doctor',
+            senderName: doctorName,
+            text: rxMsg.text,
+          }).catch(() => {});
         }}
       />
 
@@ -1359,16 +1643,21 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         doctorName={doctorName}
         patientName={activeProfile.displayName || user?.name || 'Patient'}
         onPlanPublished={(plan) => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `plan-${Date.now()}`,
-              sender: 'doctor',
-              senderName: doctorName,
-              text: `🩺 Care Journey Plan approved! ${plan.items.filter((i) => i.checkedByDoctor).length} recovery tasks have been published to your patient care dashboard.`,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-          ]);
+          const planMsg: InCallMessage = {
+            id: `plan-${Date.now()}`,
+            sender: 'doctor',
+            senderName: doctorName,
+            text: `Care Journey Plan approved (${plan.items.filter((i) => i.checkedByDoctor).length} checks)${plan.followUpDate ? ` • Follow-up: ${plan.followUpDate}` : ''}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          seenMsgIdsRef.current.add(planMsg.id);
+          seenMsgIdsRef.current.add(`${planMsg.sender}::${planMsg.text}::${planMsg.timestamp}`);
+          setMessages((prev) => [...prev, planMsg]);
+          primeApi.sendChatMessage(sessionId, {
+            sender: 'doctor',
+            senderName: doctorName,
+            text: planMsg.text,
+          }).catch(() => {});
         }}
       />
     </div>

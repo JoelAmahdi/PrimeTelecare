@@ -205,9 +205,6 @@ export const QuickLoginSetupModal: React.FC<QuickLoginSetupModalProps> = ({
           <h3 className="text-xl font-bold font-outfit text-white">
             Set Up Security PIN
           </h3>
-          <p className="text-xs text-slate-200 font-nunito mt-1 leading-relaxed">
-            Create a 4-digit PIN for quick unlock on return or idle timeouts. You can also unlock with your account password anytime.
-          </p>
         </div>
 
         {/* Body Content */}
