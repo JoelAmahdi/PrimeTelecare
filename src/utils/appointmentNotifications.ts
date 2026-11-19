@@ -1,4 +1,6 @@
 import { triggerHaptic } from './haptics';
+import { showPhoneNotification } from '../services/phoneNotifications';
+import { playNotificationChime } from './audioTones';
 
 export interface AppointmentAlert {
   id: string;
@@ -278,7 +280,7 @@ export function rescheduleConsultation(
   saveAppointmentAlerts(alerts);
 
   // Create persistent notification for patient
-  saveRescheduleNotice({
+  const noticePayload: RescheduleNotice = {
     id: existing.appointmentId || existing.id,
     appointmentId: existing.appointmentId || existing.id,
     doctorId: existing.doctorId,
@@ -295,7 +297,11 @@ export function rescheduleConsultation(
     reason: reason || 'Clinician schedule update',
     rescheduledAt: Date.now(),
     acknowledged: false,
-  });
+  };
+  saveRescheduleNotice(noticePayload);
+  try {
+    window.dispatchEvent(new CustomEvent('appointment-rescheduled', { detail: noticePayload }));
+  } catch {}
 
   return updatedAlert;
 }
@@ -376,24 +382,15 @@ export function resetDemoAppointment15Min(): void {
 }
 
 /**
- * Triggers a native system browser notification if allowed
+ * Triggers a native system browser notification with sound and mobile vibration
  */
 export function requestAndTriggerWebNotification(title: string, body: string): void {
-  if (typeof window !== 'undefined' && 'Notification' in window) {
-    if (Notification.permission === 'granted') {
-      new Notification(title, {
-        body,
-        icon: '/favicon.ico',
-      });
-    } else if (Notification.permission !== 'denied') {
-      Notification.requestPermission().then((permission) => {
-        if (permission === 'granted') {
-          new Notification(title, {
-            body,
-            icon: '/favicon.ico',
-          });
-        }
-      });
-    }
-  }
+  playNotificationChime();
+  showPhoneNotification({
+    title,
+    body,
+    type: 'appointment',
+    icon: '/icon.svg',
+    vibrate: [200, 100, 200, 100, 300],
+  }).catch(() => {});
 }

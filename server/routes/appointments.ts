@@ -105,10 +105,10 @@ appointmentsRouter.delete('/:id', (req: Request, res: Response) => {
   return res.json({ success: true, message: 'Appointment cancelled successfully', appointment: updated });
 });
 
-// GET /api/appointments/active-call (Poll for incoming doctor calls)
+// GET /api/appointments/active-call (Poll for incoming doctor & patient calls)
 appointmentsRouter.get('/active-call', (req: Request, res: Response) => {
-  const doctorId = req.query.doctorId as string;
-  const activeCall = store.getActiveCall(doctorId);
+  const userId = (req.query.userId || req.query.doctorId || req.query.patientId) as string;
+  const activeCall = store.getActiveCall(userId);
   return res.json({ success: true, activeCall: activeCall || null, call: activeCall || null });
 });
 

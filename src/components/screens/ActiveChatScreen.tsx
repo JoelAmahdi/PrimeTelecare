@@ -18,6 +18,7 @@ import { processJoinOrPayConsultation, isConsultationPaid } from '../../utils/co
 import { CollapsibleSection } from '../common/CollapsibleSection';
 import { primeApi } from '../../services/apiClient';
 import { getStoredAppointmentAlerts, completeConsultation } from '../../utils/appointmentNotifications';
+import { notifyIncomingMessage } from '../../services/phoneNotifications';
 
 interface ConsultationItem {
   id: string;
@@ -163,13 +164,37 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  // Live polling for two-way chat messages
+  // Live polling for two-way chat messages with native phone notifications
+  const hasLoadedInitialRef = useRef(false);
+  const lastMsgCountRef = useRef(0);
+
+  useEffect(() => {
+    hasLoadedInitialRef.current = false;
+    lastMsgCountRef.current = 0;
+  }, [activeSession?.id]);
+
   useEffect(() => {
     if (!activeSession) return;
 
     const fetchMessages = () => {
       primeApi.getChatMessages(activeSession.id).then((fetched) => {
         if (Array.isArray(fetched)) {
+          if (hasLoadedInitialRef.current && fetched.length > lastMsgCountRef.current) {
+            const fresh = fetched.slice(lastMsgCountRef.current);
+            const mySender = role === 'doctor' ? 'doctor' : 'patient';
+            const fromOther = fresh.filter((m) => m.sender !== mySender);
+            if (fromOther.length > 0) {
+              const latest = fromOther[fromOther.length - 1];
+              notifyIncomingMessage({
+                senderName: latest.senderName || (role === 'doctor' ? activeSession.patientName : activeSession.doctorName),
+                messageText: latest.text || 'Sent an attachment',
+                chatId: activeSession.id,
+                senderAvatar: role === 'doctor' ? undefined : activeSession.doctorAvatar,
+              });
+            }
+          }
+          hasLoadedInitialRef.current = true;
+          lastMsgCountRef.current = fetched.length;
           setMessages(fetched);
         }
       }).catch(() => {});
@@ -178,7 +203,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
     fetchMessages();
     const interval = setInterval(fetchMessages, 2500);
     return () => clearInterval(interval);
-  }, [activeSession]);
+  }, [activeSession, role]);
 
   useEffect(() => {
     if (activeSession) {

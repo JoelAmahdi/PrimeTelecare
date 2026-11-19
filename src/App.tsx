@@ -50,6 +50,13 @@ import { AccessDeniedScreen } from './components/common/AccessDeniedScreen';
 import { IncomingCallModal } from './components/common/IncomingCallModal';
 import { triggerHaptic } from './utils/haptics';
 import {
+  notifyIncomingCall,
+  notifyIncomingMessage,
+  notifyAppointmentRescheduled,
+  notifyPrescriptionIssued,
+  stopCallAlerts,
+} from './services/phoneNotifications';
+import {
   isSessionLocked,
   setSessionLocked,
   recordAppActivity,
@@ -514,23 +521,45 @@ export default function App() {
     setCurrentScreen(targetScreen);
   };
 
-  // Real-time Incoming Telehealth Call Listener & Poller for Doctors
+  // Real-time Incoming Telehealth Call Listener & Poller for Doctors and Patients
   useEffect(() => {
     const checkIncomingCalls = async () => {
-      if (effectiveRole !== 'doctor') return;
       try {
         const call = await primeApi.getActiveCall(activeUser?.id);
         if (call && call.status === 'ringing') {
-          setIncomingCall(call);
+          setIncomingCall((prev) => {
+            if (prev?.id === call.id) return prev;
+            notifyIncomingCall({
+              callId: call.id,
+              callerName: call.patientName || call.doctorName || 'Patient',
+              callerAvatar: call.patientAvatar || call.doctorAvatar,
+              modality: (call.type === 'Voice' ? 'Voice' : call.type === 'Chat' ? 'Chat' : 'Video') as any,
+              role: effectiveRole,
+              consultationId: call.consultationId,
+            });
+            return call;
+          });
         } else if (call && call.status !== 'ringing') {
-          setIncomingCall(null);
+          setIncomingCall((prev) => {
+            if (prev) stopCallAlerts();
+            return null;
+          });
         }
       } catch {}
     };
 
     const handleLocalIncomingCall = (e: any) => {
       if (e?.detail) {
-        setIncomingCall(e.detail);
+        const call = e.detail;
+        setIncomingCall(call);
+        notifyIncomingCall({
+          callId: call.id,
+          callerName: call.patientName || call.doctorName || 'Patient',
+          callerAvatar: call.patientAvatar || call.doctorAvatar,
+          modality: (call.type === 'Voice' ? 'Voice' : call.type === 'Chat' ? 'Chat' : 'Video') as any,
+          role: effectiveRole,
+          consultationId: call.consultationId,
+        });
       }
     };
 
@@ -540,23 +569,161 @@ export default function App() {
           const parsed = JSON.parse(e.newValue);
           if (parsed && parsed.status === 'ringing') {
             setIncomingCall(parsed);
+            notifyIncomingCall({
+              callId: parsed.id,
+              callerName: parsed.patientName || parsed.doctorName || 'Patient',
+              callerAvatar: parsed.patientAvatar || parsed.doctorAvatar,
+              modality: (parsed.type === 'Voice' ? 'Voice' : parsed.type === 'Chat' ? 'Chat' : 'Video') as any,
+              role: effectiveRole,
+              consultationId: parsed.consultationId,
+            });
           }
         } catch {}
       }
     };
 
-    if (effectiveRole === 'doctor') {
-      checkIncomingCalls();
-      const interval = setInterval(checkIncomingCalls, 3000);
-      window.addEventListener('incoming-doctor-call', handleLocalIncomingCall);
-      window.addEventListener('storage', handleStorageChange);
-      return () => {
-        clearInterval(interval);
-        window.removeEventListener('incoming-doctor-call', handleLocalIncomingCall);
-        window.removeEventListener('storage', handleStorageChange);
-      };
-    }
+    checkIncomingCalls();
+    const interval = setInterval(checkIncomingCalls, 3000);
+    window.addEventListener('incoming-doctor-call', handleLocalIncomingCall);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('incoming-doctor-call', handleLocalIncomingCall);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [effectiveRole, activeUser?.id]);
+
+  // Handle phone notification actions (e.g. Answer / Decline from mobile lock screen or notification shade)
+  useEffect(() => {
+    const handleNotificationClick = (event: any) => {
+      const { action, payload } = event.detail || {};
+      if (action === 'answer' || payload?.screen === 'video-call') {
+        stopCallAlerts();
+        if (incomingCall) {
+          primeApi.respondCall(incomingCall.id, 'accepted').catch(() => {});
+          const sessionPayload = {
+            doctorId: activeUser.id,
+            doctorName: activeUser.name.trim().startsWith('Dr.')
+              ? activeUser.name.trim()
+              : `Dr. ${activeUser.name.trim()}`,
+            doctorSpecialty: activeUser.doctorSpecialty || '',
+            doctorAvatar: activeUser.avatarUrl || '',
+            patientName: incomingCall.patientName || '',
+            type: incomingCall.type,
+          };
+          setActiveCallSession(sessionPayload);
+          try {
+            localStorage.setItem('prime_telecare_active_call_session', JSON.stringify(sessionPayload));
+            localStorage.removeItem('prime_telecare_incoming_call');
+            localStorage.removeItem('prime_telecare_active_call');
+          } catch {}
+          setIncomingCall(null);
+          navigateTo(incomingCall.type === 'Chat' ? 'active-chat' : 'video-call');
+        } else {
+          navigateTo(payload?.modality === 'Chat' ? 'active-chat' : 'video-call');
+        }
+      } else if (action === 'decline') {
+        stopCallAlerts();
+        if (incomingCall) {
+          primeApi.respondCall(incomingCall.id, 'declined').catch(() => {});
+          try {
+            localStorage.removeItem('prime_telecare_incoming_call');
+            localStorage.removeItem('prime_telecare_active_call');
+          } catch {}
+          setIncomingCall(null);
+          showToast('Call declined', 'info');
+        }
+      } else if (payload?.screen) {
+        navigateTo(payload.screen);
+      }
+    };
+
+    const handleNotificationClosed = () => {
+      stopCallAlerts();
+    };
+
+    window.addEventListener('phone-notification-clicked', handleNotificationClick);
+    window.addEventListener('phone-notification-closed', handleNotificationClosed);
+    return () => {
+      window.removeEventListener('phone-notification-clicked', handleNotificationClick);
+      window.removeEventListener('phone-notification-closed', handleNotificationClosed);
+    };
+  }, [incomingCall, activeUser, effectiveRole]);
+
+  // Background Chat Poller for active consultations (alerts phone when a text arrives while on other screens)
+  useEffect(() => {
+    let isMounted = true;
+    let lastSeenMsgCount = 0;
+
+    const pollBackgroundMessages = async () => {
+      if (currentScreen === 'active-chat' || currentScreen === 'video-call') return;
+      try {
+        const activeSess = localStorage.getItem('prime_telecare_active_call_session');
+        const consultId = activeSess ? JSON.parse(activeSess)?.consultationId : 'consultation-live-room';
+        if (!consultId) return;
+
+        const msgs = await primeApi.getChatMessages(consultId);
+        if (Array.isArray(msgs) && isMounted) {
+          if (lastSeenMsgCount > 0 && msgs.length > lastSeenMsgCount) {
+            const fresh = msgs.slice(lastSeenMsgCount);
+            const mySender = effectiveRole === 'doctor' ? 'doctor' : 'patient';
+            const fromOther = fresh.filter((m) => m.sender !== mySender);
+            if (fromOther.length > 0) {
+              const latest = fromOther[fromOther.length - 1];
+              notifyIncomingMessage({
+                senderName: latest.senderName || (effectiveRole === 'doctor' ? 'Patient' : 'Doctor'),
+                messageText: latest.text || 'Sent an attachment',
+                chatId: consultId,
+              });
+            }
+          }
+          lastSeenMsgCount = msgs.length;
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(pollBackgroundMessages, 3500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [currentScreen, effectiveRole]);
+
+  // Listen for real-time E-Prescriptions & Appointment Reschedules to notify phone
+  useEffect(() => {
+    const handlePrescriptionsUpdated = (e: any) => {
+      if (effectiveRole !== 'patient') return;
+      const list = e?.detail;
+      if (Array.isArray(list) && list.length > 0) {
+        const latest = list[0];
+        notifyPrescriptionIssued({
+          doctorName: latest.doctorName || 'Attending Physician',
+          medicationCount: latest.medications?.length || 1,
+          prescriptionId: latest.id,
+        });
+      }
+    };
+
+    const handleReschedule = (e: any) => {
+      const notice = e?.detail;
+      if (notice) {
+        notifyAppointmentRescheduled({
+          doctorName: notice.doctorName,
+          newDate: notice.newDate,
+          newTime: notice.newTime,
+          reason: notice.reason,
+          appointmentId: notice.appointmentId,
+        });
+      }
+    };
+
+    window.addEventListener('prescriptions-updated', handlePrescriptionsUpdated);
+    window.addEventListener('appointment-rescheduled', handleReschedule);
+    return () => {
+      window.removeEventListener('prescriptions-updated', handlePrescriptionsUpdated);
+      window.removeEventListener('appointment-rescheduled', handleReschedule);
+    };
+  }, [effectiveRole]);
 
   // Continuous RBAC Guard: Ensure active screen matches authenticated user's role permissions
   useEffect(() => {
@@ -1102,6 +1269,7 @@ export default function App() {
         <IncomingCallModal
           call={incomingCall}
           onAccept={(call) => {
+            stopCallAlerts();
             setIncomingCall(null);
             primeApi.respondCall(call.id, 'accepted').catch(() => {});
             const sessionPayload = {
@@ -1127,6 +1295,7 @@ export default function App() {
             }
           }}
           onDecline={(call) => {
+            stopCallAlerts();
             setIncomingCall(null);
             primeApi.respondCall(call.id, 'declined').catch(() => {});
             try {

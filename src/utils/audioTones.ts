@@ -111,3 +111,113 @@ export function playHangupTone() {
   }
 }
 
+/**
+ * Clean dual-tone chime for incoming text messages on mobile & desktop
+ */
+export function playMessageChime(): void {
+  try {
+    const ctx = getAudioContext();
+    const notes = [
+      { freq: 783.99, start: 0, dur: 0.12 },     // G5
+      { freq: 1046.50, start: 0.08, dur: 0.28 },  // C6
+    ];
+    notes.forEach(({ freq, start, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const st = ctx.currentTime + start;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, st);
+      gain.gain.setValueAtTime(0, st);
+      gain.gain.linearRampToValueAtTime(0.18, st + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, st + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(st);
+      osc.stop(st + dur + 0.05);
+    });
+  } catch (e) {
+    console.warn('Could not play message chime', e);
+  }
+}
+
+/**
+ * Pleasant medical attention chime for appointment alerts, reschedules, etc.
+ */
+export function playNotificationChime(): void {
+  try {
+    const ctx = getAudioContext();
+    const notes = [
+      { freq: 523.25, start: 0, dur: 0.1 },      // C5
+      { freq: 659.25, start: 0.08, dur: 0.1 },   // E5
+      { freq: 783.99, start: 0.16, dur: 0.3 },   // G5
+    ];
+    notes.forEach(({ freq, start, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const st = ctx.currentTime + start;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, st);
+      gain.gain.setValueAtTime(0, st);
+      gain.gain.linearRampToValueAtTime(0.15, st + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, st + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(st);
+      osc.stop(st + dur + 0.05);
+    });
+  } catch (e) {
+    console.warn('Could not play notification chime', e);
+  }
+}
+
+/**
+ * Specialized confirmation chime for issued e-prescriptions
+ */
+export function playPrescriptionChime(): void {
+  try {
+    const ctx = getAudioContext();
+    const notes = [
+      { freq: 440.00, start: 0, dur: 0.09 },    // A4
+      { freq: 554.37, start: 0.09, dur: 0.09 },  // C#5
+      { freq: 659.25, start: 0.18, dur: 0.25 },  // E5
+    ];
+    notes.forEach(({ freq, start, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const st = ctx.currentTime + start;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, st);
+      gain.gain.setValueAtTime(0, st);
+      gain.gain.linearRampToValueAtTime(0.14, st + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, st + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(st);
+      osc.stop(st + dur + 0.05);
+    });
+  } catch (e) {
+    console.warn('Could not play prescription chime', e);
+  }
+}
+
+/**
+ * Unlocks AudioContext on user gesture
+ */
+export function ensureAudioContext(): void {
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+  } catch {}
+}
+

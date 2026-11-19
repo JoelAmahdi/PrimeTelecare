@@ -12,6 +12,7 @@ import { useOfflineStatus } from '../../utils/useOfflineStatus';
 import { getActiveOrUpcomingConsultations, completeConsultation, rescheduleConsultation } from '../../utils/appointmentNotifications';
 import { primeApi } from '../../services/apiClient';
 import { createGoogleCalendarWebUrl } from '../../services/googleCalendar';
+import { PhoneNotificationBanner } from '../common/PhoneNotificationBanner';
 
 interface DoctorHomeDashboardProps {
   user: User;
@@ -415,6 +416,9 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             </button>
           </div>
         </div>
+
+        {/* Real Mobile / Phone Notifications Prompt Banner */}
+        <PhoneNotificationBanner />
 
         {/* Offline Banner */}
         {effectiveOffline && (

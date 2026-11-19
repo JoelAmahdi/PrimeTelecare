@@ -1,4 +1,6 @@
 import { MedicationReminder, DrugPurchaseNotification } from '../types';
+import { showPhoneNotification } from '../services/phoneNotifications';
+import { playNotificationChime } from './audioTones';
 
 export const INITIAL_REMINDERS: MedicationReminder[] = [];
 
@@ -104,11 +106,12 @@ export async function requestBrowserNotificationPermission(): Promise<Notificati
 }
 
 export function sendBrowserNotification(title: string, body: string): void {
-  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-    try {
-      new Notification(title, { body });
-    } catch {
-      // Ignore browser notification runtime issues on restricted mobile webviews
-    }
-  }
+  playNotificationChime();
+  showPhoneNotification({
+    title,
+    body,
+    type: 'medication',
+    icon: '/icon.svg',
+    vibrate: [150, 100, 150],
+  }).catch(() => {});
 }

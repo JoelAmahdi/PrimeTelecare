@@ -304,9 +304,9 @@ export const primeApi = {
     }
   },
 
-  async getActiveCall(doctorId?: string): Promise<any> {
+  async getActiveCall(userId?: string): Promise<any> {
     try {
-      const q = doctorId ? `?doctorId=${encodeURIComponent(doctorId)}` : '';
+      const q = userId ? `?userId=${encodeURIComponent(userId)}` : '';
       const res = await request<{ success: boolean; activeCall: any }>(`/appointments/active-call${q}`);
       return res.activeCall;
     } catch {

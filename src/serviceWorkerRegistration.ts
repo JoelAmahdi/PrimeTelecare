@@ -1,14 +1,47 @@
 // Service Worker Registration for Prime Telecare Offline Resilience
 
+let swRegistrationPromise: Promise<ServiceWorkerRegistration | null> | null = null;
+
+export function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return Promise.resolve(null);
+  }
+  if (!swRegistrationPromise) {
+    swRegistrationPromise = navigator.serviceWorker.ready.catch(() => null);
+  }
+  return swRegistrationPromise;
+}
+
 export function registerServiceWorker() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
     return;
   }
 
-  // We must register the SW even in dev so the browser updates to the latest sw.js
-  // (which contains the bypass logic for Vite). The new sw.js will call skipWaiting.
-  // We can unregister it after registering if we really want to, but it's better
-  // to just let it update.
+  // Wire up incoming messages from Service Worker (e.g. phone notification clicks & actions)
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (!event.data) return;
+    if (event.data.type === 'PHONE_NOTIFICATION_CLICK') {
+      window.dispatchEvent(
+        new CustomEvent('phone-notification-clicked', {
+          detail: {
+            action: event.data.action,
+            payload: event.data.payload,
+            tag: event.data.tag,
+          },
+        })
+      );
+    } else if (event.data.type === 'PHONE_NOTIFICATION_CLOSED') {
+      window.dispatchEvent(
+        new CustomEvent('phone-notification-closed', {
+          detail: {
+            payload: event.data.payload,
+            tag: event.data.tag,
+          },
+        })
+      );
+    }
+  });
+
   const isDev = Boolean((import.meta as any).env?.DEV);
   
   window.addEventListener('load', () => {

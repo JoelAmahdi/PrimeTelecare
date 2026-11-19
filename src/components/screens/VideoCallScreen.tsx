@@ -43,6 +43,7 @@ import { ConnectionRecoveryModal } from '../common/ConnectionRecoveryModal';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
 import { primeApi } from '../../services/apiClient';
 import { completeConsultation, getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
+import { notifyIncomingMessage } from '../../services/phoneNotifications';
 import { playRingingTone, playConnectedTone, playHangupTone } from '../../utils/audioTones';
 import {
   requestUserMedia,
@@ -268,6 +269,11 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           triggerHaptic('medium');
           const latest = fromOther[fromOther.length - 1];
           showToast(`New message from ${latest.senderName}`, 'info');
+          notifyIncomingMessage({
+            senderName: latest.senderName,
+            messageText: latest.text || 'Sent an attachment',
+            chatId: roomChatSession,
+          });
         }
       }
     };

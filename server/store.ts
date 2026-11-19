@@ -545,15 +545,24 @@ class MemoryStore {
     return newCall;
   }
 
-  getActiveCall(doctorId?: string): ActiveCall | undefined {
+  getActiveCall(userId?: string): ActiveCall | undefined {
     if (!this.state.activeCalls) return undefined;
     const now = Date.now();
-    // Match specific doctor if provided
-    if (doctorId && this.state.activeCalls[doctorId]) {
-      const c = this.state.activeCalls[doctorId];
-      if (c.status === 'ringing' && now - c.startedAt < 180000) {
-        return c;
+    // Match specific doctor or patient if provided
+    if (userId) {
+      if (this.state.activeCalls[userId]) {
+        const c = this.state.activeCalls[userId];
+        if (c.status === 'ringing' && now - c.startedAt < 180000) {
+          return c;
+        }
       }
+      const match = Object.values(this.state.activeCalls).find(
+        (c) =>
+          c.status === 'ringing' &&
+          now - c.startedAt < 180000 &&
+          (c.doctorId === userId || (c as any).patientId === userId || c.patientName?.toLowerCase() === userId.toLowerCase())
+      );
+      if (match) return match;
     }
     // Return any active ringing call within the last 3 minutes
     const calls = Object.values(this.state.activeCalls);

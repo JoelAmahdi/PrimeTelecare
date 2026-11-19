@@ -177,3 +177,89 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
+
+// =========================================================================
+// PUSH & PHONE SYSTEM NOTIFICATION HANDLING
+// =========================================================================
+
+// Handle Push Events from server
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    const text = event.data ? event.data.text() : 'You have a new telehealth update';
+    data = { title: 'Prime Telecare', body: text };
+  }
+
+  const title = data.title || 'Prime Telecare Alert';
+  const options = {
+    body: data.body || 'New clinical update from Prime Telecare',
+    icon: data.icon || '/icon.svg',
+    badge: data.badge || '/icon.svg',
+    tag: data.tag || `prime-notice-${Date.now()}`,
+    data: data.data || { url: '/' },
+    vibrate: data.vibrate || [200, 100, 200],
+    requireInteraction: Boolean(data.requireInteraction),
+    actions: data.actions || [],
+    silent: Boolean(data.silent),
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Handle Notification Click & Action Buttons
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const action = event.action;
+  const payload = event.notification.data || {};
+  const targetUrl = payload.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // 1. If an existing app window is open, focus it and dispatch notification action
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          client.postMessage({
+            type: 'PHONE_NOTIFICATION_CLICK',
+            action,
+            payload,
+            tag: event.notification.tag,
+          });
+          return client;
+        }
+      }
+      // 2. Otherwise open a new window to the target url
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl).then((newClient) => {
+          if (newClient) {
+            setTimeout(() => {
+              newClient.postMessage({
+                type: 'PHONE_NOTIFICATION_CLICK',
+                action,
+                payload,
+                tag: event.notification.tag,
+              });
+            }, 1000);
+          }
+          return newClient;
+        });
+      }
+    })
+  );
+});
+
+// Handle Notification Close (dismissal)
+self.addEventListener('notificationclose', (event) => {
+  const payload = event.notification.data || {};
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    for (const client of clientList) {
+      client.postMessage({
+        type: 'PHONE_NOTIFICATION_CLOSED',
+        payload,
+        tag: event.notification.tag,
+      });
+    }
+  });
+});

@@ -43,6 +43,7 @@ import { primeApi } from '../../services/apiClient';
 import { AddDoctorModal } from '../common/AddDoctorModal';
 import { CareJourneyPatientWidget } from '../common/CareJourneyPatientWidget';
 import { PostConsultationNotificationsWidget } from '../common/PostConsultationNotificationsWidget';
+import { PhoneNotificationBanner } from '../common/PhoneNotificationBanner';
 import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
 import { createGoogleCalendarWebUrl } from '../../services/googleCalendar';
 import {
@@ -297,6 +298,9 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Real Mobile / Phone Notifications Prompt Banner */}
+        <PhoneNotificationBanner />
 
         {/* Offline Banner if effectiveOffline */}
         {effectiveOffline && (
