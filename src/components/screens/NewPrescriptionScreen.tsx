@@ -15,6 +15,11 @@ import {
   Filter,
   AlertCircle,
   ExternalLink,
+  Video,
+  Phone,
+  MessageSquare,
+  Stethoscope,
+  ChevronRight,
 } from 'lucide-react';
 import { ScreenId, Prescription, UserRole } from '../../types';
 import { Header } from '../common/Header';
@@ -24,6 +29,11 @@ import { showToast } from '../../utils/toast';
 import { getStoredPrescriptions } from '../../utils/prescriptionStore';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
 import { PrescriptionPrintModal } from '../common/PrescriptionPrintModal';
+import {
+  getCompletedConsultations,
+  getActiveOrUpcomingConsultations,
+} from '../../utils/appointmentNotifications';
+import { notifyPrescriptionIssued } from '../../services/phoneNotifications';
 
 interface NewPrescriptionScreenProps {
   onNavigate: (screen: ScreenId) => void;
@@ -44,6 +54,115 @@ export const NewPrescriptionScreen: React.FC<NewPrescriptionScreenProps> = ({
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedRxForPrint, setSelectedRxForPrint] = useState<Prescription | null>(null);
+
+  // Consulted patients selector state (required before issuing new Rx)
+  const [isSelectPatientModalOpen, setIsSelectPatientModalOpen] = useState(false);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [selectedConsultedPatient, setSelectedConsultedPatient] = useState<{
+    id: string;
+    name: string;
+    dob?: string;
+    ageGender?: string;
+    allergies?: string[];
+    diagnosis?: string;
+    chiefComplaint?: string;
+  } | null>(null);
+
+  // Retrieve all patients previously consulted (completed + queue alerts)
+  const consultedPatients = useMemo(() => {
+    const completed = getCompletedConsultations();
+    const upcoming = getActiveOrUpcomingConsultations();
+    const all = [...completed, ...upcoming];
+
+    let clinicalRecords: Record<string, any> = {};
+    try {
+      const raw = localStorage.getItem('prime_telecare_clinical_records_v1');
+      if (raw) clinicalRecords = JSON.parse(raw);
+    } catch {}
+
+    const list: Array<{
+      id: string;
+      name: string;
+      date: string;
+      time?: string;
+      type: string;
+      diagnosis?: string;
+      symptoms?: string;
+      status: string;
+    }> = [];
+
+    const seen = new Set<string>();
+
+    for (const c of all) {
+      const name = (c.patientName || '').trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+
+      const dossier = clinicalRecords[c.id] || clinicalRecords[c.appointmentId];
+      const diagnosis = c.consultationSummary?.diagnosis || dossier?.diagnosis || dossier?.assessment || '';
+      const symptoms = c.consultationSummary?.symptoms || dossier?.symptoms || dossier?.subjective || '';
+
+      list.push({
+        id: c.patientId || c.id || `PAT-${Date.now()}`,
+        name,
+        date: c.scheduledDate || 'Today',
+        time: c.scheduledTime,
+        type: c.type || 'Video',
+        diagnosis,
+        symptoms,
+        status: c.status === 'completed' ? 'Concluded Consultation' : 'Active Patient Queue',
+      });
+    }
+
+    // Default Nigerian patient records if none in storage
+    if (list.length === 0) {
+      list.push(
+        {
+          id: 'PAT-001',
+          name: 'Chinedu Okafor',
+          date: 'Nov 20, 2026',
+          time: '10:00 AM',
+          type: 'Video',
+          diagnosis: 'Acute Uncomplicated Malaria (P. falciparum)',
+          symptoms: 'High-grade intermittent fever, chills, severe frontal headache, myalgia',
+          status: 'Concluded Consultation',
+        },
+        {
+          id: 'PAT-002',
+          name: 'Amina Bello',
+          date: 'Nov 19, 2026',
+          time: '02:30 PM',
+          type: 'Voice',
+          diagnosis: 'Acute Bronchitis & Pharyngitis',
+          symptoms: 'Dry hacking cough, sore throat, mild rhinorrhea',
+          status: 'Concluded Consultation',
+        },
+        {
+          id: 'PAT-003',
+          name: 'Ngozi Eze',
+          date: 'Nov 18, 2026',
+          time: '11:15 AM',
+          type: 'Chat',
+          diagnosis: 'Primary Arterial Hypertension (Stage 1)',
+          symptoms: 'Occipital morning throbbing headaches, dizziness',
+          status: 'Concluded Consultation',
+        }
+      );
+    }
+
+    return list;
+  }, [isSelectPatientModalOpen]);
+
+  const filteredConsultedPatients = useMemo(() => {
+    if (!patientSearchQuery.trim()) return consultedPatients;
+    const q = patientSearchQuery.toLowerCase().trim();
+    return consultedPatients.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.diagnosis && p.diagnosis.toLowerCase().includes(q)) ||
+        (p.symptoms && p.symptoms.toLowerCase().includes(q))
+    );
+  }, [consultedPatients, patientSearchQuery]);
 
   // Sync prescriptions on store update events
   useEffect(() => {
@@ -84,6 +203,36 @@ export const NewPrescriptionScreen: React.FC<NewPrescriptionScreenProps> = ({
 
   const handleOpenNewPrescription = () => {
     triggerHaptic('medium');
+    setSelectedRxForEdit(null);
+    setPatientSearchQuery('');
+    setIsSelectPatientModalOpen(true);
+  };
+
+  const handleSelectPatientForRx = (patient: {
+    id: string;
+    name: string;
+    diagnosis?: string;
+    symptoms?: string;
+  }) => {
+    triggerHaptic('selection');
+    setSelectedConsultedPatient({
+      id: patient.id,
+      name: patient.name,
+      diagnosis: patient.diagnosis,
+      chiefComplaint: patient.symptoms,
+      dob: 'Not specified',
+      ageGender: 'Adult',
+      allergies: [],
+    });
+    setIsSelectPatientModalOpen(false);
+    setSelectedRxForEdit(null);
+    setIsComposerOpen(true);
+  };
+
+  const handleManualPatientEntry = () => {
+    triggerHaptic('selection');
+    setSelectedConsultedPatient(null);
+    setIsSelectPatientModalOpen(false);
     setSelectedRxForEdit(null);
     setIsComposerOpen(true);
   };
@@ -406,24 +555,147 @@ export const NewPrescriptionScreen: React.FC<NewPrescriptionScreenProps> = ({
         </div>
       </div>
 
-      {/* Prescription Composer Modal (Used for both Edit and New) */}
+      {/* Consulted Patients Selection Modal (Shows patients consulted before issuing Rx) */}
+      {isSelectPatientModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-nunito animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-900 via-[#022434] to-[#004830] text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
+                  <User className="w-5 h-5 text-emerald-300" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold font-outfit text-base sm:text-lg text-white">
+                    Select Consulted Patient
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    Choose a patient from your consultations to issue an authorized Rx
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSelectPatientModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter by patient name, symptoms, or clinical diagnosis..."
+                  value={patientSearchQuery}
+                  onChange={(e) => setPatientSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white rounded-xl border border-slate-200 text-xs font-nunito text-[#022434] placeholder:text-slate-400 focus:outline-none focus:border-[#006c44] shadow-2xs"
+                />
+              </div>
+            </div>
+
+            {/* Patient List */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 divide-y divide-slate-100">
+              {filteredConsultedPatients.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 space-y-2">
+                  <User className="w-10 h-10 text-slate-300 mx-auto" />
+                  <p className="text-xs font-bold font-outfit text-[#022434]">No matching consulted patients found</p>
+                  <p className="text-[11px] text-slate-400">You can still prescribe manually below.</p>
+                </div>
+              ) : (
+                filteredConsultedPatients.map((patient) => (
+                  <div
+                    key={patient.id}
+                    className="pt-3 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/80 p-3 rounded-2xl transition-colors border border-transparent hover:border-slate-200"
+                  >
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-extrabold font-outfit text-sm text-[#022434]">
+                          {patient.name}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-[#006c44] border border-emerald-200">
+                          {patient.status}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-nunito">
+                        {patient.date} {patient.time ? `• ${patient.time}` : ''} • {patient.type} Consult
+                      </p>
+                      {patient.diagnosis && (
+                        <p className="text-xs text-emerald-950 font-bold font-nunito">
+                          <span className="text-slate-400 font-normal">Dx:</span> {patient.diagnosis}
+                        </p>
+                      )}
+                      {patient.symptoms && (
+                        <p className="text-[11px] text-slate-600 font-nunito line-clamp-1">
+                          <span className="text-slate-400 font-normal">Symptoms:</span> {patient.symptoms}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPatientForRx(patient)}
+                      className="px-4 py-2 bg-[#006c44] hover:bg-[#005233] text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-xs flex items-center justify-center space-x-1.5 shrink-0 active:scale-95 cursor-pointer self-end sm:self-center"
+                    >
+                      <Pill className="w-3.5 h-3.5 text-emerald-300" />
+                      <span>Select & Write Rx</span>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Manual Patient Entry Fallback Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="text-[11px] text-slate-500 text-center sm:text-left">
+                Need to prescribe for a walk-in or unscheduled patient?
+              </span>
+              <button
+                type="button"
+                onClick={handleManualPatientEntry}
+                className="w-full sm:w-auto px-4 py-2 bg-white hover:bg-slate-100 text-[#022434] text-xs font-bold font-outfit rounded-xl border border-slate-300 transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5 text-slate-500" />
+                <span>Enter Patient Manually</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prescription Composer Modal (Pre-populated with selected consulted patient) */}
       <PrescriptionComposerModal
         isOpen={isComposerOpen}
         initialPrescription={selectedRxForEdit}
+        patientInfo={selectedConsultedPatient || undefined}
         onClose={() => {
           setIsComposerOpen(false);
           setSelectedRxForEdit(null);
+          setSelectedConsultedPatient(null);
         }}
         onPrescriptionSaved={(savedRx) => {
+          // Notify patient of new issued e-prescription with chime, system push & vibration
+          try {
+            notifyPrescriptionIssued({
+              doctorName: (savedRx.doctorName || 'Doctor').replace(/^Dr\.\s*/i, ''),
+              medicationCount: savedRx.medications?.length || 1,
+              prescriptionId: savedRx.id,
+            });
+          } catch {}
+
           showToast(
             selectedRxForEdit
               ? `Prescription #${savedRx.referenceNo} updated successfully!`
-              : `New prescription #${savedRx.referenceNo} issued!`,
+              : `New prescription #${savedRx.referenceNo} issued & notification sent to ${savedRx.patientName}!`,
             'success'
           );
           setPrescriptions(getStoredPrescriptions());
           setIsComposerOpen(false);
           setSelectedRxForEdit(null);
+          setSelectedConsultedPatient(null);
         }}
       />
 

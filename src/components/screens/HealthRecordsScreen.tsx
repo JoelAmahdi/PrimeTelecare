@@ -625,17 +625,30 @@ export const HealthRecordsScreen: React.FC<HealthRecordsScreenProps> = ({ user, 
               <FileText className="w-8 h-8" />
             </div>
             <h3 className="text-xl font-bold font-outfit text-[#022434]">No Consultation History</h3>
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic('selection');
-                onNavigate('doctor-discovery');
-              }}
-              className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Book Your First Consultation</span>
-            </button>
+            {user?.role === 'doctor' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onNavigate('doctor-home');
+                }}
+                className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+              >
+                <span>Return to Clinical Dashboard</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic('selection');
+                  onNavigate('doctor-discovery');
+                }}
+                className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Book Your First Consultation</span>
+              </button>
+            )}
           </div>
         ) : (
           <>

@@ -123,10 +123,10 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
           <h2 className="font-extrabold font-outfit text-lg text-[#022434]">Clinician Not Found</h2>
           <button
             type="button"
-            onClick={() => onNavigate('doctor-discovery')}
+            onClick={() => onNavigate(role === 'doctor' ? 'doctor-home' : 'doctor-discovery')}
             className="w-full py-3 bg-[#006c44] hover:bg-[#022434] text-white font-bold font-outfit text-xs rounded-xl cursor-pointer"
           >
-            Back to Find Doctors
+            {role === 'doctor' ? 'Back to Dashboard' : 'Back to Find Doctors'}
           </button>
         </div>
       </div>
@@ -187,7 +187,7 @@ export const DoctorProfileScreen: React.FC<DoctorProfileScreenProps> = ({
       <Header
         title=""
         showBack
-        onBack={() => onNavigate('doctor-discovery')}
+        onBack={() => onNavigate(role === 'doctor' ? 'doctor-home' : 'doctor-discovery')}
         showLike
         isLiked={isLiked}
         onLikeToggle={() => setIsLiked(!isLiked)}

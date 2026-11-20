@@ -22,11 +22,6 @@ import {
   Info,
   CheckCircle2,
   KeyRound,
-  Smartphone,
-  Volume2,
-  MessageSquare,
-  Pill,
-  Sparkles,
 } from 'lucide-react';
 import { ScreenId, User } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
@@ -39,14 +34,6 @@ import { QuickLoginSetupModal } from '../common/QuickLoginSetupModal';
 import {
   isGoogleCalendarConnected,
 } from '../../services/googleCalendar';
-import {
-  getPhoneNotificationSettings,
-  updatePhoneNotificationSettings,
-  getPhoneNotificationPermission,
-  requestPhoneNotificationPermission,
-  sendTestPhoneNotification,
-  PhoneNotificationSettings,
-} from '../../services/phoneNotifications';
 
 interface SettingsScreenProps {
   user: User;
@@ -59,11 +46,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [calendarConnected, setCalendarConnected] = useState(isGoogleCalendarConnected());
 
-  // Phone & Device Notification Preferences
-  const [phoneNotifSettings, setPhoneNotifSettings] = useState<PhoneNotificationSettings>(getPhoneNotificationSettings());
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>(getPhoneNotificationPermission());
-  const [isTestingNotification, setIsTestingNotification] = useState(false);
-
   // Security PIN Lock state
   const [pinLockEnabled, setPinLockEnabled] = useState<boolean>(true);
   const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
@@ -73,8 +55,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
     const settings = getBiometricSettings();
     setPinLockEnabled(settings.enabled);
     setCalendarConnected(isGoogleCalendarConnected());
-    setPhoneNotifSettings(getPhoneNotificationSettings());
-    setNotifPermission(getPhoneNotificationPermission());
   };
 
   useEffect(() => {
@@ -84,13 +64,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
 
     window.addEventListener('biometric-settings-updated', handleUpdate);
     window.addEventListener('google-calendar-auth-changed', handleCalendarUpdate);
-    window.addEventListener('phone-notifications-settings-updated', handleUpdate);
-    window.addEventListener('phone-notification-permission-changed', handleUpdate);
     return () => {
       window.removeEventListener('biometric-settings-updated', handleUpdate);
       window.removeEventListener('google-calendar-auth-changed', handleCalendarUpdate);
-      window.removeEventListener('phone-notifications-settings-updated', handleUpdate);
-      window.removeEventListener('phone-notification-permission-changed', handleUpdate);
     };
   }, []);
 
@@ -282,238 +258,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, onNavigate
             <span className="font-semibold font-outfit text-[#022434] text-sm">Rate us</span>
           </div>
           <span className="text-xs font-nunito text-slate-400 font-medium">It's important for us</span>
-        </div>
-
-        {/* 3. Phone & Native Device Push Notifications Card */}
-        <div className="bg-white rounded-[22px] border border-slate-200/90 shadow-xs overflow-hidden divide-y divide-slate-100">
-          {/* Master Toggle Row */}
-          <div className="p-4 sm:p-5 flex items-center justify-between gap-3 bg-gradient-to-r from-slate-50/50 to-white">
-            <div className="flex items-center space-x-3.5 min-w-0">
-              <div className="p-2.5 rounded-2xl bg-emerald-50 text-[#006c44] border border-emerald-200/60 shrink-0">
-                <Smartphone className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                  <span className="font-extrabold font-outfit text-[#022434] text-sm">
-                    Phone & Device Notifications
-                  </span>
-                  <span
-                    className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                      notifPermission === 'granted'
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        : notifPermission === 'denied'
-                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                        : 'bg-amber-100 text-amber-800 border border-amber-300'
-                    }`}
-                  >
-                    {notifPermission === 'granted'
-                      ? '✓ Active & Ringing'
-                      : notifPermission === 'denied'
-                      ? '✕ Blocked in Browser'
-                      : '⚡ Tap to Enable'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 font-nunito mt-0.5">
-                  Rings phone for incoming calls, vibrates for new texts & clinical updates.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={async () => {
-                triggerHaptic('medium');
-                if (!phoneNotifSettings.enabled || notifPermission !== 'granted') {
-                  const perm = await requestPhoneNotificationPermission();
-                  setNotifPermission(perm);
-                  if (perm === 'granted') {
-                    updatePhoneNotificationSettings({ enabled: true });
-                    showToast('Phone notifications enabled!', 'success');
-                  } else if (perm === 'denied') {
-                    showToast('Notification permission blocked in browser settings', 'warning');
-                  } else {
-                    updatePhoneNotificationSettings({ enabled: true });
-                  }
-                } else {
-                  updatePhoneNotificationSettings({ enabled: false });
-                  showToast('Phone notifications paused', 'info');
-                }
-              }}
-              className={`w-12 h-6.5 rounded-full p-0.5 transition-colors duration-200 flex items-center shrink-0 cursor-pointer ${
-                phoneNotifSettings.enabled && notifPermission === 'granted'
-                  ? 'bg-[#006c44] justify-end'
-                  : 'bg-slate-300 justify-start'
-              }`}
-            >
-              <span className="w-5.5 h-5.5 bg-white rounded-full shadow-md transform transition-transform" />
-            </button>
-          </div>
-
-          {/* Granular Sub-options (visible when enabled) */}
-          {phoneNotifSettings.enabled && (
-            <>
-              {/* Call Ringtones & Vibrations */}
-              <div className="px-5 py-3 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <PhoneCall className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div>
-                    <span className="font-semibold font-outfit text-xs text-[#022434] block">
-                      Incoming Call Ringtones & Vibrations
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      Rings your device continuously until answered or declined
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    updatePhoneNotificationSettings({ callsEnabled: !phoneNotifSettings.callsEnabled });
-                  }}
-                  className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                    phoneNotifSettings.callsEnabled ? 'bg-[#006c44] justify-end' : 'bg-slate-200 justify-start'
-                  }`}
-                >
-                  <span className="w-4 h-4 bg-white rounded-full shadow-xs" />
-                </button>
-              </div>
-
-              {/* Chat & Text Message Alerts */}
-              <div className="px-5 py-3 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <MessageSquare className="w-4 h-4 text-blue-600 shrink-0" />
-                  <div>
-                    <span className="font-semibold font-outfit text-xs text-[#022434] block">
-                      Chat & Text Message Chimes
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      Dual-tone chime & double-pulse vibration for instant messages
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    updatePhoneNotificationSettings({ textsEnabled: !phoneNotifSettings.textsEnabled });
-                  }}
-                  className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                    phoneNotifSettings.textsEnabled ? 'bg-[#006c44] justify-end' : 'bg-slate-200 justify-start'
-                  }`}
-                >
-                  <span className="w-4 h-4 bg-white rounded-full shadow-xs" />
-                </button>
-              </div>
-
-              {/* Appointment Alerts */}
-              <div className="px-5 py-3 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Calendar className="w-4 h-4 text-purple-600 shrink-0" />
-                  <div>
-                    <span className="font-semibold font-outfit text-xs text-[#022434] block">
-                      Appointments & Reschedules
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      15-min start reminder and schedule change notices
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    updatePhoneNotificationSettings({ appointmentsEnabled: !phoneNotifSettings.appointmentsEnabled });
-                  }}
-                  className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                    phoneNotifSettings.appointmentsEnabled ? 'bg-[#006c44] justify-end' : 'bg-slate-200 justify-start'
-                  }`}
-                >
-                  <span className="w-4 h-4 bg-white rounded-full shadow-xs" />
-                </button>
-              </div>
-
-              {/* Prescriptions & Deliveries */}
-              <div className="px-5 py-3 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Pill className="w-4 h-4 text-amber-600 shrink-0" />
-                  <div>
-                    <span className="font-semibold font-outfit text-xs text-[#022434] block">
-                      Prescriptions & Medication Refills
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      Immediate alert when doctor signs digital Rx
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    updatePhoneNotificationSettings({ prescriptionsEnabled: !phoneNotifSettings.prescriptionsEnabled });
-                  }}
-                  className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                    phoneNotifSettings.prescriptionsEnabled ? 'bg-[#006c44] justify-end' : 'bg-slate-200 justify-start'
-                  }`}
-                >
-                  <span className="w-4 h-4 bg-white rounded-full shadow-xs" />
-                </button>
-              </div>
-
-              {/* Audio Chimes Switch */}
-              <div className="px-5 py-3 flex items-center justify-between bg-slate-50/50">
-                <div className="flex items-center space-x-3">
-                  <Volume2 className="w-4 h-4 text-slate-600 shrink-0" />
-                  <div>
-                    <span className="font-semibold font-outfit text-xs text-[#022434] block">
-                      Acoustic Sound & Chimes
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      Plays clean audio tones alongside mobile vibration
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('light');
-                    updatePhoneNotificationSettings({ soundEnabled: !phoneNotifSettings.soundEnabled });
-                  }}
-                  className={`w-9 h-5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                    phoneNotifSettings.soundEnabled ? 'bg-[#006c44] justify-end' : 'bg-slate-200 justify-start'
-                  }`}
-                >
-                  <span className="w-4 h-4 bg-white rounded-full shadow-xs" />
-                </button>
-              </div>
-
-              {/* Test Phone Notification Button */}
-              <div className="p-3 bg-white flex justify-center">
-                <button
-                  type="button"
-                  disabled={isTestingNotification}
-                  onClick={async () => {
-                    triggerHaptic('medium');
-                    setIsTestingNotification(true);
-                    try {
-                      const sent = await sendTestPhoneNotification();
-                      if (sent) {
-                        showToast('Test phone alert sent! Check your notification shade.', 'success');
-                      } else {
-                        showToast('Please allow notification permission first.', 'warning');
-                      }
-                    } finally {
-                      setIsTestingNotification(false);
-                    }
-                  }}
-                  className="w-full py-2.5 bg-slate-100 hover:bg-emerald-50 hover:text-[#006c44] text-[#022434] font-extrabold font-outfit text-xs rounded-xl border border-slate-200 transition-all flex items-center justify-center space-x-1.5 cursor-pointer active:scale-98"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isTestingNotification ? 'Sending Alert...' : 'Test Phone Ringtone & Notification'}</span>
-                </button>
-              </div>
-            </>
-          )}
         </div>
 
         {/* Google Calendar Integration Card */}

@@ -56,6 +56,8 @@ interface PrescriptionComposerModalProps {
     dob?: string;
     ageGender?: string;
     allergies?: string[];
+    diagnosis?: string;
+    chiefComplaint?: string;
   };
   consultationId?: string;
   consultationType?: 'Video' | 'Voice' | 'Chat';
@@ -181,8 +183,8 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
       setPatientDob(patientInfo?.dob || 'Not specified');
       setPatientAgeGender(patientInfo?.ageGender || 'Adult');
       setAllergies(patientInfo?.allergies || []);
-      setDiagnosis('');
-      setChiefComplaint('');
+      setDiagnosis(patientInfo?.diagnosis || '');
+      setChiefComplaint(patientInfo?.chiefComplaint || '');
       setFollowUpTime('1 Week');
       setSelectedLabTests([]);
       setMedications([

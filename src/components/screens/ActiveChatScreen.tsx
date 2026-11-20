@@ -4,7 +4,7 @@ import { StatusBar } from '../common/StatusBar';
 import {
   Video, MessageSquare, Phone, Search, Filter, Clock, Calendar, CheckCircle2, FileText, ChevronRight,
   ChevronDown, ChevronUp, ArrowUpDown, User, Sparkles, ArrowLeft, Send, Paperclip, Camera, MoreHorizontal,
-  Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill
+  Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill, Users
 } from 'lucide-react';
 import { ScreenId, ChatMessage, Doctor, UserRole, BookingSummary, ConsultationSummaryData } from '../../types';
 import { mockDoctors, currentUserPatient, currentUserDoctor } from '../../data/mockData';
@@ -959,24 +959,47 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                   <MessageSquare className="w-8 h-8" />
                 </div>
                 <h4 className="font-bold font-outfit text-[#022434] text-lg">
-                  {consultationsList.length === 0 ? 'No consultations booked yet' : 'No consultations match your search'}
+                  {role === 'doctor'
+                    ? consultationsList.length === 0
+                      ? 'No active patient consultations'
+                      : 'No consultations match your search'
+                    : consultationsList.length === 0
+                    ? 'No consultations booked yet'
+                    : 'No consultations match your search'}
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto font-nunito leading-relaxed">
-                  {consultationsList.length === 0
+                  {role === 'doctor'
+                    ? consultationsList.length === 0
+                      ? 'When patients book or check in for consultations, their live sessions and queue items will appear here for you to join.'
+                      : 'No patient sessions match your current search or filter criteria. Try resetting your active filters.'
+                    : consultationsList.length === 0
                     ? 'Connect with verified Nigerian doctors for real-time video, voice, and encrypted chat consultations.'
                     : 'No consultations match your current search or filter criteria. Try resetting your active filters.'}
                 </p>
                 {consultationsList.length === 0 ? (
-                  <button
-                    onClick={() => {
-                      triggerHaptic('selection');
-                      onNavigate('doctor-discovery');
-                    }}
-                    className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Find & Book a Doctor</span>
-                  </button>
+                  role === 'doctor' ? (
+                    <button
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        onNavigate('doctor-home');
+                      }}
+                      className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>View Patient Queue</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        onNavigate('doctor-discovery');
+                      }}
+                      className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Find & Book a Doctor</span>
+                    </button>
+                  )
                 ) : (
                   <button
                     onClick={() => {

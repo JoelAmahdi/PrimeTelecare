@@ -12,6 +12,7 @@ export interface AppointmentAlert {
   doctorSpecialty: string;
   doctorAvatar: string;
   patientName: string;
+  patientId?: string;
   scheduledTime: string;
   scheduledDate: string;
   type: 'Video' | 'Voice' | 'Chat';
