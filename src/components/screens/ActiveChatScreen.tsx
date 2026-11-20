@@ -6,13 +6,14 @@ import {
   ChevronDown, ChevronUp, ArrowUpDown, User, Sparkles, ArrowLeft, Send, Paperclip, Camera, MoreHorizontal,
   Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill
 } from 'lucide-react';
-import { ScreenId, ChatMessage, Doctor, UserRole, BookingSummary } from '../../types';
+import { ScreenId, ChatMessage, Doctor, UserRole, BookingSummary, ConsultationSummaryData } from '../../types';
 import { mockDoctors, currentUserPatient, currentUserDoctor } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { ConsultationSummaryPDFModal } from '../common/ConsultationSummaryPDFModal';
 import { ClinicalDocumentationModal } from '../common/ClinicalDocumentationModal';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
+import { ConsultationSummaryModal } from '../common/ConsultationSummaryModal';
 import { NotificationsDrawer } from '../common/NotificationsDrawer';
 import { processJoinOrPayConsultation, isConsultationPaid } from '../../utils/consultationPayment';
 import { CollapsibleSection } from '../common/CollapsibleSection';
@@ -116,13 +117,43 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
     }
   };
 
-  const handleEndChatConsultation = async () => {
+  const [isConsultationSummaryModalOpen, setIsConsultationSummaryModalOpen] = useState(false);
+
+  const handleEndChatConsultation = async (summaryData?: ConsultationSummaryData) => {
     if (!activeSession) return;
+    if (role === 'doctor' && !summaryData) {
+      setIsConsultationSummaryModalOpen(true);
+      return;
+    }
+
     triggerHaptic('heavy');
-    completeConsultation(activeSession.id);
-    await primeApi.completeAppointment(activeSession.id).catch(() => {});
-    showToast('Consultation concluded and archived under Completed.', 'success');
+    completeConsultation(activeSession.id, summaryData, {
+      doctorName: activeSession.doctorName,
+      patientName: activeSession.patientName,
+      type: 'Chat',
+    });
+    await primeApi.completeAppointment(activeSession.id, summaryData).catch(() => {});
+
+    if (summaryData) {
+      const conclusionMsg: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        sender: 'doctor',
+        senderName: activeSession.doctorName,
+        text: `📋 Official Clinical Summary & Consultation Concluded:\n• Diagnosis: ${summaryData.diagnosis}\n• Treatment Plan: ${summaryData.treatment}${summaryData.doctorNotes ? `\n• Notes: ${summaryData.doctorNotes}` : ''}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'delivered',
+      };
+      setMessages((prev) => [...prev, conclusionMsg]);
+      primeApi.sendChatMessage(activeSession.id, {
+        sender: conclusionMsg.sender,
+        senderName: conclusionMsg.senderName,
+        text: conclusionMsg.text || '',
+      }).catch(() => {});
+    }
+
+    showToast('Consultation concluded and summary archived under Completed.', 'success');
     window.dispatchEvent(new Event('appointment-alerts-updated'));
+    setIsConsultationSummaryModalOpen(false);
     setActiveSession(null);
     if (role === 'patient') {
       onNavigate('post-consultation-journey');
@@ -444,7 +475,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
               )}
               <button
                 type="button"
-                onClick={handleEndChatConsultation}
+                onClick={() => handleEndChatConsultation()}
                 className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 font-bold font-outfit text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center space-x-1"
                 title="Conclude Consultation"
               >
@@ -1007,6 +1038,22 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
               },
             ]);
           }
+        }}
+      />
+
+      {/* End-of-Consultation Clinical Summary Modal (Doctor) */}
+      <ConsultationSummaryModal
+        isOpen={isConsultationSummaryModalOpen}
+        onClose={() => setIsConsultationSummaryModalOpen(false)}
+        patientName={activeSession?.patientName || 'Patient'}
+        patientId="pat-1"
+        doctorName={activeSession?.doctorName || 'Doctor'}
+        doctorSpecialty={activeSession?.specialty || 'General Practice'}
+        doctorLicense="MDCN Verified"
+        appointmentId={activeSession?.id}
+        consultationType="Chat"
+        onSaveSummary={(summary) => {
+          handleEndChatConsultation(summary);
         }}
       />
 

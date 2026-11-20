@@ -1,6 +1,8 @@
 import { triggerHaptic } from './haptics';
 import { showPhoneNotification } from '../services/phoneNotifications';
 import { playNotificationChime } from './audioTones';
+import { ConsultationSummaryData, StructuredClinicalRecord } from '../types';
+import { getStoredCareJourneyPlan, saveStoredCareJourneyPlan } from './careJourney';
 
 export interface AppointmentAlert {
   id: string;
@@ -23,6 +25,7 @@ export interface AppointmentAlert {
   rescheduleReason?: string;
   previousDate?: string;
   previousTime?: string;
+  consultationSummary?: ConsultationSummaryData;
 }
 
 export interface RescheduleNotice {
@@ -215,14 +218,100 @@ export function cancelConsultation(id: string): void {
 }
 
 /**
- * Marks consultation as completed
+ * Marks consultation as completed, stores clinical summary, updates records & care journey
  */
-export function completeConsultation(id: string): void {
+export function completeConsultation(
+  id: string,
+  summary?: ConsultationSummaryData,
+  fallbackMeta?: Partial<AppointmentAlert>
+): AppointmentAlert {
   const alerts = getStoredAppointmentAlerts();
-  const updated = alerts.map((a) =>
-    a.id === id || a.appointmentId === id ? { ...a, status: 'completed' as const } : a
-  );
-  saveAppointmentAlerts(updated);
+  const index = alerts.findIndex((a) => a.id === id || a.appointmentId === id);
+
+  let targetAlert: AppointmentAlert;
+
+  if (index >= 0) {
+    targetAlert = {
+      ...alerts[index],
+      status: 'completed',
+      consultationSummary: summary || alerts[index].consultationSummary,
+    };
+    alerts[index] = targetAlert;
+  } else {
+    // Session wasn't previously in alerts list (e.g. instant or newly booked) - add it to completed
+    const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const nowTimeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    targetAlert = {
+      id: id || `cns-${Date.now()}`,
+      appointmentId: id || `cns-${Date.now()}`,
+      doctorId: fallbackMeta?.doctorId || summary?.doctorLicense || '',
+      doctorName: fallbackMeta?.doctorName || summary?.doctorName || 'Attending Physician',
+      doctorSpecialty: fallbackMeta?.doctorSpecialty || summary?.doctorSpecialty || 'General Practice',
+      doctorAvatar: fallbackMeta?.doctorAvatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
+      patientName: fallbackMeta?.patientName || summary?.patientName || 'Patient',
+      scheduledDate: fallbackMeta?.scheduledDate || todayStr,
+      scheduledTime: fallbackMeta?.scheduledTime || nowTimeStr,
+      type: fallbackMeta?.type || summary?.consultationType || 'Video',
+      startTimeTimestamp: Date.now(),
+      dismissed: false,
+      status: 'completed',
+      consultationSummary: summary,
+    };
+    alerts.unshift(targetAlert);
+  }
+
+  saveAppointmentAlerts(alerts);
+
+  // If a consultation summary was provided, persist structured clinical record and care journey
+  if (summary) {
+    try {
+      // 1. Structured Clinical Record for EHR & PDF
+      const existingRaw = localStorage.getItem('prime_telecare_clinical_records_v1');
+      const existingRecords: StructuredClinicalRecord[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const newRecord: StructuredClinicalRecord = {
+        id: `CR-${Date.now()}`,
+        consultationId: targetAlert.appointmentId || targetAlert.id,
+        patientId: summary.patientId || 'pat-1',
+        patientName: summary.patientName || targetAlert.patientName,
+        doctorName: summary.doctorName || targetAlert.doctorName,
+        doctorSpecialty: summary.doctorSpecialty || targetAlert.doctorSpecialty,
+        doctorLicense: summary.doctorLicense || 'MDCN Verified',
+        dateStr: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        timestamp: Date.now(),
+        patientComplaint: summary.symptoms,
+        diagnosis: summary.diagnosis,
+        carePlan: summary.treatment,
+        markdownNotes: `## Telehealth Clinical Consultation Summary\n\n### 🩺 Reported Symptoms & Presenting Complaints\n${summary.symptoms}\n\n### 🔬 Clinical Diagnosis\n${summary.diagnosis}\n\n### 💊 Prescribed Treatment & Care Instructions\n${summary.treatment}${summary.doctorNotes ? `\n\n### 📝 Additional Clinical Advice\n${summary.doctorNotes}` : ''}`,
+        exportPermissionStatus: 'granted',
+        exportGrantedBy: summary.doctorName || targetAlert.doctorName,
+        exportGrantedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      };
+      localStorage.setItem('prime_telecare_clinical_records_v1', JSON.stringify([newRecord, ...existingRecords]));
+
+      // 2. Update Care Journey Plan with Consultation Summary (Symptoms, Diagnosis, Treatment)
+      const currentPlan = getStoredCareJourneyPlan(summary.patientId || 'pat-1');
+      if (currentPlan) {
+        const updatedPlan = {
+          ...currentPlan,
+          status: 'approved_by_doctor' as const,
+          approvedAt: new Date().toISOString(),
+          symptoms: summary.symptoms,
+          diagnosis: summary.diagnosis,
+          treatment: summary.treatment,
+          followUpPlanNote: summary.treatment,
+          doctorNotes: summary.treatment,
+          consultationSummary: summary,
+        };
+        saveStoredCareJourneyPlan(updatedPlan);
+      }
+
+      window.dispatchEvent(new CustomEvent('consultation-summary-saved', { detail: { summary, record: newRecord } }));
+    } catch (e) {
+      console.error('Error saving clinical summary record', e);
+    }
+  }
+
+  return targetAlert;
 }
 
 /**

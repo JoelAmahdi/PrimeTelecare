@@ -387,14 +387,45 @@ export const PostConsultationJourneyScreen: React.FC<PostConsultationJourneyScre
               </div>
             )}
 
-            {/* Follow-Up Plan Note */}
-            {planNote && (
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 space-y-1.5">
-                <div className="flex items-center space-x-1.5 font-extrabold text-[#022434] font-outfit">
-                  <FileText className="w-4 h-4 text-[#006c44]" />
-                  <span>Follow-Up Plan Note</span>
+            {/* Consultation Summary */}
+            {(plan.diagnosis || plan.symptoms || plan.treatment || planNote) && (
+              <div className="p-4.5 bg-emerald-50/50 border border-emerald-200/90 rounded-2xl text-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5 font-extrabold text-[#022434] font-outfit">
+                    <FileText className="w-4 h-4 text-[#006c44]" />
+                    <span>Doctor's Consultation Summary</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[#006c44] text-[10px] font-bold">
+                    Doctor Verified
+                  </span>
                 </div>
-                <p className="leading-relaxed whitespace-pre-line">{planNote}</p>
+
+                <div className="space-y-2.5 text-xs font-nunito">
+                  {plan.symptoms && (
+                    <div className="bg-white p-3 rounded-xl border border-emerald-100/80">
+                      <span className="font-bold text-slate-600 block text-[11px] font-outfit mb-0.5">
+                        Reported Symptoms:
+                      </span>
+                      <p className="text-slate-800">{plan.symptoms}</p>
+                    </div>
+                  )}
+                  {plan.diagnosis && (
+                    <div className="bg-white p-3 rounded-xl border border-emerald-100/80">
+                      <span className="font-bold text-slate-600 block text-[11px] font-outfit mb-0.5">
+                        Clinical Diagnosis:
+                      </span>
+                      <p className="text-emerald-950 font-bold">{plan.diagnosis}</p>
+                    </div>
+                  )}
+                  {(plan.treatment || planNote) && (
+                    <div className="bg-white p-3 rounded-xl border border-emerald-100/80">
+                      <span className="font-bold text-slate-600 block text-[11px] font-outfit mb-0.5">
+                        Treatment Plan & Instructions:
+                      </span>
+                      <p className="text-slate-700 leading-relaxed whitespace-pre-line">{plan.treatment || planNote}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

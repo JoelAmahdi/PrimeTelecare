@@ -267,11 +267,11 @@ export const primeApi = {
     }
   },
 
-  async completeAppointment(id: string): Promise<boolean> {
+  async completeAppointment(id: string, summary?: any): Promise<boolean> {
     try {
       await request(`/appointments/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ status: 'completed' }),
+        body: JSON.stringify({ status: 'completed', consultationSummary: summary }),
       });
       return true;
     } catch {

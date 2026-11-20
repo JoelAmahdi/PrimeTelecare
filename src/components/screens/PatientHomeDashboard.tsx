@@ -153,6 +153,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
     loadAlerts();
     loadReschedules();
     window.addEventListener('appointment-alerts-updated', loadConsultations);
+    window.addEventListener('consultation-summary-saved', loadConsultations);
     window.addEventListener('consultation-payment-updated', loadConsultations);
     window.addEventListener('reminders-updated', loadAlerts);
     window.addEventListener('drug-purchase-notifications-updated', loadAlerts);
@@ -160,6 +161,7 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
     window.addEventListener('reschedule-notices-updated', loadReschedules);
     return () => {
       window.removeEventListener('appointment-alerts-updated', loadConsultations);
+      window.removeEventListener('consultation-summary-saved', loadConsultations);
       window.removeEventListener('consultation-payment-updated', loadConsultations);
       window.removeEventListener('reminders-updated', loadAlerts);
       window.removeEventListener('drug-purchase-notifications-updated', loadAlerts);
@@ -769,10 +771,77 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                           </div>
                         </div>
 
+                        {/* Consultation Clinical Summary (Symptoms, Diagnosis, Treatment) */}
+                        {(() => {
+                          const summary = consult.consultationSummary || (() => {
+                            try {
+                              const recRaw = localStorage.getItem('prime_telecare_clinical_records_v1');
+                              if (recRaw) {
+                                const recs: StructuredClinicalRecord[] = JSON.parse(recRaw);
+                                const match = recs.find((r) => r.consultationId === consult.id || r.consultationId === consult.appointmentId);
+                                if (match) {
+                                  return {
+                                    symptoms: match.patientComplaint || '',
+                                    diagnosis: match.diagnosis || '',
+                                    treatment: match.carePlan || '',
+                                  };
+                                }
+                              }
+                            } catch {}
+                            return null;
+                          })();
+
+                          if (!summary || (!summary.symptoms && !summary.diagnosis && !summary.treatment)) {
+                            return null;
+                          }
+
+                          return (
+                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2.5 text-xs font-nunito">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-1.5 font-bold font-outfit text-[#022434]">
+                                  <FileText className="w-3.5 h-3.5 text-[#006c44]" />
+                                  <span>Doctor's Consultation Summary</span>
+                                </div>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#006c44] text-[10px] font-bold border border-emerald-200">
+                                  Clinical Dossier
+                                </span>
+                              </div>
+
+                              <div className="space-y-2">
+                                {summary.symptoms && (
+                                  <div className="bg-white p-2.5 rounded-xl border border-slate-100">
+                                    <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500 block mb-0.5 font-outfit">
+                                      Reported Symptoms:
+                                    </span>
+                                    <p className="text-slate-700">{summary.symptoms}</p>
+                                  </div>
+                                )}
+                                {summary.diagnosis && (
+                                  <div className="bg-white p-2.5 rounded-xl border border-slate-100">
+                                    <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500 block mb-0.5 font-outfit">
+                                      Diagnosis:
+                                    </span>
+                                    <p className="text-emerald-950 font-bold">{summary.diagnosis}</p>
+                                  </div>
+                                )}
+                                {summary.treatment && (
+                                  <div className="bg-white p-2.5 rounded-xl border border-slate-100">
+                                    <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500 block mb-0.5 font-outfit">
+                                      Treatment Plan & Care Instructions:
+                                    </span>
+                                    <p className="text-slate-700 leading-relaxed whitespace-pre-line">{summary.treatment}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
                           <button
                             onClick={() => {
                               triggerHaptic('selection');
+                              const summary = consult.consultationSummary;
                               const structuredRecord: StructuredClinicalRecord = {
                                 id: consult.appointmentId || consult.id,
                                 patientId: user.id || '',
@@ -782,15 +851,20 @@ export const PatientHomeDashboard: React.FC<PatientHomeDashboardProps> = ({
                                 doctorLicense: 'MDCN Verified',
                                 dateStr: consult.scheduledDate || 'Completed',
                                 timestamp: consult.startTimeTimestamp || Date.now(),
-                                markdownNotes: `## Telehealth Consultation Summary\n- **Modality**: ${consult.type} Call\n- **Consultant**: ${consult.doctorName} (${consult.doctorSpecialty})\n- **Status**: Completed & Concluded\n- **Care Continuity**: Clinical encounter archived under confidential health records.`,
+                                patientComplaint: summary?.symptoms || 'Clinical Consultation Review',
+                                diagnosis: summary?.diagnosis || 'General Clinical Review',
+                                carePlan: summary?.treatment || 'Care plan recorded and archived.',
+                                markdownNotes: summary
+                                  ? `## Official Clinical Consultation Dossier\n\n### 🩺 Reported Symptoms & Chief Complaint\n${summary.symptoms}\n\n### 🔬 Clinical Diagnosis\n${summary.diagnosis}\n\n### 💊 Prescribed Treatment & Care Plan\n${summary.treatment}${summary.doctorNotes ? `\n\n### 📝 Physician Instructions\n${summary.doctorNotes}` : ''}\n\n---\n*Verified Telehealth Encounter archived under NDPA statutory health vault.*`
+                                  : `## Telehealth Consultation Summary\n- **Modality**: ${consult.type} Call\n- **Consultant**: ${consult.doctorName} (${consult.doctorSpecialty})\n- **Status**: Completed & Concluded\n- **Care Continuity**: Clinical encounter archived under confidential health records.`,
                               };
                               setSelectedRecordForSummary(structuredRecord);
                               setIsSummaryModalOpen(true);
                             }}
-                            className="flex-1 py-3 px-4 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200/80 font-bold font-outfit text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                            className="flex-1 py-3 px-4 bg-emerald-50 hover:bg-emerald-100 text-[#006c44] border border-emerald-200/90 font-bold font-outfit text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center space-x-2 cursor-pointer"
                           >
-                            <FileText className="w-4 h-4 text-blue-700" />
-                            <span>EHR Summary</span>
+                            <FileText className="w-4 h-4 text-[#006c44]" />
+                            <span>View Full Consultation Dossier</span>
                           </button>
                           <button
                             onClick={() => {

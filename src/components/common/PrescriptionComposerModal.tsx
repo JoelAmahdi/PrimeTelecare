@@ -129,8 +129,23 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
   const docSpecialty = doctorInfo?.specialty || 'General Practice';
   const docClinic = doctorInfo?.clinic || 'Prime Telecare Specialist Clinic';
 
+  const prevIsOpenRef = React.useRef(false);
+  const prevRxIdRef = React.useRef<string | undefined>(undefined);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      prevIsOpenRef.current = false;
+      prevRxIdRef.current = undefined;
+      return;
+    }
+
+    const rxId = initialPrescription?.id;
+    // Prevent re-initialization if already open with same prescription
+    if (prevIsOpenRef.current && prevRxIdRef.current === rxId) {
+      return;
+    }
+    prevIsOpenRef.current = true;
+    prevRxIdRef.current = rxId;
 
     if (initialPrescription) {
       // Load existing prescription for editing
@@ -185,7 +200,7 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
       setIsDigitallySigned(true);
       setRestrictionError(null);
     }
-  }, [isOpen, initialPrescription, patientInfo]);
+  }, [isOpen, initialPrescription]);
 
   if (!isOpen) return null;
 
@@ -338,8 +353,14 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white rounded-[28px] w-full max-w-2xl shadow-2xl border border-slate-200/80 my-auto overflow-hidden flex flex-col max-h-[92vh]">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-[28px] w-full max-w-2xl shadow-2xl border border-slate-200/80 my-auto overflow-hidden flex flex-col max-h-[92vh]"
+      >
         {/* Header */}
         <div className="px-6 py-4.5 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center space-x-3">
@@ -530,12 +551,20 @@ export const PrescriptionComposerModal: React.FC<PrescriptionComposerModalProps>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
                     {/* Drug Name */}
                     <div className="sm:col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-600 mb-0.5">
+                      <label
+                        htmlFor={`drug-name-${med.id}`}
+                        className="block text-[11px] font-bold text-slate-600 mb-0.5"
+                      >
                         Drug Name & Formulation <span className="text-rose-500">*</span>
                       </label>
                       <input
+                        id={`drug-name-${med.id}`}
+                        name={`drugName_${med.id}`}
                         type="text"
                         required
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
                         placeholder="e.g. Artemether / Lumefantrine"
                         value={med.drugName}
                         onChange={(e) => handleMedChange(med.id, 'drugName', e.target.value)}

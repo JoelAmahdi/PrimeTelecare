@@ -223,6 +223,22 @@ export interface Doctor {
   };
 }
 
+export interface ConsultationSummaryData {
+  symptoms: string;
+  diagnosis: string;
+  treatment: string;
+  doctorNotes?: string;
+  doctorName?: string;
+  doctorSpecialty?: string;
+  doctorLicense?: string;
+  patientName?: string;
+  patientId?: string;
+  appointmentId?: string;
+  consultationType?: 'Video' | 'Voice' | 'Chat';
+  completedAt?: string;
+  timestamp?: number;
+}
+
 export interface Appointment {
   id: string;
   doctorId: string;
@@ -238,6 +254,7 @@ export interface Appointment {
   status: 'upcoming' | 'completed' | 'cancelled';
   price: number;
   notes?: string;
+  consultationSummary?: ConsultationSummaryData;
 }
 
 export interface Medication {
@@ -451,6 +468,10 @@ export interface CareJourneyPlan {
   followUpDate?: string;
   followUpPlanNote?: string;
   doctorNotes?: string;
+  symptoms?: string;
+  diagnosis?: string;
+  treatment?: string;
+  consultationSummary?: ConsultationSummaryData;
 }
 
 export type ScreenId = 

@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
 import { Video, Clock, ChevronRight, ChevronDown, CheckCircle2, Users, ArrowUpRight, Stethoscope, WifiOff, FileDown, Lock, FileText, CreditCard, ArrowRight, ShieldCheck, Share2, Copy, Check, X, Zap, AlertCircle, Calendar, Phone, MessageSquare } from 'lucide-react';
-import { ScreenId, User } from '../../types';
+import { ScreenId, User, ConsultationSummaryData } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { useHealthRecordPermission } from '../../utils/healthRecordPermissions';
 import { NextAppointmentBanner } from '../common/NextAppointmentBanner';
 import { ClinicalDocumentationModal } from '../common/ClinicalDocumentationModal';
+import { ConsultationSummaryModal } from '../common/ConsultationSummaryModal';
 import { useOfflineStatus } from '../../utils/useOfflineStatus';
-import { getActiveOrUpcomingConsultations, completeConsultation, rescheduleConsultation } from '../../utils/appointmentNotifications';
+import { getActiveOrUpcomingConsultations, getCompletedConsultations, completeConsultation, rescheduleConsultation, AppointmentAlert } from '../../utils/appointmentNotifications';
 import { primeApi } from '../../services/apiClient';
 import { createGoogleCalendarWebUrl } from '../../services/googleCalendar';
 import { PhoneNotificationBanner } from '../common/PhoneNotificationBanner';
@@ -221,12 +222,22 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
     }
   });
 
-  const handleConcludeConsultation = async (patientId: string, patientName: string) => {
+  const [consultationTab, setConsultationTab] = useState<'queue' | 'completed'>('queue');
+  const [completedConsultations, setCompletedConsultations] = useState<AppointmentAlert[]>([]);
+  const [selectedPatientForSummary, setSelectedPatientForSummary] = useState<{ id: string; name: string; type?: any } | null>(null);
+  const [isConsultationSummaryModalOpen, setIsConsultationSummaryModalOpen] = useState(false);
+
+  const handleConcludeConsultation = async (patientId: string, patientName: string, summary?: ConsultationSummaryData) => {
     triggerHaptic('success');
-    completeConsultation(patientId);
-    await primeApi.completeAppointment(patientId).catch(() => {});
-    showToast(`Consultation with ${patientName} concluded and archived under Completed.`, 'success');
+    const doctorDisplayName = user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`;
+    completeConsultation(patientId, summary, {
+      doctorName: doctorDisplayName,
+      patientName,
+    });
+    await primeApi.completeAppointment(patientId, summary).catch(() => {});
+    showToast(`Consultation with ${patientName} concluded and summary saved under Completed.`, 'success');
     window.dispatchEvent(new Event('appointment-alerts-updated'));
+    setIsConsultationSummaryModalOpen(false);
   };
 
   useEffect(() => {
@@ -278,6 +289,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             }
           }
           setTodaysPatients(merged);
+          setCompletedConsultations(getCompletedConsultations());
           return;
         }
       } catch (e) {
@@ -285,6 +297,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
       }
       if (isMounted) {
         setTodaysPatients(local);
+        setCompletedConsultations(getCompletedConsultations());
       }
     };
 
@@ -769,18 +782,97 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
               </div>
             </div>
 
-            {/* Today's Patient Queue Section */}
+            {/* Patient Queue & Completed Consultations Section */}
             <div className="bg-white rounded-3xl p-6 sm:p-7 shadow-xs border border-slate-200/90">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="font-extrabold font-outfit text-lg sm:text-xl text-[#022434]">
-                  Today&apos;s Patient Queue
-                </h3>
-                <span className="text-xs font-bold text-slate-500 font-mono">
-                  {todaysPatients.length} Patients
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setConsultationTab('queue');
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-outfit transition-all cursor-pointer ${
+                      consultationTab === 'queue'
+                        ? 'bg-[#006c44] text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Patient Queue ({todaysPatients.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setConsultationTab('completed');
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-outfit transition-all cursor-pointer ${
+                      consultationTab === 'completed'
+                        ? 'bg-[#006c44] text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    Completed ({completedConsultations.length})
+                  </button>
+                </div>
               </div>
 
-              {todaysPatients.length === 0 ? (
+              {consultationTab === 'completed' ? (
+                completedConsultations.length === 0 ? (
+                  <div className="py-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                    <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold font-outfit text-sm sm:text-base text-[#022434]">
+                      No Completed Consultations Yet
+                    </h4>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 space-y-3">
+                    {completedConsultations.map((consult) => (
+                      <div key={consult.id} className="pt-3 pb-4 space-y-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <span className="font-bold font-outfit text-sm sm:text-base text-[#022434]">
+                              {consult.patientName}
+                            </span>
+                            <span className="text-xs text-slate-500 font-nunito ml-2">
+                              {consult.scheduledDate} • {consult.type} Call
+                            </span>
+                          </div>
+                          <span className="self-start sm:self-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold border border-slate-200">
+                            Completed
+                          </span>
+                        </div>
+
+                        {consult.consultationSummary && (
+                          <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/80 space-y-1.5 text-xs font-nunito">
+                            {consult.consultationSummary.diagnosis && (
+                              <div>
+                                <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500 block font-outfit">
+                                  Diagnosis:
+                                </span>
+                                <span className="text-emerald-950 font-bold">{consult.consultationSummary.diagnosis}</span>
+                              </div>
+                            )}
+                            {consult.consultationSummary.treatment && (
+                              <div>
+                                <span className="font-bold text-[10px] uppercase tracking-wider text-slate-500 block font-outfit">
+                                  Treatment:
+                                </span>
+                                <span className="text-slate-700 line-clamp-2">{consult.consultationSummary.treatment}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : null}
+
+              {consultationTab === 'queue' && (
+                todaysPatients.length === 0 ? (
                 <div className="py-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                   <div className="w-12 h-12 bg-emerald-50 text-[#006c44] rounded-2xl flex items-center justify-center mx-auto mb-3">
                     <Users className="w-6 h-6" />
@@ -892,9 +984,13 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
 
                         <button
                           type="button"
-                          onClick={() => handleConcludeConsultation(patient.id, patient.name)}
+                          onClick={() => {
+                            triggerHaptic('selection');
+                            setSelectedPatientForSummary({ id: patient.id, name: patient.name, type: patient.type });
+                            setIsConsultationSummaryModalOpen(true);
+                          }}
                           className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#006c44] border border-emerald-200/80 font-bold font-outfit text-xs rounded-xl transition-all flex items-center space-x-1 cursor-pointer"
-                          title="Mark Consultation Completed"
+                          title="Input Consultation Summary & Complete"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                           <span className="hidden sm:inline">Conclude</span>
@@ -903,8 +999,9 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              )
+            )}
+          </div>
           </div>
 
           {/* Right Sidebar Column (lg:col-span-4 space-y-6) */}
@@ -1163,6 +1260,26 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             </div>
           </div>
         </div>
+      )}
+
+      {/* End-of-Consultation Clinical Summary Modal (Doctor) */}
+      {selectedPatientForSummary && (
+        <ConsultationSummaryModal
+          isOpen={isConsultationSummaryModalOpen}
+          onClose={() => {
+            setIsConsultationSummaryModalOpen(false);
+            setSelectedPatientForSummary(null);
+          }}
+          patientName={selectedPatientForSummary.name}
+          doctorName={user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`}
+          doctorSpecialty={user.doctorSpecialty || 'General Practice'}
+          doctorLicense={user.doctorLicenseNo || 'MDCN Verified'}
+          appointmentId={selectedPatientForSummary.id}
+          consultationType={selectedPatientForSummary.type || 'Video'}
+          onSaveSummary={(summary) => {
+            handleConcludeConsultation(selectedPatientForSummary.id, selectedPatientForSummary.name, summary);
+          }}
+        />
       )}
     </div>
   );

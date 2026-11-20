@@ -41,10 +41,12 @@ import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import { ConnectionRecoveryModal } from '../common/ConnectionRecoveryModal';
 import { PrescriptionComposerModal } from '../common/PrescriptionComposerModal';
+import { ConsultationSummaryModal } from '../common/ConsultationSummaryModal';
 import { primeApi } from '../../services/apiClient';
 import { completeConsultation, getActiveOrUpcomingConsultations } from '../../utils/appointmentNotifications';
 import { notifyIncomingMessage } from '../../services/phoneNotifications';
 import { playRingingTone, playConnectedTone, playHangupTone } from '../../utils/audioTones';
+import { ConsultationSummaryData } from '../../types';
 import {
   requestUserMedia,
   setupAudioAnalyser,
@@ -222,6 +224,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const isChatOpenRef = useRef(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [showConsultationSummaryModal, setShowConsultationSummaryModal] = useState(false);
 
   useEffect(() => {
     isChatOpenRef.current = isChatOpen;
@@ -1145,7 +1148,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     }
   };
 
-  const handleHangup = () => {
+  const handleHangup = (summaryData?: ConsultationSummaryData) => {
     triggerHaptic('heavy');
     playHangupTone();
     if (localStreamRef.current) {
@@ -1157,6 +1160,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       peerConnectionRef.current = null;
     }
     setShowEndConsultationModal(false);
+    setShowConsultationSummaryModal(false);
 
     // Conclude consultation: mark appointment as completed so it reflects under Completed
     try {
@@ -1166,16 +1170,31 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         const parsed = JSON.parse(savedRaw);
         aptId = parsed.appointmentId || parsed.consultationId || parsed.id || '';
       }
-      if (aptId) {
-        completeConsultation(aptId);
-        primeApi.completeAppointment(aptId).catch(() => {});
+      const targetId = aptId || sessionId;
+      const consultationModality = isStrictlyAudio || isAudioOnlyMode ? 'Voice' : 'Video';
+
+      if (targetId) {
+        completeConsultation(targetId, summaryData, {
+          doctorName: displayDoctorName,
+          patientName: displayPatientName,
+          type: consultationModality,
+        });
+        primeApi.completeAppointment(targetId, summaryData).catch(() => {});
       } else {
         const upcoming = getActiveOrUpcomingConsultations();
         if (upcoming.length > 0) {
-          completeConsultation(upcoming[0].id);
+          completeConsultation(upcoming[0].id, summaryData, {
+            doctorName: displayDoctorName,
+            patientName: displayPatientName,
+            type: consultationModality,
+          });
           if (upcoming[0].appointmentId) {
-            completeConsultation(upcoming[0].appointmentId);
-            primeApi.completeAppointment(upcoming[0].appointmentId).catch(() => {});
+            completeConsultation(upcoming[0].appointmentId, summaryData, {
+              doctorName: displayDoctorName,
+              patientName: displayPatientName,
+              type: consultationModality,
+            });
+            primeApi.completeAppointment(upcoming[0].appointmentId, summaryData).catch(() => {});
           }
         }
       }
@@ -1183,6 +1202,10 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       localStorage.removeItem('prime_telecare_active_call');
       window.dispatchEvent(new Event('appointment-alerts-updated'));
     } catch {}
+
+    if (summaryData) {
+      showToast('Consultation concluded & clinical summary saved for patient!', 'success');
+    }
 
     onNavigate('post-consultation-journey');
   };
@@ -1904,7 +1927,11 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           <button
             onClick={() => {
               triggerHaptic('heavy');
-              setShowEndConsultationModal(true);
+              if (myRole === 'doctor') {
+                setShowConsultationSummaryModal(true);
+              } else {
+                setShowEndConsultationModal(true);
+              }
             }}
             className="p-3 sm:p-3.5 rounded-full bg-rose-600 text-white shadow-lg hover:bg-rose-700 transition-all transform active:scale-95 border-2 border-rose-400 shrink-0 cursor-pointer"
             title="End Consultation"
@@ -2032,16 +2059,36 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             </div>
 
             <div className="space-y-2 pt-2">
-              <button
-                onClick={handleHangup}
-                className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold font-outfit text-xs rounded-2xl shadow-lg transition-all"
-              >
-                Confirm & View Next Steps
-              </button>
+              {myRole === 'doctor' ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowEndConsultationModal(false);
+                      setShowConsultationSummaryModal(true);
+                    }}
+                    className="w-full py-3 bg-[#006c44] hover:bg-[#005233] text-white font-extrabold font-outfit text-xs rounded-2xl shadow-lg transition-all cursor-pointer"
+                  >
+                    Input Consultation Summary & End
+                  </button>
+                  <button
+                    onClick={() => handleHangup()}
+                    className="w-full py-2.5 bg-rose-600/80 hover:bg-rose-700 text-white font-bold text-xs rounded-2xl transition-all cursor-pointer"
+                  >
+                    End Call Without Summary
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => handleHangup()}
+                  className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold font-outfit text-xs rounded-2xl shadow-lg transition-all cursor-pointer"
+                >
+                  Confirm & View Next Steps
+                </button>
+              )}
 
               <button
                 onClick={() => setShowEndConsultationModal(false)}
-                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-2xl border border-slate-700"
+                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-2xl border border-slate-700 cursor-pointer"
               >
                 Return to Live Call
               </button>
@@ -2307,6 +2354,21 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             senderName: displayDoctorName,
             text: rxMsg.text,
           }).catch(() => {});
+        }}
+      />
+
+      {/* End-of-Consultation Clinical Summary Modal (Doctor) */}
+      <ConsultationSummaryModal
+        isOpen={showConsultationSummaryModal}
+        onClose={() => setShowConsultationSummaryModal(false)}
+        patientName={displayPatientName}
+        doctorName={displayDoctorName}
+        doctorSpecialty={doctorSpecialty}
+        doctorLicense={user?.doctorLicenseNo || 'MDCN Verified'}
+        appointmentId={sessionId}
+        consultationType={isStrictlyAudio || isAudioOnlyMode ? 'Voice' : 'Video'}
+        onSaveSummary={(summary) => {
+          handleHangup(summary);
         }}
       />
     </div>

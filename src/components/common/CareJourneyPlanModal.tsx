@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   FileText,
 } from 'lucide-react';
-import { CareJourneyItem, CareJourneyPlan } from '../../types';
+import { CareJourneyItem, CareJourneyPlan, ConsultationSummaryData } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
 import {
@@ -21,6 +21,7 @@ import {
   saveStoredCareJourneyPlan,
   createInitialCareJourneyDraft,
 } from '../../utils/careJourney';
+import { completeConsultation } from '../../utils/appointmentNotifications';
 import { primeApi } from '../../services/apiClient';
 
 interface CareJourneyPlanModalProps {
@@ -83,7 +84,9 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
   const [labInvestigationDetails, setLabInvestigationDetails] = useState(plan.labInvestigationDetails || '');
   const [followUpDate, setFollowUpDate] = useState(plan.followUpDate || '');
   const [followUpDateNeeded, setFollowUpDateNeeded] = useState(Boolean(plan.followUpDate));
-  const [followUpPlanNote, setFollowUpPlanNote] = useState(plan.followUpPlanNote || plan.doctorNotes || '');
+  const [symptoms, setSymptoms] = useState(plan.symptoms || '');
+  const [diagnosis, setDiagnosis] = useState(plan.diagnosis || '');
+  const [treatment, setTreatment] = useState(plan.treatment || plan.followUpPlanNote || plan.doctorNotes || '');
 
   useEffect(() => {
     if (isOpen) {
@@ -94,14 +97,18 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
         setLabInvestigationDetails(stored.labInvestigationDetails || '');
         setFollowUpDate(stored.followUpDate || '');
         setFollowUpDateNeeded(Boolean(stored.followUpDate));
-        setFollowUpPlanNote(stored.followUpPlanNote || stored.doctorNotes || '');
+        setSymptoms(stored.symptoms || '');
+        setDiagnosis(stored.diagnosis || '');
+        setTreatment(stored.treatment || stored.followUpPlanNote || stored.doctorNotes || '');
       } else {
         const fresh = createInitialCareJourneyDraft(patientName, doctorName);
         setPlan(fresh);
         setLabInvestigationDetails('');
         setFollowUpDate('');
         setFollowUpDateNeeded(false);
-        setFollowUpPlanNote('');
+        setSymptoms('');
+        setDiagnosis('');
+        setTreatment('');
       }
     }
   }, [isOpen, patientId, patientName, doctorName]);
@@ -153,14 +160,17 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
   const handlePublishPlan = async () => {
     triggerHaptic('success');
     const checkedCount = plan.items.filter((i) => i.checkedByDoctor).length;
-    if (checkedCount === 0 && !followUpPlanNote.trim()) {
-      showToast('Please check at least one care journey item or add a follow-up plan note.', 'info');
+    const hasSummary = Boolean(symptoms.trim() || diagnosis.trim() || treatment.trim());
+    if (checkedCount === 0 && !hasSummary) {
+      showToast('Please check at least one care journey item or complete the consultation summary.', 'info');
       return;
     }
 
     const finalFollowUpDate = followUpDateNeeded && followUpDate ? followUpDate : '';
     const trimmedLabDetails = labInvestigationDetails.trim();
-    const trimmedFollowUpNote = followUpPlanNote.trim();
+    const trimmedSymptoms = symptoms.trim();
+    const trimmedDiagnosis = diagnosis.trim();
+    const trimmedTreatment = treatment.trim();
 
     const updatedItems = plan.items.map((item) => {
       if (item.id === 'item-lab' && trimmedLabDetails) {
@@ -179,6 +189,18 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
       return item;
     });
 
+    const summaryPayload: ConsultationSummaryData | undefined = hasSummary ? {
+      symptoms: trimmedSymptoms,
+      diagnosis: trimmedDiagnosis,
+      treatment: trimmedTreatment,
+      doctorNotes: trimmedTreatment,
+      doctorName,
+      patientName,
+      patientId,
+      completedAt: new Date().toISOString(),
+      timestamp: Date.now(),
+    } : undefined;
+
     const updatedPlan: CareJourneyPlan = {
       ...plan,
       patientId,
@@ -192,14 +214,28 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
       labInvestigationDetails: isLabChecked ? trimmedLabDetails : '',
       followUpVisitChecked: isFollowUpChecked,
       followUpDate: finalFollowUpDate || undefined,
-      followUpPlanNote: trimmedFollowUpNote,
-      doctorNotes: trimmedFollowUpNote,
+      symptoms: trimmedSymptoms,
+      diagnosis: trimmedDiagnosis,
+      treatment: trimmedTreatment,
+      followUpPlanNote: trimmedTreatment,
+      doctorNotes: trimmedTreatment,
+      consultationSummary: summaryPayload,
     };
 
     saveStoredCareJourneyPlan(updatedPlan);
     primeApi.saveCareJourneyPlan?.(updatedPlan).catch(() => {});
 
-    showToast('Care Journey Plan approved! Now live on the patient dashboard.', 'success');
+    // Save to completed consultations
+    if (summaryPayload) {
+      try {
+        completeConsultation(`cns-${patientId}`, summaryPayload, {
+          patientName,
+          doctorName,
+        });
+      } catch {}
+    }
+
+    showToast('Consultation summary & Care Journey approved! Now live on patient dashboard.', 'success');
     if (onPlanPublished) {
       onPlanPublished(updatedPlan);
     }
@@ -416,18 +452,53 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
             ) : null}
           </div>
 
-          {/* Follow-Up Plan Note */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-extrabold text-[#022434] font-outfit">
-              Follow-Up Plan Note
-            </label>
-            <textarea
-              rows={3}
-              value={followUpPlanNote}
-              onChange={(e) => setFollowUpPlanNote(e.target.value)}
-              placeholder="Follow-up plan note"
-              className="w-full p-3 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006c44] text-[#022434]"
-            />
+          {/* Consultation Summary (Symptoms, Diagnosis, Treatment) */}
+          <div className="p-4 rounded-2xl border border-emerald-200/90 bg-emerald-50/40 space-y-3">
+            <div className="flex items-center space-x-2">
+              <FileText className="w-4 h-4 text-[#006c44]" />
+              <span className="text-xs font-extrabold text-[#022434] font-outfit">
+                Consultation Summary (Symptoms, Diagnosis & Treatment)
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 font-outfit mb-1">
+                Reported Symptoms & Chief Complaints <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                rows={2}
+                value={symptoms}
+                onChange={(e) => setSymptoms(e.target.value)}
+                placeholder="e.g. Fever (38.8°C), sore throat, body chills, persistent dry cough for 3 days"
+                className="w-full p-2.5 text-xs border border-slate-300 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006c44] text-[#022434]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 font-outfit mb-1">
+                Clinical Diagnosis <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={diagnosis}
+                onChange={(e) => setDiagnosis(e.target.value)}
+                placeholder="e.g. Acute Viral Upper Respiratory Tract Infection"
+                className="w-full p-2.5 text-xs border border-slate-300 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006c44] text-[#022434]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 font-outfit mb-1">
+                Treatment Plan & Care Instructions <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                rows={2}
+                value={treatment}
+                onChange={(e) => setTreatment(e.target.value)}
+                placeholder="e.g. Oral medication regimen, bed rest, hydration, review in 5 days"
+                className="w-full p-2.5 text-xs border border-slate-300 bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-[#006c44] text-[#022434]"
+              />
+            </div>
           </div>
 
           {/* Add Custom Task Form */}
