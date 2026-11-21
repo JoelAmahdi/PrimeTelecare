@@ -297,39 +297,52 @@ export function notifyIncomingCall(opts: {
   const isVoice = modality === 'Voice';
   const isChat = modality === 'Chat';
 
-  // 1. Play Synthesized Acoustic Ringtone
+  // 1. Play Synthesized Acoustic Ringtone or Invitation Chime
   if (settings.soundEnabled) {
     if (activeCallRingtoneStop) {
       activeCallRingtoneStop();
+      activeCallRingtoneStop = null;
     }
-    activeCallRingtoneStop = playRingingTone();
+    if (isChat) {
+      playMessageChime();
+    } else {
+      activeCallRingtoneStop = playRingingTone();
+    }
   }
 
-  // 2. Continuous Telephone Vibration
+  // 2. Continuous Telephone Vibration (calls only) or gentle pulse (text invitation)
   if (settings.vibrateEnabled) {
-    startIncomingCallVibrationLoop();
+    if (isChat) {
+      triggerPhoneVibration([150, 75, 150]);
+    } else {
+      startIncomingCallVibrationLoop();
+    }
   }
 
   // 3. System Push / Native Phone Notification
   const title = isVoice
     ? `📞 Incoming Audio Call: ${callerName}`
     : isChat
-    ? `💬 Incoming Chat Session: ${callerName}`
+    ? `💬 Consultation Invitation: ${callerName}`
     : `📹 Incoming Video Call: ${callerName}`;
 
-  const body = role === 'doctor'
+  const body = isChat
+    ? role === 'doctor'
+      ? `Patient ${callerName} is inviting you to a live text consultation. Tap to accept.`
+      : `Dr. ${callerName} is ready for your text consultation. Tap to enter chat.`
+    : role === 'doctor'
     ? `Patient ${callerName} is waiting in the encrypted telehealth room. Tap to answer.`
     : `Dr. ${callerName} is calling for your scheduled consultation. Tap to answer.`;
 
   showPhoneNotification({
     title,
     body,
-    type: 'call',
+    type: isChat ? 'text' : 'call',
     icon: callerAvatar || '/icon.svg',
     badge: '/icon.svg',
     tag: 'incoming-telehealth-call',
     requireInteraction: true,
-    vibrate: [500, 250, 500, 250, 500, 250, 1000],
+    vibrate: isChat ? [150, 75, 150] : [500, 250, 500, 250, 500, 250, 1000],
     data: {
       url: isChat ? '/#active-chat' : '/#video-call',
       screen: isChat ? 'active-chat' : 'video-call',
@@ -337,7 +350,7 @@ export function notifyIncomingCall(opts: {
       modality,
     },
     actions: [
-      { action: 'answer', title: '📞 Answer Call' },
+      { action: 'answer', title: isChat ? '💬 Accept & Chat' : '📞 Answer Call' },
       { action: 'decline', title: '✕ Decline' },
     ],
   });

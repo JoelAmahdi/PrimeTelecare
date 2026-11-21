@@ -662,7 +662,11 @@ export default function App() {
         stopCallAlerts();
         if (incomingCall) {
           primeApi.respondCall(incomingCall.id, 'accepted').catch(() => {});
+          const consultId = incomingCall.consultationId || incomingCall.id || `cns-${Date.now()}`;
           const sessionPayload = {
+            id: consultId,
+            appointmentId: consultId,
+            consultationId: consultId,
             doctorId: activeUser.id,
             doctorName: activeUser.name.trim().startsWith('Dr.')
               ? activeUser.name.trim()
@@ -670,11 +674,13 @@ export default function App() {
             doctorSpecialty: activeUser.doctorSpecialty || '',
             doctorAvatar: activeUser.avatarUrl || '',
             patientName: incomingCall.patientName || '',
+            patientAvatar: incomingCall.patientAvatar || '',
             type: incomingCall.type,
           };
           setActiveCallSession(sessionPayload);
           try {
             localStorage.setItem('prime_telecare_active_call_session', JSON.stringify(sessionPayload));
+            window.dispatchEvent(new Event('active-call-session-updated'));
             localStorage.removeItem('prime_telecare_incoming_call');
             localStorage.removeItem('prime_telecare_active_call');
           } catch {}
@@ -1132,7 +1138,7 @@ export default function App() {
             {currentScreen === 'active-chat' && (
               <ActiveChatScreen
                 onNavigate={navigateTo}
-                role={role}
+                role={effectiveRole}
                 onSaveBookingSummary={setCurrentBookingSummary}
                 onActiveSessionChange={setIsChatSessionActive}
               />
@@ -1326,14 +1332,18 @@ export default function App() {
           </>
         )}
 
-        {/* Real-time Online Incoming Call Modal for Doctor */}
+        {/* Real-time Online Incoming Call / Text Consultation Invitation Modal for Doctor */}
         <IncomingCallModal
           call={incomingCall}
           onAccept={(call) => {
             stopCallAlerts();
             setIncomingCall(null);
             primeApi.respondCall(call.id, 'accepted').catch(() => {});
+            const consultId = call.consultationId || call.id || `cns-${Date.now()}`;
             const sessionPayload = {
+              id: consultId,
+              appointmentId: consultId,
+              consultationId: consultId,
               doctorId: activeUser.id,
               doctorName: activeUser.name.trim().startsWith('Dr.')
                 ? activeUser.name.trim()
@@ -1341,11 +1351,13 @@ export default function App() {
               doctorSpecialty: activeUser.doctorSpecialty || '',
               doctorAvatar: activeUser.avatarUrl || '',
               patientName: call.patientName || '',
+              patientAvatar: call.patientAvatar || '',
               type: call.type,
             };
             setActiveCallSession(sessionPayload);
             try {
               localStorage.setItem('prime_telecare_active_call_session', JSON.stringify(sessionPayload));
+              window.dispatchEvent(new Event('active-call-session-updated'));
               localStorage.removeItem('prime_telecare_incoming_call');
               localStorage.removeItem('prime_telecare_active_call');
             } catch {}

@@ -548,21 +548,27 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
 
         {/* Live Incoming Consultation Alert Banner */}
         {liveConsultationAlert && (
-          <div className="bg-linear-to-r from-emerald-600 via-[#006c44] to-teal-800 text-white rounded-3xl p-5 sm:p-6 shadow-xl border-2 border-emerald-400/40 animate-in slide-in-from-top-3 duration-300">
+          <div className="bg-gradient-to-r from-emerald-600 via-[#006c44] to-teal-800 text-white rounded-3xl p-5 sm:p-6 shadow-xl border-2 border-emerald-400/40 animate-in slide-in-from-top-3 duration-300">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-start sm:items-center space-x-4">
                 <div className="w-13 h-13 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center shrink-0 shadow-inner">
-                  <Video className="w-6 h-6 text-white animate-pulse" />
+                  {liveConsultationAlert.type === 'Chat' ? (
+                    <MessageSquare className="w-6 h-6 text-white animate-pulse" />
+                  ) : liveConsultationAlert.type === 'Voice' ? (
+                    <Phone className="w-6 h-6 text-white animate-pulse" />
+                  ) : (
+                    <Video className="w-6 h-6 text-white animate-pulse" />
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-ping" />
                     <span className="text-[11px] font-extrabold font-outfit uppercase tracking-wider text-emerald-200 bg-black/20 px-2.5 py-0.5 rounded-full">
-                      New Consultation Alert
+                      {liveConsultationAlert.type === 'Chat' ? 'Text Consultation Invitation' : 'New Consultation Alert'}
                     </span>
                   </div>
                   <h3 className="text-base sm:text-xl font-extrabold font-outfit text-white mt-1">
-                    {liveConsultationAlert.patientName} • {liveConsultationAlert.type} Consultation
+                    {liveConsultationAlert.patientName} • {liveConsultationAlert.type === 'Chat' ? 'Text Consultation Invitation' : `${liveConsultationAlert.type} Consultation`}
                   </h3>
                   <p className="text-xs text-emerald-100 font-nunito mt-0.5">
                     {liveConsultationAlert.timeSlot} • Fee: ₦{(liveConsultationAlert.price || 10000).toLocaleString()} Credited
@@ -585,12 +591,17 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                 <button
                   onClick={() => {
                     triggerHaptic('heavy');
+                    const consultId = liveConsultationAlert.id || liveConsultationAlert.appointmentId || `cns-${Date.now()}`;
                     const sessionPayload = {
+                      id: consultId,
+                      appointmentId: consultId,
+                      consultationId: consultId,
                       doctorId: user.id,
                       doctorName: user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`,
                       doctorSpecialty: user.doctorSpecialty || '',
                       doctorAvatar: user.avatarUrl || '',
                       patientName: liveConsultationAlert.patientName || '',
+                      patientAvatar: liveConsultationAlert.patientAvatar || '',
                       type: liveConsultationAlert.type,
                     };
                     setLiveConsultationAlert(null);
@@ -618,7 +629,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                     {liveConsultationAlert.type === 'Voice'
                       ? 'Start Audio Consultation'
                       : liveConsultationAlert.type === 'Chat'
-                      ? 'Open Chat Consultation'
+                      ? 'Accept & Enter Chat'
                       : 'Start Video Consultation'}
                   </span>
                 </button>

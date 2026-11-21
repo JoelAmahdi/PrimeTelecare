@@ -4,9 +4,9 @@ import { StatusBar } from '../common/StatusBar';
 import {
   Video, MessageSquare, Phone, Search, Filter, Clock, Calendar, CheckCircle2, FileText, ChevronRight,
   ChevronDown, ChevronUp, ArrowUpDown, User, Sparkles, ArrowLeft, Send, Paperclip, Camera, MoreHorizontal,
-  Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill, Users
+  Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill, Users, RotateCcw, Home
 } from 'lucide-react';
-import { ScreenId, ChatMessage, Doctor, UserRole, BookingSummary, ConsultationSummaryData } from '../../types';
+import { ScreenId, ChatMessage, Doctor, UserRole, BookingSummary, ConsultationSummaryData, StructuredClinicalRecord } from '../../types';
 import { mockDoctors, currentUserPatient, currentUserDoctor } from '../../data/mockData';
 import { triggerHaptic } from '../../utils/haptics';
 import { showToast } from '../../utils/toast';
@@ -19,7 +19,7 @@ import { processJoinOrPayConsultation, isConsultationPaid } from '../../utils/co
 import { CollapsibleSection } from '../common/CollapsibleSection';
 import { primeApi } from '../../services/apiClient';
 import { getStoredAppointmentAlerts, completeConsultation } from '../../utils/appointmentNotifications';
-import { notifyIncomingMessage } from '../../services/phoneNotifications';
+import { notifyIncomingMessage, showPhoneNotification } from '../../services/phoneNotifications';
 
 interface ConsultationItem {
   id: string;
@@ -52,9 +52,71 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   onSaveBookingSummary,
   onActiveSessionChange,
 }) => {
-  const [activeSession, setActiveSession] = useState<ConsultationItem | null>(null);
+  // Active consultation session (auto-loaded from active call session if doctor accepted or joined)
+  const [activeSession, setActiveSession] = useState<ConsultationItem | null>(() => {
+    try {
+      const raw = localStorage.getItem('prime_telecare_active_call_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.type === 'Chat' || parsed.modality === 'Chat' || !parsed.type)) {
+          return {
+            id: parsed.id || parsed.consultationId || parsed.appointmentId || `chat-${Date.now()}`,
+            patientName: parsed.patientName || 'Patient',
+            patientAvatar: parsed.patientAvatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+            doctorName: parsed.doctorName || 'Doctor',
+            doctorAvatar: parsed.doctorAvatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=150&q=80',
+            specialty: parsed.doctorSpecialty || 'General Practice',
+            type: 'Chat',
+            dateTimeStr: 'Today, Live Session',
+            rawDate: new Date().toISOString(),
+            sortTimestamp: Date.now(),
+            status: 'live',
+            chiefComplaint: parsed.chiefComplaint || 'Live Chat Consultation',
+            price: parsed.price || 10000,
+          };
+        }
+      }
+    } catch {}
+    return null;
+  });
   const [consultationsList, setConsultationsList] = useState<ConsultationItem[]>([]);
   const [isLoadingConsultations, setIsLoadingConsultations] = useState(true);
+
+  // Sync active consultation session in real time (e.g. doctor accepted invitation modal or queue row clicked)
+  useEffect(() => {
+    const handleActiveSessionSync = () => {
+      try {
+        const raw = localStorage.getItem('prime_telecare_active_call_session');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.type === 'Chat' || parsed.modality === 'Chat' || !parsed.type)) {
+            setActiveSession({
+              id: parsed.id || parsed.consultationId || parsed.appointmentId || `chat-${Date.now()}`,
+              patientName: parsed.patientName || 'Patient',
+              patientAvatar: parsed.patientAvatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+              doctorName: parsed.doctorName || 'Doctor',
+              doctorAvatar: parsed.doctorAvatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=150&q=80',
+              specialty: parsed.doctorSpecialty || 'General Practice',
+              type: 'Chat',
+              dateTimeStr: 'Today, Live Session',
+              rawDate: new Date().toISOString(),
+              sortTimestamp: Date.now(),
+              status: 'live',
+              chiefComplaint: parsed.chiefComplaint || 'Live Chat Consultation',
+              price: parsed.price || 10000,
+            });
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('active-call-session-updated', handleActiveSessionSync);
+    window.addEventListener('storage', handleActiveSessionSync);
+    return () => {
+      window.removeEventListener('active-call-session-updated', handleActiveSessionSync);
+      window.removeEventListener('storage', handleActiveSessionSync);
+    };
+  }, []);
 
   // Load live appointments from backend & persistent consultations store
   const loadConsultations = async () => {
@@ -124,45 +186,128 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   };
 
   const [isConsultationSummaryModalOpen, setIsConsultationSummaryModalOpen] = useState(false);
+  const isEndingSessionRef = useRef<boolean>(false);
 
-  const handleEndChatConsultation = async (summaryData?: ConsultationSummaryData) => {
+  // Issues and publishes the official clinical health report (with embedded chat transcript)
+  const handleSaveHealthReport = async (summaryData: ConsultationSummaryData, shouldEndSession = false) => {
     if (!activeSession) return;
-    if (role === 'doctor' && !summaryData) {
-      setIsConsultationSummaryModalOpen(true);
-      return;
-    }
+    triggerHaptic('success');
 
-    triggerHaptic('heavy');
+    // 1. Build chronological chat transcript from session messages
+    const chatTranscript = messages
+      .map(
+        (m) =>
+          `[${m.timestamp}] ${m.senderName || (m.sender === 'doctor' ? activeSession.doctorName : activeSession.patientName)}: ${m.text || (m.imageUrl ? '[Image Attachment]' : '')}`
+      )
+      .join('\n');
+
+    // 2. Mark consultation completed or updated with summary & chat transcript
     completeConsultation(activeSession.id, summaryData, {
+      doctorId: activeSession.id,
       doctorName: activeSession.doctorName,
       patientName: activeSession.patientName,
       type: 'Chat',
     });
+
+    // 3. Save structured clinical record with transcript to central EHR storage
+    try {
+      const existingRaw = localStorage.getItem('prime_telecare_clinical_records_v1');
+      const existingRecords: StructuredClinicalRecord[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const reportRecord: StructuredClinicalRecord = {
+        id: `CR-${Date.now()}`,
+        consultationId: activeSession.id,
+        patientId: summaryData.patientId || 'pat-1',
+        patientName: activeSession.patientName,
+        doctorName: activeSession.doctorName,
+        doctorSpecialty: activeSession.specialty,
+        doctorLicense: summaryData.doctorLicense || 'MDCN Verified',
+        dateStr: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        timestamp: Date.now(),
+        patientComplaint: summaryData.symptoms,
+        diagnosis: summaryData.diagnosis,
+        carePlan: summaryData.treatment,
+        markdownNotes: `## Telehealth Clinical Consultation Summary & Report\n\n### 🩺 Reported Symptoms & Presenting Complaints\n${summaryData.symptoms}\n\n### 🔬 Clinical Diagnosis\n${summaryData.diagnosis}\n\n### 💊 Prescribed Treatment & Care Instructions\n${summaryData.treatment}${summaryData.doctorNotes ? `\n\n### 📝 Clinical Observations\n${summaryData.doctorNotes}` : ''}${chatTranscript ? `\n\n### 💬 Consultation Chat Record\n\`\`\`text\n${chatTranscript}\n\`\`\`` : ''}`,
+        exportPermissionStatus: 'granted',
+        exportGrantedBy: activeSession.doctorName,
+        exportGrantedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      };
+
+      const filteredRecords = existingRecords.filter((r) => r.consultationId !== activeSession.id);
+      localStorage.setItem('prime_telecare_clinical_records_v1', JSON.stringify([reportRecord, ...filteredRecords]));
+      setSelectedConsultationForPDF(reportRecord);
+    } catch {}
+
+    // 4. Send official report announcement message into the chat
+    const reportMsg: ChatMessage = {
+      id: `msg-report-${Date.now()}`,
+      sender: 'doctor',
+      senderName: activeSession.doctorName,
+      text: `📋 Official Clinical Health Report Issued:\n• Symptoms: ${summaryData.symptoms}\n• Diagnosis: ${summaryData.diagnosis}\n• Treatment Plan: ${summaryData.treatment}${summaryData.doctorNotes ? `\n• Notes: ${summaryData.doctorNotes}` : ''}\n\n📄 Official clinical dossier has been saved into patient's Health Records.`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'delivered',
+    };
+    setMessages((prev) => [...prev, reportMsg]);
+    primeApi
+      .sendChatMessage(activeSession.id, {
+        sender: reportMsg.sender,
+        senderName: reportMsg.senderName,
+        text: reportMsg.text || '',
+      })
+      .catch(() => {});
+
+    // 5. Notify patient phone
+    showPhoneNotification({
+      title: `📄 Health Report Issued: ${activeSession.doctorName}`,
+      body: `Dr. ${activeSession.doctorName} published your official consultation summary & health report.`,
+      type: 'prescription',
+      tag: `report-${activeSession.id}`,
+    });
+
     await primeApi.completeAppointment(activeSession.id, summaryData).catch(() => {});
 
-    if (summaryData) {
-      const conclusionMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        sender: 'doctor',
-        senderName: activeSession.doctorName,
-        text: `📋 Official Clinical Summary & Consultation Concluded:\n• Diagnosis: ${summaryData.diagnosis}\n• Treatment Plan: ${summaryData.treatment}${summaryData.doctorNotes ? `\n• Notes: ${summaryData.doctorNotes}` : ''}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: 'delivered',
-      };
-      setMessages((prev) => [...prev, conclusionMsg]);
-      primeApi.sendChatMessage(activeSession.id, {
-        sender: conclusionMsg.sender,
-        senderName: conclusionMsg.senderName,
-        text: conclusionMsg.text || '',
-      }).catch(() => {});
-    }
-
-    showToast('Consultation concluded and summary archived under Completed.', 'success');
+    showToast('Official health report issued and saved to patient records.', 'success');
     window.dispatchEvent(new Event('appointment-alerts-updated'));
     setIsConsultationSummaryModalOpen(false);
-    setActiveSession(null);
-    if (role === 'patient') {
-      onNavigate('post-consultation-journey');
+
+    if (shouldEndSession) {
+      try {
+        localStorage.removeItem('prime_telecare_active_call_session');
+        window.dispatchEvent(new Event('active-call-session-updated'));
+      } catch {}
+      setActiveSession(null);
+      if (role === 'patient') {
+        onNavigate('post-consultation-journey');
+      }
+    }
+  };
+
+  const handleEndChatConsultation = async (summaryData?: ConsultationSummaryData) => {
+    if (!activeSession) return;
+    if (role === 'doctor' && !summaryData) {
+      isEndingSessionRef.current = true;
+      setIsConsultationSummaryModalOpen(true);
+      return;
+    }
+
+    if (summaryData) {
+      await handleSaveHealthReport(summaryData, true);
+    } else {
+      triggerHaptic('heavy');
+      completeConsultation(activeSession.id, undefined, {
+        doctorName: activeSession.doctorName,
+        patientName: activeSession.patientName,
+        type: 'Chat',
+      });
+      await primeApi.completeAppointment(activeSession.id).catch(() => {});
+      try {
+        localStorage.removeItem('prime_telecare_active_call_session');
+        window.dispatchEvent(new Event('active-call-session-updated'));
+      } catch {}
+      showToast('Consultation concluded.', 'info');
+      setActiveSession(null);
+      if (role === 'patient') {
+        onNavigate('post-consultation-journey');
+      }
     }
   };
 
@@ -190,9 +335,18 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [selectedPatientForRx, setSelectedPatientForRx] = useState('');
 
-  // Real-time Chat state
+  // Real-time Chat state with offline local persistence per consultation session
   const [chatMessage, setChatMessage] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const initialId = activeSession?.id;
+      if (initialId) {
+        const cached = localStorage.getItem(`prime_telecare_chat_${initialId}`);
+        if (cached) return JSON.parse(cached);
+      }
+    } catch {}
+    return [];
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -208,6 +362,19 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   useEffect(() => {
     hasLoadedInitialRef.current = false;
     lastMsgCountRef.current = 0;
+    if (activeSession?.id) {
+      try {
+        const cached = localStorage.getItem(`prime_telecare_chat_${activeSession.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+          }
+        }
+      } catch {}
+    } else {
+      setMessages([]);
+    }
   }, [activeSession?.id]);
 
   useEffect(() => {
@@ -233,6 +400,9 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
           hasLoadedInitialRef.current = true;
           lastMsgCountRef.current = fetched.length;
           setMessages(fetched);
+          try {
+            localStorage.setItem(`prime_telecare_chat_${activeSession.id}`, JSON.stringify(fetched));
+          } catch {}
         }
       }).catch(() => {});
     };
@@ -436,6 +606,10 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                 onClick={() => {
                   triggerHaptic('selection');
                   setActiveSession(null);
+                  try {
+                    localStorage.removeItem('prime_telecare_active_call_session');
+                    window.dispatchEvent(new Event('active-call-session-updated'));
+                  } catch {}
                 }}
                 className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
               >
@@ -465,18 +639,48 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
             </div>
             <div className="flex items-center space-x-1 sm:space-x-2">
               {role === 'doctor' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('medium');
+                      isEndingSessionRef.current = false;
+                      setIsConsultationSummaryModalOpen(true);
+                    }}
+                    className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-[#022434] hover:bg-[#1c3a4a] text-white rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                    title="Send Official Health Report to Patient"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-teal-300" />
+                    <span className="hidden sm:inline">Health Report</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('medium');
+                      setSelectedPatientForRx(activeSession.patientName);
+                      setIsPrescriptionModalOpen(true);
+                    }}
+                    className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-[#006c44] hover:bg-[#005233] text-white rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                    title="Issue E-Prescription in Consultation"
+                  >
+                    <Pill className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Issue Rx</span>
+                  </button>
+                </>
+              )}
+              {selectedConsultationForPDF && (
                 <button
                   type="button"
                   onClick={() => {
-                    triggerHaptic('medium');
-                    setSelectedPatientForRx(activeSession.patientName);
-                    setIsPrescriptionModalOpen(true);
+                    triggerHaptic('selection');
+                    setIsSummaryModalOpen(true);
                   }}
-                  className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-[#006c44] hover:bg-[#005233] text-white rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
-                  title="Issue E-Prescription in Consultation"
+                  className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                  title="View Official Health Report PDF"
                 >
-                  <Pill className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Issue Rx</span>
+                  <FileText className="w-3.5 h-3.5 text-teal-600" />
+                  <span className="hidden sm:inline">View PDF</span>
                 </button>
               )}
               <button
@@ -988,16 +1192,29 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                 </p>
                 {consultationsList.length === 0 ? (
                   role === 'doctor' ? (
-                    <button
-                      onClick={() => {
-                        triggerHaptic('selection');
-                        onNavigate('doctor-home');
-                      }}
-                      className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
-                    >
-                      <Users className="w-4 h-4" />
-                      <span>View Patient Queue</span>
-                    </button>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                      <button
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          loadConsultations();
+                          showToast('Consultations queue refreshed', 'info');
+                        }}
+                        className="px-6 py-3 bg-[#006c44] hover:bg-[#005233] text-white text-sm font-bold font-outfit rounded-xl transition-all shadow-md active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        <span>Refresh Queue</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          onNavigate('doctor-home');
+                        }}
+                        className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold font-outfit rounded-xl transition-all active:scale-95 inline-flex items-center space-x-2 cursor-pointer"
+                      >
+                        <Home className="w-4 h-4" />
+                        <span>Dashboard</span>
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => {
@@ -1031,7 +1248,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
       {/* Patient Consultation Summary PDF Modal */}
       <ConsultationSummaryPDFModal
         isOpen={isSummaryModalOpen}
-        user={currentUserPatient}
+        user={role === 'doctor' ? currentUserDoctor : currentUserPatient}
         consultationRecord={selectedConsultationForPDF}
         onClose={() => setIsSummaryModalOpen(false)}
       />
@@ -1080,13 +1297,13 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         onClose={() => setIsConsultationSummaryModalOpen(false)}
         patientName={activeSession?.patientName || 'Patient'}
         patientId="pat-1"
-        doctorName={activeSession?.doctorName || 'Doctor'}
+        doctorName={activeSession?.doctorName || (role === 'doctor' ? currentUserDoctor.name : 'Doctor')}
         doctorSpecialty={activeSession?.specialty || 'General Practice'}
         doctorLicense="MDCN Verified"
         appointmentId={activeSession?.id}
         consultationType="Chat"
         onSaveSummary={(summary) => {
-          handleEndChatConsultation(summary);
+          handleSaveHealthReport(summary, isEndingSessionRef.current);
         }}
       />
 

@@ -9,10 +9,12 @@ import {
   Thermometer,
   ShieldCheck,
   Zap,
+  MessageSquare,
+  Sparkles,
 } from 'lucide-react';
 import { ActiveCall } from '../../types';
 import { triggerHaptic } from '../../utils/haptics';
-import { playRingingTone, playConnectedTone, playHangupTone } from '../../utils/audioTones';
+import { playRingingTone, playConnectedTone, playHangupTone, playMessageChime, playNotificationChime } from '../../utils/audioTones';
 
 interface IncomingCallModalProps {
   call: ActiveCall | null;
@@ -25,38 +27,54 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
   onAccept,
   onDecline,
 }) => {
+  const isChat = call?.type === 'Chat';
+  const isVideo = call?.type !== 'Voice' && call?.type !== 'Chat';
+
   useEffect(() => {
     if (!call || call.status !== 'ringing') return;
 
-    // Start acoustic ringing tone
-    const stopAudio = playRingingTone();
+    let stopAudio: (() => void) | undefined;
 
-    // Start haptic ring pattern on supported mobile devices
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try {
-        navigator.vibrate([500, 300, 500, 300, 800]);
-      } catch {}
+    if (isChat) {
+      // For Text Consultations: Play gentle invitation notification chime (NOT telephone ringing)
+      playMessageChime();
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate([150, 80, 150]);
+        } catch {}
+      }
+    } else {
+      // For Audio / Video: Start continuous acoustic ringing tone and telephone vibration pattern
+      stopAudio = playRingingTone();
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate([500, 300, 500, 300, 800]);
+        } catch {}
+      }
     }
 
     return () => {
-      stopAudio();
+      if (stopAudio) stopAudio();
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
         try {
           navigator.vibrate(0);
         } catch {}
       }
     };
-  }, [call]);
+  }, [call, isChat]);
 
   if (!call || call.status !== 'ringing') return null;
 
-  const isVideo = call.type !== 'Voice' && call.type !== 'Chat';
   const defaultAvatar =
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300';
 
   const handleAccept = () => {
     triggerHaptic('success');
-    playConnectedTone();
+    if (isChat) {
+      playNotificationChime();
+    } else {
+      playConnectedTone();
+    }
     onAccept(call);
   };
 
@@ -70,23 +88,36 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Incoming Patient Consultation Call"
+      aria-label={isChat ? 'Text Consultation Invitation' : 'Incoming Patient Consultation Call'}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200"
     >
       <div className="relative w-full max-w-md bg-gradient-to-b from-[#022434] to-[#04364e] border border-emerald-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl text-white text-center space-y-6 overflow-hidden">
         
-        {/* Radar Ringing Pulse Background */}
+        {/* Subtle Background Pulse for Invitation vs Radar for Call */}
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-          <div className="w-64 h-64 rounded-full bg-emerald-500/10 animate-ping" />
-          <div className="absolute w-48 h-48 rounded-full bg-emerald-400/10 animate-pulse" />
+          {isChat ? (
+            <div className="w-56 h-56 rounded-full bg-teal-500/10 animate-pulse" />
+          ) : (
+            <>
+              <div className="w-64 h-64 rounded-full bg-emerald-500/10 animate-ping" />
+              <div className="absolute w-48 h-48 rounded-full bg-emerald-400/10 animate-pulse" />
+            </>
+          )}
         </div>
 
         {/* Top Badges */}
         <div className="relative z-10 flex items-center justify-between">
-          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold font-outfit bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>INCOMING CONSULTATION CALL</span>
-          </span>
+          {isChat ? (
+            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold font-outfit bg-teal-500/20 text-teal-300 border border-teal-500/30">
+              <MessageSquare className="w-3.5 h-3.5 text-teal-300" />
+              <span>TEXT CONSULTATION INVITATION</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold font-outfit bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>INCOMING CONSULTATION CALL</span>
+            </span>
+          )}
 
           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-white/10 text-white/80">
             <Zap className="w-3 h-3 text-amber-300 fill-amber-300" />
@@ -94,7 +125,7 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
           </span>
         </div>
 
-        {/* Patient Avatar & Ringing Animation */}
+        {/* Patient Avatar & Indicator */}
         <div className="relative z-10 flex flex-col items-center space-y-3">
           <div className="relative">
             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full ring-4 ring-emerald-400/40 p-1 bg-white/5 shadow-2xl flex items-center justify-center">
@@ -105,7 +136,9 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
               />
             </div>
             <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 border-2 border-[#022434] flex items-center justify-center shadow-md animate-bounce">
-              {isVideo ? (
+              {isChat ? (
+                <MessageSquare className="w-3.5 h-3.5 text-white" />
+              ) : isVideo ? (
                 <Video className="w-3.5 h-3.5 text-white" />
               ) : (
                 <Phone className="w-3.5 h-3.5 text-white" />
@@ -118,7 +151,11 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
               {call.patientName}
             </h3>
             <p className="text-xs sm:text-sm text-emerald-300 font-medium">
-              Calling for {isVideo ? 'Encrypted HD Video Consultation' : `${call.type} Consultation`}
+              {isChat
+                ? 'Invited you to a live encrypted Text Consultation'
+                : isVideo
+                ? 'Calling for Encrypted HD Video Consultation'
+                : 'Calling for High-Def Audio Consultation'}
             </p>
           </div>
         </div>
@@ -169,8 +206,17 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
             onClick={handleAccept}
             className="w-full py-4 px-4 bg-[#006c44] hover:bg-[#008755] text-white font-extrabold font-outfit text-xs sm:text-sm rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center space-x-2 cursor-pointer border border-emerald-400/50 animate-pulse hover:animate-none"
           >
-            <PhoneCall className="w-4 h-4" />
-            <span>Join Room</span>
+            {isChat ? (
+              <>
+                <MessageSquare className="w-4 h-4" />
+                <span>Accept & Enter Chat</span>
+              </>
+            ) : (
+              <>
+                <PhoneCall className="w-4 h-4" />
+                <span>Join Room</span>
+              </>
+            )}
           </button>
         </div>
 
