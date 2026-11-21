@@ -229,7 +229,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                 triggerHaptic('selection');
                 setLoginRole('patient');
                 setErrorMsg(null);
-                if (email === 'admin@telecare.ng' || email === 'dr.emeka@primetelecare.com') {
+                if (email === 'admin@telecare.ng' || email === 'admin@primetelecare.com') {
                   setEmail('');
                   setPassword('');
                 }
@@ -390,7 +390,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                     loginRole === 'admin'
                       ? 'admin@telecare.ng or admin'
                       : loginRole === 'doctor'
-                      ? 'dr.emeka@primetelecare.com'
+                      ? 'doctor@primetelecare.com'
                       : 'email@example.com'
                   }
                   className="w-full bg-transparent border-none text-sm font-nunito focus:outline-none text-[#171c1f]"

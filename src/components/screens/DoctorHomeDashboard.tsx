@@ -334,7 +334,10 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
   useEffect(() => {
     let isMounted = true;
     const loadQueue = async () => {
-      const local: PatientQueueItem[] = getActiveOrUpcomingConsultations().map((c) => ({
+      const DEMO_NAMES = new Set(['chinedu okafor', 'amina bello', 'ngozi eze', 'babatunde adeleke', 'ada okonkwo']);
+      const local: PatientQueueItem[] = getActiveOrUpcomingConsultations()
+        .filter((c) => !DEMO_NAMES.has((c.patientName || '').toLowerCase()))
+        .map((c) => ({
         id: c.id,
         name: c.patientName || 'Patient',
         time: c.scheduledTime || 'Scheduled',
@@ -356,7 +359,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
         const res = await primeApi.getAppointments();
         const apiAppointments: any[] = Array.isArray(res) ? res : (res as any)?.appointments || (res as any)?.data || [];
         if (isMounted && apiAppointments.length > 0) {
-          const activeOnly = apiAppointments.filter((a: any) => a.status !== 'completed' && a.status !== 'cancelled');
+          const activeOnly = apiAppointments.filter((a: any) => a.status !== 'completed' && a.status !== 'cancelled' && !DEMO_NAMES.has((a.patientName || '').toLowerCase()));
           const apiItems: PatientQueueItem[] = activeOnly.map((a: any) => ({
             id: a.id,
             name: a.patientName || 'Patient',
@@ -380,7 +383,9 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             }
           }
           setTodaysPatients(merged);
-          setCompletedConsultations(getCompletedConsultations());
+          setCompletedConsultations(
+            getCompletedConsultations().filter((c) => !DEMO_NAMES.has((c.patientName || '').toLowerCase()))
+          );
           return;
         }
       } catch (e) {
@@ -388,7 +393,9 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
       }
       if (isMounted) {
         setTodaysPatients(local);
-        setCompletedConsultations(getCompletedConsultations());
+        setCompletedConsultations(
+          getCompletedConsultations().filter((c) => !DEMO_NAMES.has((c.patientName || '').toLowerCase()))
+        );
       }
     };
 

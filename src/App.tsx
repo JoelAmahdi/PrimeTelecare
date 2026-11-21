@@ -255,6 +255,67 @@ export default function App() {
       window.removeEventListener('storage', syncCallSession);
     };
   }, []);
+
+  // One-time purge of all demo profile seeds and records from localStorage
+  useEffect(() => {
+    try {
+      const DEMO_NAMES = ['chinedu okafor', 'amina bello', 'ngozi eze', 'babatunde adeleke', 'ada okonkwo', 'dr. anya sharma'];
+
+      // Clean appointment alerts
+      const rawAlerts = localStorage.getItem('prime_telecare_appointment_alerts');
+      if (rawAlerts) {
+        const parsed = JSON.parse(rawAlerts);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (a: any) =>
+              a &&
+              !a.id?.startsWith('apt-seed-') &&
+              !DEMO_NAMES.includes((a.patientName || '').toLowerCase().trim()) &&
+              !DEMO_NAMES.includes((a.doctorName || '').toLowerCase().trim())
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('prime_telecare_appointment_alerts', JSON.stringify(cleaned));
+            window.dispatchEvent(new Event('appointment-alerts-updated'));
+          }
+        }
+      }
+
+      // Clean custom doctors
+      const rawDocs = localStorage.getItem('prime_telecare_custom_doctors');
+      if (rawDocs) {
+        const parsed = JSON.parse(rawDocs);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (d: any) =>
+              d &&
+              !d.id?.startsWith('doc-anya') &&
+              !DEMO_NAMES.includes((d.name || '').toLowerCase().trim())
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('prime_telecare_custom_doctors', JSON.stringify(cleaned));
+            window.dispatchEvent(new Event('doctors-directory-updated'));
+          }
+        }
+      }
+
+      // Clean prescriptions
+      const rawRx = localStorage.getItem('prime_telecare_prescriptions_store_v1');
+      if (rawRx) {
+        const parsed = JSON.parse(rawRx);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(
+            (p: any) =>
+              p &&
+              !DEMO_NAMES.includes((p.patientName || '').toLowerCase().trim())
+          );
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('prime_telecare_prescriptions_store_v1', JSON.stringify(cleaned));
+            window.dispatchEvent(new Event('prescriptions-updated'));
+          }
+        }
+      }
+    } catch {}
+  }, []);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [showQuickLoginSetup, setShowQuickLoginSetup] = useState<boolean>(false);
   const [isNetworkIssue, setIsNetworkIssue] = useState<boolean>(false);

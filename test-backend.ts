@@ -307,6 +307,40 @@ async function testBackend() {
   );
 
   console.log(`\n--- Test Results: ${passed} Passed, ${failed} Failed ---`);
+
+  // Clean up disk store after test suite run so no demo or test profiles persist
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const storePath = path.resolve(process.cwd(), 'server/data/store.json');
+    const cleanState = {
+      users: [
+        {
+          id: 'admin-1',
+          name: 'System Administrator',
+          email: 'admin@primetelecare.com',
+          role: 'admin',
+          avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300',
+          phone: '',
+          onboarded: true,
+          hasCompletedOnboarding: true,
+        },
+      ],
+      doctors: [],
+      appointments: [],
+      prescriptions: [],
+      auditLogs: [],
+      triageCases: [],
+      payments: [],
+      chatMessages: {},
+      dependents: {},
+      exportAuthorizations: {},
+      activeCalls: {},
+      careJourneyPlans: {},
+    };
+    fs.writeFileSync(storePath, JSON.stringify(cleanState, null, 2), 'utf-8');
+  } catch {}
+
   server.close(() => {
     process.exit(failed > 0 ? 1 : 0);
   });

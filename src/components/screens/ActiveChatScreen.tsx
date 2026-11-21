@@ -109,7 +109,13 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         }
       }
 
-      setConsultationsList(Array.from(map.values()));
+      const DEMO_NAMES = new Set(['chinedu okafor', 'amina bello', 'ngozi eze', 'babatunde adeleke', 'ada okonkwo']);
+      const filtered = Array.from(map.values()).filter(
+        (c) =>
+          !DEMO_NAMES.has((c.patientName || '').toLowerCase()) &&
+          !c.id.startsWith('apt-seed-')
+      );
+      setConsultationsList(filtered);
     } catch {
       setConsultationsList([]);
     } finally {

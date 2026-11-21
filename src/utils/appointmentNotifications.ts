@@ -79,101 +79,37 @@ export function acknowledgeRescheduleNotice(id: string): void {
   } catch {}
 }
 
-export const DEFAULT_APPOINTMENT_ALERTS: AppointmentAlert[] = [
-  {
-    id: 'apt-seed-1',
-    appointmentId: 'apt-seed-1',
-    doctorId: 'doc-attending',
-    doctorName: 'Dr. Attending Physician',
-    doctorSpecialty: 'General Practice / Family Medicine',
-    doctorAvatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
-    patientName: 'Chinedu Okafor',
-    patientId: 'PAT-001',
-    scheduledTime: '10:30 AM',
-    scheduledDate: 'Today',
-    type: 'Video',
-    startTimeTimestamp: Date.now() - 1000 * 60 * 10,
-    dismissed: false,
-    bookingMode: 'instant',
-    status: 'active',
-    price: 10000,
-  },
-  {
-    id: 'apt-seed-2',
-    appointmentId: 'apt-seed-2',
-    doctorId: 'doc-attending',
-    doctorName: 'Dr. Attending Physician',
-    doctorSpecialty: 'General Practice / Family Medicine',
-    doctorAvatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
-    patientName: 'Amina Bello',
-    patientId: 'PAT-002',
-    scheduledTime: '01:15 PM',
-    scheduledDate: 'Today',
-    type: 'Voice',
-    startTimeTimestamp: Date.now() + 1000 * 60 * 60,
-    dismissed: false,
-    bookingMode: 'scheduled',
-    status: 'upcoming',
-    price: 7000,
-  },
-  {
-    id: 'apt-seed-3',
-    appointmentId: 'apt-seed-3',
-    doctorId: 'doc-attending',
-    doctorName: 'Dr. Attending Physician',
-    doctorSpecialty: 'General Practice / Family Medicine',
-    doctorAvatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
-    patientName: 'Ngozi Eze',
-    patientId: 'PAT-003',
-    scheduledTime: '03:00 PM',
-    scheduledDate: 'Today',
-    type: 'Chat',
-    startTimeTimestamp: Date.now() + 1000 * 60 * 180,
-    dismissed: false,
-    bookingMode: 'scheduled',
-    status: 'upcoming',
-    price: 5000,
-  },
-  {
-    id: 'apt-seed-4',
-    appointmentId: 'apt-seed-4',
-    doctorId: 'doc-attending',
-    doctorName: 'Dr. Attending Physician',
-    doctorSpecialty: 'General Practice / Family Medicine',
-    doctorAvatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=400',
-    patientName: 'Babatunde Adeleke',
-    patientId: 'PAT-004',
-    scheduledTime: '09:00 AM',
-    scheduledDate: 'Yesterday',
-    type: 'Video',
-    startTimeTimestamp: Date.now() - 1000 * 60 * 60 * 24,
-    dismissed: false,
-    bookingMode: 'scheduled',
-    status: 'completed',
-    price: 10000,
-    consultationSummary: {
-      symptoms: 'Mild chest tightness upon moderate exertion, fatigue',
-      diagnosis: 'Stable Angina Pectoris (Class II NYHA) & Dyslipidemia',
-      treatment: 'Prescribed Atorvastatin 20mg once daily at night, sublingual Nitroglycerin SOS. Low-sodium diet and lifestyle modification advised.',
-    },
-  },
-];
+const DEMO_PATIENT_NAMES = new Set([
+  'chinedu okafor',
+  'amina bello',
+  'ngozi eze',
+  'babatunde adeleke',
+  'ada okonkwo',
+]);
 
 export function getStoredAppointmentAlerts(): AppointmentAlert[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_APPOINTMENT_ALERTS));
-      return DEFAULT_APPOINTMENT_ALERTS;
+      return [];
     }
     const parsed: AppointmentAlert[] = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_APPOINTMENT_ALERTS));
-      return DEFAULT_APPOINTMENT_ALERTS;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
-    return parsed;
+    // Filter out all demo profile seeds
+    const cleaned = parsed.filter(
+      (a) =>
+        a &&
+        !a.id.startsWith('apt-seed-') &&
+        !DEMO_PATIENT_NAMES.has((a.patientName || '').trim().toLowerCase())
+    );
+    if (cleaned.length !== parsed.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
   } catch (e) {
-    return DEFAULT_APPOINTMENT_ALERTS;
+    return [];
   }
 }
 

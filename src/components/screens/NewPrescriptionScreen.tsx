@@ -114,42 +114,6 @@ export const NewPrescriptionScreen: React.FC<NewPrescriptionScreenProps> = ({
       });
     }
 
-    // Default Nigerian patient records if none in storage
-    if (list.length === 0) {
-      list.push(
-        {
-          id: 'PAT-001',
-          name: 'Chinedu Okafor',
-          date: 'Nov 20, 2026',
-          time: '10:00 AM',
-          type: 'Video',
-          diagnosis: 'Acute Uncomplicated Malaria (P. falciparum)',
-          symptoms: 'High-grade intermittent fever, chills, severe frontal headache, myalgia',
-          status: 'Concluded Consultation',
-        },
-        {
-          id: 'PAT-002',
-          name: 'Amina Bello',
-          date: 'Nov 19, 2026',
-          time: '02:30 PM',
-          type: 'Voice',
-          diagnosis: 'Acute Bronchitis & Pharyngitis',
-          symptoms: 'Dry hacking cough, sore throat, mild rhinorrhea',
-          status: 'Concluded Consultation',
-        },
-        {
-          id: 'PAT-003',
-          name: 'Ngozi Eze',
-          date: 'Nov 18, 2026',
-          time: '11:15 AM',
-          type: 'Chat',
-          diagnosis: 'Primary Arterial Hypertension (Stage 1)',
-          symptoms: 'Occipital morning throbbing headaches, dizziness',
-          status: 'Concluded Consultation',
-        }
-      );
-    }
-
     return list;
   }, [isSelectPatientModalOpen]);
 
