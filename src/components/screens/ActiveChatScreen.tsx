@@ -75,7 +75,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         dateTimeStr: `${a.scheduledDate || 'Today'}, ${a.timeSlot || 'Scheduled'}`,
         rawDate: a.scheduledDate || new Date().toISOString(),
         sortTimestamp: a.createdAt ? new Date(a.createdAt).getTime() : Date.now(),
-        status: a.status === 'completed' ? 'completed' : a.status === 'cancelled' ? 'cancelled' : 'upcoming',
+        status: a.status === 'completed' ? 'completed' : a.status === 'cancelled' ? 'cancelled' : (a.status === 'active' || (a.status as any) === 'in-progress') ? 'live' : 'upcoming',
         chiefComplaint: a.notes || 'Telehealth Consultation',
         price: a.price || 10000,
       }));
@@ -91,7 +91,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         dateTimeStr: `${a.scheduledDate}, ${a.scheduledTime}`,
         rawDate: a.scheduledDate,
         sortTimestamp: a.startTimeTimestamp || Date.now(),
-        status: a.status === 'completed' ? 'completed' : a.status === 'cancelled' ? 'cancelled' : 'upcoming',
+        status: a.status === 'completed' ? 'completed' : a.status === 'cancelled' ? 'cancelled' : (a.status === 'active' || (a.status as any) === 'in-progress') ? 'live' : 'upcoming',
         chiefComplaint: `${a.type} Consultation with ${a.doctorName}`,
         price: a.price || 10000,
       }));
@@ -169,7 +169,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   useEffect(() => {
     onActiveSessionChange?.(Boolean(activeSession));
   }, [activeSession, onActiveSessionChange]);
-  const [activeTab, setActiveTab] = useState<'all' | 'new' | 'previous'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'new' | 'previous'>(role === 'doctor' ? 'new' : 'all');
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'Video' | 'Chat' | 'Voice'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
@@ -629,7 +629,9 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
     <div className="flex flex-col h-full bg-slate-50/50 font-outfit relative overflow-hidden pb-20 sm:pb-0">
       <StatusBar />
       <Header
-        title="Consultations"
+        title={role === 'doctor' ? 'Patients Queue & Clinic' : 'Consultations'}
+        showBack={role === 'doctor'}
+        onBack={role === 'doctor' ? () => onNavigate('doctor-home') : undefined}
         showBell
         bellCount={2}
         onBellClick={() => setIsNotificationsOpen(true)}
@@ -652,10 +654,12 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-[#022434] tracking-tight">
-                Consultations
+                {role === 'doctor' ? 'Patients Queue & Upcoming Sessions' : 'Consultations'}
               </h1>
               <p className="text-sm text-slate-500 font-nunito mt-1">
-                Manage your active, upcoming, and completed sessions.
+                {role === 'doctor'
+                  ? 'Monitor your live patient waiting queue, upcoming scheduled sessions, and clinical encounters.'
+                  : 'Manage your active, upcoming, and completed sessions.'}
               </p>
             </div>
             {role !== 'doctor' && (
@@ -697,7 +701,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                     }`}
                   >
                     {tab === 'all'
-                      ? 'All Sessions'
+                      ? (role === 'doctor' ? 'All Patients' : 'All Sessions')
                       : tab === 'new'
                       ? (role === 'doctor' ? 'Patient Queue' : 'Active & Upcoming')
                       : 'Completed'}

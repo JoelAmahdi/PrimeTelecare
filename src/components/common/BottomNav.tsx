@@ -136,7 +136,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentScreen, onNavigate,
     },
     {
       id: 'active-chat' as ScreenId,
-      label: 'Sessions',
+      label: 'Patients',
       icon: Users,
       isActive: currentScreen === 'active-chat',
     },

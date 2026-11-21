@@ -264,7 +264,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
 
   const handleEnterConsultationRoom = () => {
     triggerHaptic('selection');
-    // 1. Re-enter active session in progress if one exists
+    // 1. Re-enter active session in progress if one exists (e.g. room was closed or refreshed)
     try {
       const raw = localStorage.getItem('prime_telecare_active_call_session');
       if (raw) {
@@ -277,30 +277,44 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
       }
     } catch {}
 
+    try {
+      const callRaw = localStorage.getItem('prime_telecare_active_call') || localStorage.getItem('prime_telecare_incoming_call');
+      if (callRaw) {
+        const parsed = JSON.parse(callRaw);
+        if (parsed && (parsed.id || parsed.callId)) {
+          showToast(`Resuming active call with ${parsed.callerName || parsed.patientName || 'patient'}...`, 'info');
+          onNavigate(parsed.modality === 'Chat' || parsed.type === 'Chat' ? 'active-chat' : 'video-call');
+          return;
+        }
+      }
+    } catch {}
+
     // 2. Check if there are active queue consultations to enter
     const active = getActiveOrUpcomingConsultations();
-    if (active.length > 0) {
-      const first = active[0];
+    const liveFirst = active.find((a) => a.status === 'active') || active[0];
+    if (liveFirst) {
       const sessionPayload = {
-        id: first.appointmentId || first.id,
-        appointmentId: first.appointmentId || first.id,
-        consultationId: first.id,
+        id: liveFirst.appointmentId || liveFirst.id,
+        appointmentId: liveFirst.appointmentId || liveFirst.id,
+        consultationId: liveFirst.id,
         doctorId: user.id,
         doctorName: user.name.trim().startsWith('Dr.') ? user.name.trim() : `Dr. ${user.name.trim()}`,
         doctorSpecialty: user.doctorSpecialty || '',
         doctorAvatar: user.avatarUrl || '',
-        patientName: first.patientName || '',
-        type: first.type || 'Video',
+        patientName: liveFirst.patientName || '',
+        type: liveFirst.type || 'Video',
       };
       try {
         localStorage.setItem('prime_telecare_active_call_session', JSON.stringify(sessionPayload));
         window.dispatchEvent(new Event('active-call-session-updated'));
       } catch {}
-      onNavigate(first.type === 'Chat' ? 'active-chat' : 'video-call');
+      showToast(`Entering consultation room with ${liveFirst.patientName}...`, 'info');
+      onNavigate(liveFirst.type === 'Chat' ? 'active-chat' : 'video-call');
       return;
     }
 
-    // 3. Fallback to active-chat screen (which displays patient queue status without find doctor)
+    // 3. Fallback to active-chat screen (which displays patient queue without find doctor)
+    showToast('Opening Patient Queue & Consultations...', 'info');
     onNavigate('active-chat');
   };
 
@@ -497,11 +511,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
             <button
               onClick={() => {
                 triggerHaptic('selection');
-                setConsultationTab('queue');
-                const el = document.getElementById('patient-queue-section');
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth' });
-                }
+                onNavigate('active-chat');
               }}
               className="px-5 py-2.5 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs sm:text-sm rounded-xl shadow-xs transition-all active:scale-95 flex items-center space-x-2 cursor-pointer"
             >
@@ -665,10 +675,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <button
-                      onClick={() => {
-                        triggerHaptic('selection');
-                        onNavigate('active-chat');
-                      }}
+                      onClick={handleEnterConsultationRoom}
                       className="px-3 py-2.5 rounded-2xl border transition-all text-left flex items-center justify-between group active:scale-98 cursor-pointer bg-white/10 hover:bg-white/15 border-white/15 text-white"
                     >
                       <div className="flex items-center space-x-2 min-w-0">
@@ -676,8 +683,12 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                           <Video className="w-3.5 h-3.5" />
                         </div>
                         <div className="min-w-0">
-                          <span className="text-xs font-bold font-outfit block text-white truncate">Live Rooms</span>
-                          <span className="text-[10px] text-emerald-200 block truncate">Enter Room</span>
+                          <span className="text-xs font-bold font-outfit block text-white truncate">
+                            {activeSession ? 'Resume Room' : 'Consultation Room'}
+                          </span>
+                          <span className="text-[10px] text-emerald-200 block truncate">
+                            {activeSession ? 'Tap to Re-enter' : 'Active Consultations'}
+                          </span>
                         </div>
                       </div>
                     </button>
