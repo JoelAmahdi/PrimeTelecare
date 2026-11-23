@@ -20,6 +20,7 @@ import {
   Lock,
   Volume2,
   User,
+  Users,
   Info,
   ChevronRight,
   PhoneCall,
@@ -355,6 +356,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   const [isConnectingCall, setIsConnectingCall] = useState<boolean>(false);
   const [isPeerConnected, setIsPeerConnected] = useState<boolean>(false);
   const isPeerConnectedRef = useRef<boolean>(false);
+  const prevPeerConnectedRef = useRef<boolean>(false);
   const [iceStatus, setIceStatus] = useState<string>('waiting');
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [swappedPiP, setSwappedPiP] = useState<boolean>(false);
@@ -516,14 +518,24 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
     }
   };
 
-  // Active Call Timer Loop
+  // When someone else joins the call, announce presence and tone
   useEffect(() => {
-    if (!hasConfirmedConsent || isReconnecting) return;
+    if (isPeerConnected && !prevPeerConnectedRef.current) {
+      const otherPerson = myRole === 'doctor' ? displayPatientName : displayDoctorName;
+      showToast(`${otherPerson} joined the call. Consultation started.`, 'success');
+      playConnectedTone();
+    }
+    prevPeerConnectedRef.current = isPeerConnected;
+  }, [isPeerConnected, myRole, displayPatientName, displayDoctorName]);
+
+  // Active Call Timer Loop — only ticks when the other participant has joined
+  useEffect(() => {
+    if (!hasConfirmedConsent || isReconnecting || !isPeerConnected) return;
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, [hasConfirmedConsent, isReconnecting]);
+  }, [hasConfirmedConsent, isReconnecting, isPeerConnected]);
 
   // Acquire local camera/mic (can be triggered directly inside user click gesture for iOS Safari)
   const acquireLocalMedia = async (mode: 'user' | 'environment' = facingMode) => {
@@ -1487,6 +1499,175 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       )}
 
       {/* ========================================================================= */}
+      {/* 1B. AWAITING PARTICIPANT HOLDING VIEW (Consultation room starts on join)  */}
+      {/* ========================================================================= */}
+      {hasConfirmedConsent && !isPeerConnected && (
+        <div className="absolute inset-0 z-30 bg-gradient-to-b from-[#022434] via-[#011621] to-[#000d14] flex flex-col justify-between p-5 sm:p-6 text-center font-nunito overflow-y-auto">
+          {/* Top Bar for Awaiting */}
+          <div className="relative z-20 pt-2 flex items-center justify-between max-w-md mx-auto w-full">
+            <div className="bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-amber-500/30 flex items-center space-x-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span className="text-xs font-bold text-amber-300 font-outfit">
+                {myRole === 'doctor' ? 'Awaiting Patient...' : 'Awaiting Doctor...'}
+              </span>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-[11px] text-slate-300 font-mono">
+              Timer: Not started
+            </div>
+          </div>
+
+          {/* Center Holding Card */}
+          <div className="max-w-sm mx-auto w-full space-y-5 my-auto py-4">
+            <div className="relative mx-auto w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
+              {/* Radar rings */}
+              <div className="absolute inset-0 rounded-full border border-emerald-400/20 animate-ping pointer-events-none" />
+              <div className="absolute -inset-4 rounded-full border border-emerald-400/10 animate-pulse pointer-events-none" />
+              {myRole === 'doctor' ? (
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-800 border-4 border-emerald-400/50 flex items-center justify-center text-white font-extrabold text-2xl sm:text-3xl font-outfit shadow-2xl">
+                  {displayPatientName.slice(0, 2).toUpperCase() || 'PT'}
+                </div>
+              ) : resolvedDoctorAvatar ? (
+                <img
+                  src={resolvedDoctorAvatar}
+                  alt={displayDoctorName}
+                  className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-emerald-400 shadow-2xl"
+                />
+              ) : (
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-emerald-500/20 border-4 border-[#77daa4] flex items-center justify-center text-[#77daa4] font-extrabold text-xl sm:text-2xl font-outfit shadow-2xl">
+                  {displayDoctorName.replace(/^Dr\.\s*/i, '').slice(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-2xl font-extrabold font-outfit text-white">
+                {myRole === 'doctor' ? 'Awaiting Patient...' : 'Awaiting Doctor...'}
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
+                {myRole === 'doctor'
+                  ? `The consultation room will start automatically when ${displayPatientName} joins the call.`
+                  : `The consultation room will start automatically when ${displayDoctorName} joins the call.`}
+              </p>
+            </div>
+
+            {/* Participant Card */}
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-left space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">
+                  {myRole === 'doctor' ? 'Expected Patient' : 'Attending Physician'}
+                </span>
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                  Not joined yet
+                </span>
+              </div>
+              <p className="text-sm font-extrabold font-outfit text-white">
+                {myRole === 'doctor' ? displayPatientName : displayDoctorName}
+              </p>
+              {myRole === 'patient' && doctorSpecialty && (
+                <p className="text-xs text-slate-400">{doctorSpecialty}</p>
+              )}
+            </div>
+
+            {/* In Video mode, self camera preview check */}
+            {!isStrictlyAudio && hasCamera && (
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 flex items-center space-x-3 text-left">
+                <div className="w-12 h-16 rounded-xl overflow-hidden bg-slate-900 border border-white/20 shrink-0">
+                  <video
+                    ref={(el) => {
+                      if (el && localStreamRef.current && el.srcObject !== localStreamRef.current) {
+                        el.srcObject = localStreamRef.current;
+                        el.muted = true;
+                        el.play().catch(() => {});
+                      }
+                    }}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover scale-x-[-1]"
+                  />
+                </div>
+                <div className="text-xs">
+                  <span className="font-extrabold text-white block">Camera & Mic Ready</span>
+                  <span className="text-[11px] text-slate-400">Your video will be shared once the other person joins</span>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons during waiting */}
+            <div className="flex flex-col gap-2 pt-1">
+              {myRole === 'patient' && (
+                <button
+                  type="button"
+                  onClick={handleRingDoctorAgain}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold font-outfit text-xs rounded-xl shadow-lg flex items-center justify-center space-x-2 cursor-pointer active:scale-98"
+                >
+                  <PhoneCall className="w-4 h-4" />
+                  <span>Ring Doctor Again</span>
+                </button>
+              )}
+              {myRole === 'doctor' && (
+                <button
+                  type="button"
+                  onClick={handleCopyCallLink}
+                  className="w-full py-3 bg-white/10 hover:bg-white/20 text-white font-extrabold font-outfit text-xs rounded-xl shadow-lg flex items-center justify-center space-x-2 cursor-pointer active:scale-98"
+                >
+                  {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedLink ? 'Consultation Link Copied' : 'Copy Consultation Link'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleForceReconnect}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold font-outfit text-xs rounded-xl border border-slate-700 flex items-center justify-center space-x-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh Connection</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Controls for Awaiting State: Mic/Cam check & Leave */}
+          <div className="relative z-20 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] flex items-center justify-center gap-3">
+            <button
+              onClick={handleToggleMute}
+              className={`p-3 rounded-full border transition-all cursor-pointer ${
+                isMuted
+                  ? 'bg-rose-600 text-white border-rose-600'
+                  : 'bg-white/15 text-white border-white/20 hover:bg-white/25'
+              }`}
+              title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
+            >
+              {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+            {!isStrictlyAudio && (
+              <button
+                onClick={handleToggleVideo}
+                className={`p-3 rounded-full border transition-all cursor-pointer ${
+                  isVideoOff
+                    ? 'bg-rose-600 text-white border-rose-600'
+                    : 'bg-white/15 text-white border-white/20 hover:bg-white/25'
+                }`}
+                title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
+              >
+                {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+              </button>
+            )}
+            <button
+              onClick={() => {
+                triggerHaptic('heavy');
+                handleHangup();
+              }}
+              className="px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white font-extrabold font-outfit text-xs rounded-full shadow-lg flex items-center space-x-1.5 cursor-pointer"
+              title="Leave Room"
+            >
+              <PhoneOff className="w-4 h-4" />
+              <span>Leave Room</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* 2. MAIN CONSULTATION CANVAS (LIVE WEBRTC VIDEO OR AUDIO FALLBACK)         */}
       {/* ========================================================================= */}
       {!isAudioOnlyMode && !isStrictlyAudio ? (
@@ -1515,61 +1696,39 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
             </button>
           )}
 
-          {/* Waiting for Peer / Reconnect Banner */}
-          {(!isPeerConnected || (!hasRemoteVideo && !swappedPiP)) && (
-            <div className="absolute top-20 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-20 max-w-sm bg-black/80 backdrop-blur-md p-4 rounded-2xl border border-emerald-500/40 text-white shadow-2xl text-center space-y-2.5">
+          {/* Visual Presence Pill on Video Canvas: Someone else is on call */}
+          {isPeerConnected && (
+            <div className="absolute top-20 left-4 z-20 bg-black/70 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-emerald-500/40 text-white shadow-lg flex items-center space-x-2 animate-in fade-in duration-300">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[11px] font-extrabold text-emerald-300 font-outfit">
+                {myRole === 'doctor' ? `${displayPatientName} is on call` : `${displayDoctorName} is on call`}
+              </span>
+            </div>
+          )}
+
+          {/* Peer Connected but Remote Camera Off / Loading Banner */}
+          {isPeerConnected && !hasRemoteVideo && !swappedPiP && (
+            <div className="absolute top-20 right-4 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 z-20 max-w-xs bg-black/80 backdrop-blur-md p-3.5 rounded-2xl border border-emerald-500/40 text-white shadow-2xl text-center space-y-2">
               <div className="flex items-center justify-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                <span className="text-xs font-bold font-outfit text-emerald-300 uppercase tracking-wider">
-                  {isPeerConnected && !hasRemoteVideo
-                    ? myRole === 'patient'
-                      ? 'Waiting for Doctor Camera...'
-                      : 'Waiting for Patient Camera...'
-                    : iceStatus === 'checking'
-                    ? 'Connecting Live Video...'
-                    : myRole === 'patient'
-                    ? `Calling ${displayDoctorName}...`
-                    : 'Waiting for Patient...'}
+                <span className="text-xs font-bold font-outfit text-emerald-300">
+                  {myRole === 'patient' ? 'Doctor Camera Off • Audio Active' : 'Patient Camera Off • Audio Active'}
                 </span>
               </div>
-              {mediaError && (
-                <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-400/40 text-[11px] text-amber-200 space-y-1.5">
-                  <p>{mediaError}</p>
-                  <button
-                    type="button"
-                    onClick={() => acquireLocalMedia(facingMode)}
-                    className="px-3 py-1 bg-amber-400 text-slate-950 font-bold rounded-lg text-[11px] cursor-pointer"
-                  >
-                    Enable Camera & Mic
-                  </button>
-                </div>
-              )}
+              <p className="text-[11px] text-slate-300">
+                You are connected. Both participants are on the call.
+              </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={handleForceReconnect}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-1.5 cursor-pointer"
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-1.5 cursor-pointer"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Reconnect Video</span>
-                </button>
-                {myRole === 'patient' && !isPeerConnected && (
-                  <button
-                    type="button"
-                    onClick={handleRingDoctorAgain}
-                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-1.5 cursor-pointer"
-                  >
-                    <PhoneCall className="w-3.5 h-3.5" />
-                    <span>Ring Doctor</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleCopyCallLink}
-                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-outfit rounded-xl transition-all shadow-sm active:scale-95 inline-flex items-center space-x-1.5 cursor-pointer"
-                >
-                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Refresh Video Feed</span>
                 </button>
               </div>
             </div>
@@ -1608,8 +1767,9 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           </div>
 
           <div className="space-y-1">
-            <span className="text-xs font-extrabold font-outfit text-[#77daa4] uppercase tracking-wider bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-400/30">
-              {isStrictlyAudio ? 'Strictly Audio Consultation' : 'Audio Mode'}
+            <span className="text-xs font-extrabold font-outfit text-[#77daa4] uppercase tracking-wider bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-400/30 inline-flex items-center space-x-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{isPeerConnected ? `${myRole === 'doctor' ? displayPatientName : displayDoctorName} is on call` : isStrictlyAudio ? 'Strictly Audio Consultation' : 'Audio Mode'}</span>
             </span>
             <h2 className="text-2xl font-extrabold font-outfit text-white">
               {myRole === 'doctor' ? displayPatientName : displayDoctorName}
@@ -1635,7 +1795,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       {/* ========================================================================= */}
       {/* 3. FLOATING PIP SELF PREVIEW & VISUAL MIC/CAM STATUS                      */}
       {/* ========================================================================= */}
-      {!isStrictlyAudio && (
+      {!isStrictlyAudio && isPeerConnected && (
         <div
           onClick={() => {
             triggerHaptic('selection');
@@ -1706,21 +1866,30 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       {/* ========================================================================= */}
       {/* 4. TOP BAR: PRACTITIONER NAME & LIVE STATUS                               */}
       {/* ========================================================================= */}
-      <div className="relative z-20 px-5 pt-3 pb-2 flex items-center justify-center">
-        <div className="bg-black/60 backdrop-blur-md px-5 py-2 rounded-full border border-white/20 shadow-lg flex items-center space-x-2.5">
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${
-              isPeerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-ping'
-            }`}
-          />
-          <span className="text-sm sm:text-base font-extrabold font-outfit text-white tracking-wide">
-            {myRole === 'doctor' ? displayPatientName : displayDoctorName}
-          </span>
-          <span className="text-[11px] font-mono text-emerald-300 font-bold">
-            {formatTime(elapsedSeconds)}
-          </span>
+      {isPeerConnected && (
+        <div className="relative z-20 px-4 sm:px-5 pt-3 pb-2 flex items-center justify-between max-w-lg mx-auto w-full">
+          {/* Presence Indicator: Someone else is on call */}
+          <div className="bg-black/75 backdrop-blur-md px-3 sm:px-3.5 py-1.5 rounded-full border border-emerald-500/40 shadow-lg flex items-center space-x-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[11px] font-extrabold text-emerald-300 font-outfit flex items-center space-x-1">
+              <Users className="w-3.5 h-3.5" />
+              <span>2 on call</span>
+            </span>
+          </div>
+
+          <div className="bg-black/75 backdrop-blur-md px-3.5 sm:px-4 py-1.5 rounded-full border border-white/20 shadow-lg flex items-center space-x-2.5">
+            <span className="text-xs sm:text-sm font-extrabold font-outfit text-white tracking-wide truncate max-w-[130px] sm:max-w-[200px]">
+              {myRole === 'doctor' ? displayPatientName : displayDoctorName}
+            </span>
+            <span className="text-[11px] font-mono text-emerald-300 font-bold border-l border-white/20 pl-2">
+              {formatTime(elapsedSeconds)}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 5. RECONNECTION OVERLAY (IF CALL DROPS)                                   */}
@@ -1804,7 +1973,8 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       {/* ========================================================================= */}
       {/* 6. BOTTOM TOOLBAR & CONSULTATION CONTROLS                                 */}
       {/* ========================================================================= */}
-      <div className="relative z-20 px-4 sm:px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-2 space-y-3">
+      {isPeerConnected && (
+        <div className="relative z-20 px-4 sm:px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-2 space-y-3">
         {/* Visual Warnings / Mode Banners */}
         {isStrictlyAudio ? (
           <div className="bg-emerald-950/80 backdrop-blur-md border border-emerald-500/40 text-emerald-300 text-xs p-2.5 rounded-2xl flex items-center justify-center max-w-md mx-auto shadow-sm">
@@ -1940,6 +2110,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 7. IN-CALL SECURE CLINICAL MESSAGING DRAWER                                */}

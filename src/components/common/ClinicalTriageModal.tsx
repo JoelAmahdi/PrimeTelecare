@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   X,
   AlertTriangle,
-  Sparkles,
+  Check,
 } from 'lucide-react';
 import { triggerHaptic } from '../../utils/haptics';
 import { primeApi } from '../../services/apiClient';
@@ -181,7 +181,7 @@ export const ClinicalTriageModal: React.FC<ClinicalTriageModalProps> = ({
                     onClick={applyNormalBaseline}
                     className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-[#006c44] border border-emerald-300 rounded-lg text-[11px] font-bold font-outfit transition-colors flex items-center space-x-1 cursor-pointer"
                   >
-                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <Check className="w-3 h-3 text-emerald-600" />
                     <span>Use Standard Baseline</span>
                   </button>
                 </div>

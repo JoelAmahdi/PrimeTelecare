@@ -208,7 +208,7 @@ Next checkup: 2026-10-15`
         {/* Quick Fill Templates Bar */}
         <div className="bg-slate-50 p-3 px-5 border-b border-slate-200 flex items-center justify-between gap-2 overflow-x-auto text-xs shrink-0">
           <span className="font-extrabold font-outfit text-[#022434] whitespace-nowrap flex items-center space-x-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <FileText className="w-3.5 h-3.5 text-emerald-600" />
             <span>Clinical Templates:</span>
           </span>
           <div className="flex items-center space-x-2">

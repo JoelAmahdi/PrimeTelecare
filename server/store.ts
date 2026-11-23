@@ -565,6 +565,29 @@ class MemoryStore {
     };
   }
 
+  getAllExportAuthorizations() {
+    const list = Object.entries(this.state.exportAuthorizations).map(([sessionId, data]) => ({
+      sessionId,
+      ...data,
+    }));
+    if (list.length === 0) {
+      const defaultReq = {
+        sessionId: 'SESS-2026-9948',
+        patientName: 'Adaeze Okonkwo',
+        doctorName: 'Dr. Emeka Nnamdi',
+        doctorLicense: 'MDCN/2019/68421',
+        status: 'pending_doctor_approval' as const,
+        purpose: 'Official Medical Record & Clinical Notes Release',
+        requestedAt: 'Nov 23, 2026, 09:30 AM',
+        isPaid: false,
+        paymentAmount: 3000,
+      };
+      this.state.exportAuthorizations['SESS-2026-9948'] = defaultReq;
+      return [{ ...defaultReq }];
+    }
+    return list;
+  }
+
   saveExportAuthorization(key: string, data: any) {
     this.state.exportAuthorizations[key] = {
       ...this.state.exportAuthorizations[key],

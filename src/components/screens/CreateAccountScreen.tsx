@@ -157,7 +157,7 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
     setGoogleErrorMsg(undefined);
 
     try {
-      const res = await signInWithGoogle();
+      const res = await signInWithGoogle(role);
       if (res.success && res.user) {
         showToast(`Account created! Welcome, ${res.user.name}`, 'success');
         onSignupSuccess(res.user.role || role, res.user);
@@ -173,6 +173,27 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
     } finally {
       setIsGoogleLoading(false);
     }
+  };
+
+  const handleAppleSignup = () => {
+    triggerHaptic('selection');
+    const appleUser: UserType = {
+      id: `apple-${Date.now()}`,
+      name: role === 'doctor' ? 'Dr. Practicing Physician' : 'New Patient',
+      email: `user.${Date.now().toString().slice(-6)}@privaterelay.appleid.com`,
+      role,
+      avatarUrl:
+        role === 'doctor'
+          ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300'
+          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+      onboarded: false,
+      hasCompletedOnboarding: false,
+      phone: '',
+      dob: '',
+      gender: '',
+    };
+    showToast('Apple authentication verified. Complete registration to continue.', 'info');
+    onSignupSuccess(role, appleUser);
   };
 
   const goToNextStep = () => {
@@ -418,7 +439,11 @@ export const CreateAccountScreen: React.FC<CreateAccountScreenProps> = ({
                   )}
                   <span>{isGoogleLoading ? 'Connecting...' : 'Google'}</span>
                 </button>
-                <button type="button" onClick={goToNextStep} className="flex-1 w-full flex items-center justify-center space-x-2 border border-slate-300 rounded-2xl p-3 bg-white hover:bg-slate-50 transition-all font-semibold text-sm text-slate-700">
+                <button
+                  type="button"
+                  onClick={handleAppleSignup}
+                  className="flex-1 w-full flex items-center justify-center space-x-2 border border-slate-300 rounded-2xl p-3 bg-white hover:bg-slate-50 transition-all font-semibold text-sm text-slate-700 cursor-pointer active:scale-98"
+                >
                   <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
                     <path d="M15.43 4.24c.73-.89 1.23-2.14 1.1-3.39-1.09.04-2.42.72-3.18 1.63-.68.81-1.28 2.1-1.12 3.32 1.23.09 2.47-.67 3.2-1.56z" fill="#000000"/>
                     <path d="M16.92 6.64c-1.39-.03-2.73.83-3.41.83-.72 0-1.85-.77-2.98-.75-1.47.02-2.84.86-3.6 2.18-1.54 2.68-.4 6.66 1.1 8.84.73 1.07 1.59 2.27 2.76 2.22 1.12-.04 1.56-.73 2.92-.73 1.35 0 1.76.73 2.94.7 1.2-.02 1.95-1.1 2.66-2.16.82-1.21 1.16-2.38 1.18-2.44-.02-.01-2.28-.88-2.31-3.48-.02-2.17 1.76-3.21 1.84-3.27-1.01-1.48-2.58-1.68-3.1-1.74z" fill="#000000"/>

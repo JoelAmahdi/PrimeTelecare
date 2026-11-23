@@ -374,6 +374,8 @@ export const primeApi = {
     senderName: string;
     text: string;
     imageUrl?: string;
+    audioUrl?: string;
+    audioDuration?: string;
     status?: MessageStatus;
     timestamp?: string;
     replyTo?: {
@@ -395,6 +397,8 @@ export const primeApi = {
         senderName: message.senderName,
         text: message.text,
         imageUrl: message.imageUrl,
+        audioUrl: message.audioUrl,
+        audioDuration: message.audioDuration,
         timestamp: message.timestamp || new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true }),
         status: 'delivered',
         replyTo: message.replyTo,
@@ -561,11 +565,20 @@ export const primeApi = {
     }
   },
 
-  async authorizeExportRelease(sessionId: string = 'app-1', action: 'grant' | 'reject', doctorName?: string) {
+  async getAllExportRequests(): Promise<any[]> {
+    try {
+      const res = await request<{ success: boolean; requests: any[] }>('/records/export-requests');
+      return res.requests || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async authorizeExportRelease(sessionId: string = 'app-1', action: 'grant' | 'reject', doctorName?: string, doctorLicense?: string) {
     try {
       const res = await request<{ success: boolean; exportAuthorization: any }>('/records/export-authorize', {
         method: 'POST',
-        body: JSON.stringify({ sessionId, action, doctorName }),
+        body: JSON.stringify({ sessionId, action, doctorName, doctorLicense }),
       });
       saveExportPermission(res.exportAuthorization);
       return res.exportAuthorization;
@@ -574,6 +587,8 @@ export const primeApi = {
       const updated = {
         ...cur,
         status: action === 'grant' ? ('granted' as const) : ('rejected' as const),
+        doctorName: doctorName || cur.doctorName,
+        doctorLicense: doctorLicense || cur.doctorLicense,
         grantedAt: new Date().toLocaleDateString(),
       };
       saveExportPermission(updated);

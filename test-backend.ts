@@ -235,8 +235,7 @@ async function testBackend() {
       followUpDate: '2026-11-24',
       followUpPlanNote: 'Review lab results and check fever resolution.',
       items: [
-        { id: 'item-rx', title: 'Drug Prescription Check', category: 'medication', checkedByDoctor: true, completedByPatient: false },
-        { id: 'item-lab', title: 'Laboratory Investigation Check', category: 'diagnostic', checkedByDoctor: true, completedByPatient: false },
+        { id: 'item-lab', title: 'Request or Reviewed Lab Results', category: 'diagnostic', checkedByDoctor: true, completedByPatient: false },
         { id: 'item-followup', title: 'Follow-Up Visit Set Up Check', category: 'followup', checkedByDoctor: true, completedByPatient: false },
       ],
     }),

@@ -13,17 +13,19 @@ chatRouter.get('/:sessionId/messages', (req: Request, res: Response) => {
 // POST /api/chat/:sessionId/messages
 chatRouter.post('/:sessionId/messages', (req: Request, res: Response) => {
   const sessionId = req.params.sessionId || 'default';
-  const { sender, senderName, text, imageUrl, status, timestamp, replyTo } = req.body;
+  const { sender, senderName, text, imageUrl, audioUrl, audioDuration, status, timestamp, replyTo } = req.body;
 
-  if (!sender || !text) {
-    return res.status(400).json({ success: false, error: 'Sender and text are required' });
+  if (!sender || (!text && !audioUrl && !imageUrl)) {
+    return res.status(400).json({ success: false, error: 'Sender and content are required' });
   }
 
   const message = store.addChatMessage(sessionId, {
     sender,
     senderName: senderName || (sender === 'doctor' ? 'Doctor' : 'Patient'),
-    text,
+    text: text || (audioUrl ? '🎤 Voice Note' : ''),
     imageUrl,
+    audioUrl,
+    audioDuration,
     status: status || 'delivered',
     timestamp,
     replyTo,

@@ -181,7 +181,7 @@ export const ConsultationSummaryModal: React.FC<ConsultationSummaryModalProps> =
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold font-outfit text-slate-600 flex items-center space-x-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <FileText className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Quick Documentation Templates:</span>
               </span>
               <span className="text-[11px] text-slate-400 font-nunito">Click to prefill</span>

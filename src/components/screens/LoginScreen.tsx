@@ -526,12 +526,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate, onLoginSuc
                     triggerHaptic('selection');
                     const appleUser: User = {
                       id: `apple-${Date.now()}`,
-                      name: loginRole === 'doctor' ? 'Practicing Physician' : 'Patient',
+                      name: loginRole === 'doctor' ? 'Dr. Practicing Physician' : 'Patient',
                       email: 'user@icloud.com',
                       role: loginRole === 'doctor' ? 'doctor' : 'patient',
-                      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+                      avatarUrl:
+                        loginRole === 'doctor'
+                          ? 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300'
+                          : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
                       onboarded: false,
                       hasCompletedOnboarding: false,
+                      phone: '',
+                      dob: '',
+                      gender: '',
+                      doctorLicenseNo: '',
+                      doctorSpecialty: '',
                     };
                     onLoginSuccess(appleUser.role, appleUser);
                   }}

@@ -2,15 +2,8 @@ import { CareJourneyItem, CareJourneyPlan } from '../types';
 
 export const DEFAULT_CARE_JOURNEY_ITEMS: CareJourneyItem[] = [
   {
-    id: 'item-rx',
-    title: 'Drug Prescription Check',
-    category: 'medication',
-    checkedByDoctor: true,
-    completedByPatient: false,
-  },
-  {
     id: 'item-lab',
-    title: 'Laboratory Investigation Check',
+    title: 'Request or Reviewed Lab Results',
     category: 'diagnostic',
     checkedByDoctor: false,
     completedByPatient: false,
@@ -19,7 +12,7 @@ export const DEFAULT_CARE_JOURNEY_ITEMS: CareJourneyItem[] = [
     id: 'item-followup',
     title: 'Follow-Up Visit Set Up Check',
     category: 'followup',
-    checkedByDoctor: true,
+    checkedByDoctor: false,
     completedByPatient: false,
   },
 ];
@@ -83,11 +76,11 @@ export function createInitialCareJourneyDraft(patientName = 'Patient', doctorNam
     doctorId: 'doc-1',
     doctorName,
     status: 'draft_pending_doctor',
-    items: DEFAULT_CARE_JOURNEY_ITEMS.map((item) => ({ ...item })),
-    drugPrescriptionChecked: true,
+    items: DEFAULT_CARE_JOURNEY_ITEMS.map((item) => ({ ...item, checkedByDoctor: false })),
+    drugPrescriptionChecked: false,
     labInvestigationChecked: false,
     labInvestigationDetails: '',
-    followUpVisitChecked: true,
+    followUpVisitChecked: false,
     followUpDate: '',
     followUpPlanNote: '',
     doctorNotes: '',

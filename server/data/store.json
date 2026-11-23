@@ -17,31 +17,7 @@
   "auditLogs": [],
   "triageCases": [],
   "payments": [],
-  "chatMessages": {
-    "test-sess-1795432134909": [
-      {
-        "sender": "doctor",
-        "senderName": "Dr. John Doe",
-        "text": "Initial consultation message",
-        "status": "delivered",
-        "timestamp": "11:45 AM",
-        "id": "msg-1795432135000-932"
-      },
-      {
-        "sender": "patient",
-        "senderName": "Jane Patient",
-        "text": "Replying to your question",
-        "status": "read",
-        "timestamp": "11:46 AM",
-        "replyTo": {
-          "id": "msg-1795432135000-932",
-          "senderName": "Dr. John Doe",
-          "text": "Initial consultation message"
-        },
-        "id": "msg-1795432135042-596"
-      }
-    ]
-  },
+  "chatMessages": {},
   "dependents": {},
   "exportAuthorizations": {},
   "activeCalls": {},

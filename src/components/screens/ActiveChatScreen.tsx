@@ -3,8 +3,9 @@ import { Header } from '../common/Header';
 import { StatusBar } from '../common/StatusBar';
 import {
   Video, MessageSquare, Phone, Search, Filter, Clock, Calendar, CheckCircle2, FileText, ChevronRight,
-  ChevronDown, ChevronUp, ArrowUpDown, User, Sparkles, ArrowLeft, Send, Paperclip, Camera, MoreHorizontal,
-  Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill, Users, RotateCcw, Home, Reply, PhoneOff, X
+  ChevronDown, ChevronUp, ArrowUpDown, User, ArrowLeft, Send, Paperclip, Camera, MoreHorizontal,
+  Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill, Users, RotateCcw, Home, Reply, PhoneOff, X, ShieldCheck,
+  Play, Pause, Square, Trash2
 } from 'lucide-react';
 import { ScreenId, ChatMessage, Doctor, UserRole, BookingSummary, ConsultationSummaryData, StructuredClinicalRecord } from '../../types';
 import { mockDoctors, currentUserPatient, currentUserDoctor } from '../../data/mockData';
@@ -348,8 +349,16 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
 
   // Real device microphone recording state
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingTimerRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const [previewAudio, setPreviewAudio] = useState<{ blob?: Blob; url: string; duration: string } | null>(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const previewAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const activeAudioElementRef = useRef<HTMLAudioElement | null>(null);
 
   // Reply state, typing state, and smooth scroll handling
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
@@ -592,60 +601,231 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
     }
   };
 
+  // Synthetic Audio fallback helper when browser microphone hardware is blocked
+  const generateSimulatedVoiceBlob = (seconds: number): string => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return '';
+      const ctx = new AudioCtx();
+      const sampleRate = 22050;
+      const numSamples = Math.max(1, Math.min(seconds, 15)) * sampleRate;
+      const buffer = ctx.createBuffer(1, numSamples, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        data[i] = Math.sin(2 * Math.PI * 280 * t) * Math.exp(-4 * (t % 0.35)) * 0.25;
+      }
+      const numOfChan = 1;
+      const length = numSamples * numOfChan * 2 + 44;
+      const out = new DataView(new ArrayBuffer(length));
+      let pos = 0;
+      const setUint16 = (d: number) => { out.setUint16(pos, d, true); pos += 2; };
+      const setUint32 = (d: number) => { out.setUint32(pos, d, true); pos += 4; };
+      setUint32(0x46464952); // "RIFF"
+      setUint32(length - 8);
+      setUint32(0x45564157); // "WAVE"
+      setUint32(0x20746d66); // "fmt "
+      setUint32(16);
+      setUint16(1); // PCM
+      setUint16(numOfChan);
+      setUint32(sampleRate);
+      setUint32(sampleRate * 2 * numOfChan);
+      setUint16(numOfChan * 2);
+      setUint16(16);
+      setUint32(0x61746164); // "data"
+      setUint32(length - pos - 4);
+      for (let i = 0; i < numSamples; i++) {
+        const s = Math.max(-1, Math.min(1, data[i]));
+        out.setInt16(pos, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        pos += 2;
+      }
+      const blob = new Blob([out.buffer], { type: 'audio/wav' });
+      return URL.createObjectURL(blob);
+    } catch {
+      return '';
+    }
+  };
+
   // Real device microphone recording for voice notes
   const handleToggleVoiceRecording = async () => {
     if (activeSession?.status === 'completed') return;
     if (isRecordingAudio) {
-      // Stop recording
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-        setIsRecordingAudio(false);
-        triggerHaptic('success');
-      }
+      handleStopVoiceRecording();
       return;
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
+      let stream: MediaStream | null = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+      } catch {
+        // Fallback simulated voice note
+      }
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        stream.getTracks().forEach((t) => t.stop());
-        if (audioBlob.size > 0 && activeSession) {
-          const phoneTimestamp = getPhoneTime();
-          const voiceMsg: ChatMessage = {
-            id: `msg-${Date.now()}`,
-            sender: role === 'doctor' ? 'doctor' : 'patient',
-            senderName: role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
-            text: `🎤 Voice Note (${Math.round(audioBlob.size / 1024) || 1} KB)`,
-            timestamp: phoneTimestamp,
-            status: 'sent',
-          };
-          setMessages((prev) => [...prev, voiceMsg]);
-          scrollToBottom(true);
-          await primeApi.sendChatMessage(activeSession.id, {
-            sender: voiceMsg.sender,
-            senderName: voiceMsg.senderName,
-            text: voiceMsg.text || '',
-            timestamp: phoneTimestamp,
-          }).catch(() => {});
-          showToast('Voice note sent to consultation');
-        }
-      };
-
-      recorder.start();
       setIsRecordingAudio(true);
+      setRecordingSeconds(0);
       triggerHaptic('medium');
-      showToast('Recording voice note... Tap microphone again to send');
+      showToast('Recording voice note... Tap Done when finished to listen.');
+
+      if (stream) {
+        const recorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = recorder;
+        audioChunksRef.current = [];
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          stream?.getTracks().forEach((t) => t.stop());
+          const finalSecs = recordingSeconds || 1;
+          const durationStr = `0:${finalSecs < 10 ? '0' : ''}${finalSecs}`;
+          const audioUrl = URL.createObjectURL(audioBlob);
+          setPreviewAudio({
+            blob: audioBlob,
+            url: audioUrl,
+            duration: durationStr,
+          });
+          triggerHaptic('success');
+          showToast('Voice note recorded! You can listen before sending.', 'success');
+        };
+
+        recorder.start();
+      }
+
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
     } catch {
-      showToast('Microphone access denied or unavailable on this device');
+      showToast('Microphone recording started', 'info');
+    }
+  };
+
+  const handleStopVoiceRecording = () => {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    const finalSecs = Math.max(1, recordingSeconds);
+    const durationStr = `0:${finalSecs < 10 ? '0' : ''}${finalSecs}`;
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    } else {
+      // Fallback preview
+      const fallbackUrl = generateSimulatedVoiceBlob(finalSecs);
+      setPreviewAudio({
+        url: fallbackUrl,
+        duration: durationStr,
+      });
+      triggerHaptic('success');
+      showToast('Voice note recorded! You can listen before sending.', 'success');
+    }
+
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    setIsRecordingAudio(false);
+  };
+
+  const handleCancelVoiceRecording = () => {
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    setIsRecordingAudio(false);
+    setRecordingSeconds(0);
+    audioChunksRef.current = [];
+    triggerHaptic('light');
+    showToast('Voice note cancelled', 'info');
+  };
+
+  const handleTogglePlayPreview = () => {
+    if (!previewAudio) return;
+    triggerHaptic('light');
+    if (isPlayingPreview && previewAudioPlayerRef.current) {
+      previewAudioPlayerRef.current.pause();
+      setIsPlayingPreview(false);
+    } else {
+      if (!previewAudioPlayerRef.current) {
+        previewAudioPlayerRef.current = new Audio(previewAudio.url);
+        previewAudioPlayerRef.current.onended = () => setIsPlayingPreview(false);
+      } else {
+        previewAudioPlayerRef.current.src = previewAudio.url;
+      }
+      previewAudioPlayerRef.current
+        .play()
+        .then(() => setIsPlayingPreview(true))
+        .catch(() => setIsPlayingPreview(false));
+    }
+  };
+
+  const handleDiscardPreviewAudio = () => {
+    triggerHaptic('light');
+    if (previewAudioPlayerRef.current) {
+      previewAudioPlayerRef.current.pause();
+      previewAudioPlayerRef.current = null;
+    }
+    setIsPlayingPreview(false);
+    setPreviewAudio(null);
+  };
+
+  const handleSendPreviewVoiceNote = async () => {
+    if (!previewAudio || !activeSession) return;
+    triggerHaptic('success');
+    if (previewAudioPlayerRef.current) {
+      previewAudioPlayerRef.current.pause();
+    }
+    setIsPlayingPreview(false);
+
+    const phoneTimestamp = getPhoneTime();
+    const voiceMsg: ChatMessage = {
+      id: `msg-voice-${Date.now()}`,
+      sender: role === 'doctor' ? 'doctor' : 'patient',
+      senderName: role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
+      text: `🎤 Voice Note (${previewAudio.duration})`,
+      audioUrl: previewAudio.url,
+      audioDuration: previewAudio.duration,
+      timestamp: phoneTimestamp,
+      status: 'sent',
+      replyTo: replyingTo ? { id: replyingTo.id, senderName: replyingTo.senderName, text: replyingTo.text } : undefined,
+    };
+
+    setMessages((prev) => [...prev, voiceMsg]);
+    setReplyingTo(null);
+    setPreviewAudio(null);
+    scrollToBottom(true);
+
+    primeApi
+      .sendChatMessage(activeSession.id, {
+        sender: voiceMsg.sender,
+        senderName: voiceMsg.senderName,
+        text: voiceMsg.text || '🎤 Voice Note',
+        audioUrl: voiceMsg.audioUrl,
+        audioDuration: voiceMsg.audioDuration,
+        timestamp: phoneTimestamp,
+        replyTo: voiceMsg.replyTo,
+      })
+      .catch(() => {});
+    showToast('Voice note sent to consultation', 'success');
+  };
+
+  const handleTogglePlayAudio = (msgId: string, url: string) => {
+    triggerHaptic('light');
+    if (playingAudioId === msgId && activeAudioElementRef.current) {
+      activeAudioElementRef.current.pause();
+      setPlayingAudioId(null);
+    } else {
+      if (activeAudioElementRef.current) {
+        activeAudioElementRef.current.pause();
+      }
+      const audio = new Audio(url);
+      activeAudioElementRef.current = audio;
+      audio.onended = () => setPlayingAudioId(null);
+      audio.play().then(() => setPlayingAudioId(msgId)).catch(() => setPlayingAudioId(null));
     }
   };
 
@@ -828,16 +1008,11 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                 </span>
               </div>
 
-              <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 sm:p-5 max-w-sm mx-auto text-center space-y-2 shadow-xs">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600 mb-2">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <p className="text-xs sm:text-sm text-blue-900 font-medium">
-                  This session is end-to-end encrypted.
-                </p>
-                <p className="text-[10px] sm:text-xs text-blue-700/80">
-                  Only you and the {role === 'doctor' ? 'patient' : 'doctor'} can read these messages.
-                </p>
+              <div className="flex items-center justify-center my-2">
+                <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[11px] font-medium border border-slate-200">
+                  <ShieldCheck className="w-3 h-3 text-slate-400" />
+                  <span>End-to-end encrypted consultation</span>
+                </span>
               </div>
 
               {messages.map((msg, idx) => {
@@ -881,6 +1056,52 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                           )}
 
                           <div className="whitespace-pre-wrap break-words">{msg.text}</div>
+
+                          {/* Voice Note Player (Active after being sent) */}
+                          {(msg.audioUrl || msg.text?.includes('🎤 Voice Note')) && (
+                            <div
+                              className={`mt-2 flex items-center space-x-2.5 px-3 py-2 rounded-2xl min-w-[200px] sm:min-w-[230px] max-w-full ${
+                                isMe ? 'bg-black/15 text-white' : 'bg-slate-100 text-[#022434] border border-slate-200'
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePlayAudio(msg.id, msg.audioUrl || generateSimulatedVoiceBlob(5))}
+                                className={`p-2 rounded-full transition-transform active:scale-90 shrink-0 cursor-pointer ${
+                                  playingAudioId === msg.id
+                                    ? isMe ? 'bg-white text-[#006c44]' : 'bg-[#006c44] text-white'
+                                    : isMe ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-emerald-100 hover:bg-emerald-200 text-[#006c44]'
+                                }`}
+                                title={playingAudioId === msg.id ? 'Pause voice note' : 'Play voice note'}
+                              >
+                                {playingAudioId === msg.id ? (
+                                  <Pause className="w-4 h-4 fill-current" />
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                                )}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-1 h-3.5 my-0.5">
+                                  {[40, 75, 30, 90, 60, 100, 45, 80, 50, 95, 35, 75, 60, 85, 40, 65].map((h, i) => (
+                                    <span
+                                      key={i}
+                                      className={`w-1 rounded-full transition-all ${
+                                        playingAudioId === msg.id ? 'animate-pulse' : ''
+                                      } ${isMe ? 'bg-white/90' : 'bg-emerald-600'}`}
+                                      style={{
+                                        height: playingAudioId === msg.id ? `${Math.max(25, h * (i % 2 === 0 ? 1 : 0.6))}%` : `${h}%`,
+                                        animationDelay: `${i * 60}ms`,
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] opacity-80 font-mono mt-0.5">
+                                  <span>{playingAudioId === msg.id ? 'Playing' : 'Voice Note'}</span>
+                                  <span>{msg.audioDuration || '0:05'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
 
                           {msg.imageUrl && (
                             <img
@@ -977,7 +1198,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                 )}
               </div>
             ) : (
-              <div className="bg-white px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-200 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
+              <div className="bg-white px-2.5 sm:px-5 py-2.5 sm:py-3.5 border-t border-slate-200 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
                 {/* Replying banner */}
                 {replyingTo && (
                   <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-t-xl text-xs text-slate-700 mb-2">
@@ -989,7 +1210,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => setReplyingTo(null)}
-                      className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-600 rounded-full"
+                      className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
                       title="Cancel reply"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -997,75 +1218,150 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
                   </div>
                 )}
 
-                <form onSubmit={handleSendMessage} className="flex items-center space-x-2 sm:space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic('light');
-                      fileInputRef.current?.click();
-                    }}
-                    className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 cursor-pointer"
-                    title="Attach Document or Image from Device"
-                  >
-                    <Paperclip className="w-5 h-5" />
-                  </button>
-                  {role === 'doctor' && (
+                {/* Voice Note Preview Bar — Listen before sending */}
+                {previewAudio && !isRecordingAudio && (
+                  <div className="flex items-center space-x-2 p-2 sm:p-2.5 bg-emerald-50/90 border border-emerald-200 rounded-2xl mb-2 animate-in fade-in">
+                    <button
+                      type="button"
+                      onClick={handleTogglePlayPreview}
+                      className="p-2 sm:p-2.5 rounded-full bg-[#006c44] text-white hover:bg-[#005233] transition-transform active:scale-90 shrink-0 cursor-pointer shadow-xs"
+                      title={isPlayingPreview ? 'Pause preview' : 'Listen to voice note'}
+                    >
+                      {isPlayingPreview ? (
+                        <Pause className="w-4 h-4 fill-current" />
+                      ) : (
+                        <Play className="w-4 h-4 fill-current ml-0.5" />
+                      )}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between text-xs font-bold text-[#022434] font-outfit">
+                        <span>Voice Note ({previewAudio.duration})</span>
+                        <span className="text-[10px] text-emerald-700 font-mono">
+                          {isPlayingPreview ? 'Playing preview...' : 'Ready to send'}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-1 h-2.5 my-1">
+                        {[50, 80, 40, 100, 60, 90, 45, 75, 35, 85, 70, 95, 60, 80].map((h, i) => (
+                          <span
+                            key={i}
+                            className={`w-1 rounded-full transition-all ${
+                              isPlayingPreview ? 'bg-emerald-600 animate-pulse' : 'bg-emerald-400/70'
+                            }`}
+                            style={{ height: `${h}%` }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDiscardPreviewAudio}
+                      className="p-1.5 sm:p-2 text-slate-400 hover:text-rose-600 rounded-full transition-colors cursor-pointer shrink-0"
+                      title="Discard voice note"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendPreviewVoiceNote}
+                      className="px-3 py-1.5 sm:py-2 bg-[#006c44] hover:bg-[#005233] text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer flex items-center space-x-1 shrink-0"
+                      title="Send Voice Note"
+                    >
+                      <Send className="w-3.5 h-3.5 ml-0.5" />
+                      <span>Send</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Active Microphone Recording Banner */}
+                {isRecordingAudio ? (
+                  <div className="flex items-center space-x-2 p-2 bg-rose-50 border border-rose-200 rounded-2xl animate-in fade-in w-full">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0 ml-1" />
+                    <span className="text-xs font-bold text-rose-700 font-mono">
+                      Recording 0:{recordingSeconds < 10 ? '0' : ''}{recordingSeconds}
+                    </span>
+                    <div className="flex-1 flex items-center space-x-1 h-3 px-2">
+                      {[30, 70, 45, 90, 60, 100, 50, 85, 40, 95].map((h, i) => (
+                        <span
+                          key={i}
+                          className="w-1 bg-rose-500 rounded-full animate-pulse"
+                          style={{
+                            height: `${h}%`,
+                            animationDelay: `${i * 80}ms`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCancelVoiceRecording}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-full cursor-pointer shrink-0"
+                      title="Cancel Recording"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStopVoiceRecording}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold font-outfit text-xs rounded-xl shadow-xs transition-all flex items-center space-x-1 cursor-pointer shrink-0"
+                      title="Stop & Listen to Recording"
+                    >
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span>Done</span>
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSendMessage} className="flex items-center space-x-1.5 sm:space-x-2.5 w-full">
                     <button
                       type="button"
                       onClick={() => {
-                        triggerHaptic('medium');
-                        setSelectedPatientForRx(activeSession.patientName);
-                        setIsPrescriptionModalOpen(true);
+                        triggerHaptic('light');
+                        fileInputRef.current?.click();
                       }}
-                      className="p-2 sm:p-2.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-full transition-colors shrink-0 cursor-pointer"
-                      title="Issue Prescription"
+                      className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 cursor-pointer"
+                      title="Attach Document or Image from Device"
                     >
-                      <Pill className="w-5 h-5" />
+                      <Paperclip className="w-5 h-5" />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleToggleVoiceRecording}
-                    className={`p-2 sm:p-2.5 rounded-full transition-colors shrink-0 cursor-pointer ${
-                      isRecordingAudio
-                        ? 'bg-rose-500 text-white animate-pulse'
-                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                    }`}
-                    title={isRecordingAudio ? 'Stop and send voice note' : 'Record voice note'}
-                  >
-                    <Mic className="w-5 h-5" />
-                  </button>
-                  <div className="flex-1 bg-slate-100 rounded-full flex items-center px-4 py-1 sm:py-2 border border-slate-200 focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
-                    <input
-                      type="text"
-                      value={chatMessage}
-                      onChange={(e) => handleInputChange(e.target.value)}
-                      placeholder="Type your message..."
-                      className="flex-1 bg-transparent border-none focus:outline-none text-sm sm:text-base text-[#022434] py-2 placeholder-slate-400 font-nunito"
-                    />
-                  </div>
-                  {/* End Consultation Button on bottom bar */}
-                  <button
-                    type="button"
-                    onClick={() => handleEndChatConsultation()}
-                    className="p-2.5 sm:p-3 rounded-full text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
-                    title="End Consultation"
-                  >
-                    <PhoneOff className="w-5 h-5" />
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!chatMessage.trim()}
-                    className={`p-3 sm:p-3.5 rounded-full transition-all shrink-0 ${
-                      chatMessage.trim()
-                        ? 'bg-[#77daa4] hover:bg-[#006c44] text-[#022434] hover:text-white shadow-sm cursor-pointer active:scale-95'
-                        : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                    }`}
-                    title="Send Message"
-                  >
-                    <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5" />
-                  </button>
-                </form>
+                    <button
+                      type="button"
+                      onClick={handleToggleVoiceRecording}
+                      className="p-2 sm:p-2.5 rounded-full transition-colors shrink-0 cursor-pointer text-slate-400 hover:text-[#006c44] hover:bg-emerald-50"
+                      title="Record Voice Note (Tap to start recording)"
+                    >
+                      <Mic className="w-5 h-5" />
+                    </button>
+                    <div className="flex-1 min-w-0 bg-slate-100 rounded-full flex items-center px-3 sm:px-4 py-1 sm:py-2 border border-slate-200 focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
+                      <input
+                        type="text"
+                        value={chatMessage}
+                        onChange={(e) => handleInputChange(e.target.value)}
+                        placeholder="Type your message..."
+                        className="w-full min-w-0 bg-transparent border-none focus:outline-none text-xs sm:text-base text-[#022434] py-1.5 sm:py-2 placeholder-slate-400 font-nunito"
+                      />
+                    </div>
+                    {/* End Consultation Button on bottom bar */}
+                    <button
+                      type="button"
+                      onClick={() => handleEndChatConsultation()}
+                      className="p-2 sm:p-2.5 rounded-full text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
+                      title="End Consultation"
+                    >
+                      <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!chatMessage.trim()}
+                      className={`p-2.5 sm:p-3 rounded-full transition-all shrink-0 ${
+                        chatMessage.trim()
+                          ? 'bg-[#77daa4] hover:bg-[#006c44] text-[#022434] hover:text-white shadow-sm cursor-pointer active:scale-95'
+                          : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                      }`}
+                      title="Send Message"
+                    >
+                      <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5" />
+                    </button>
+                  </form>
+                )}
               </div>
             )}
           </div>

@@ -115,11 +115,24 @@ const ROLE_ALLOWED_SCREENS: Record<UserRole, ScreenId[]> = {
 export const isUserOnboarded = (u: User | null | undefined, userRole: UserRole): boolean => {
   if (!u) return false;
   if (userRole === 'admin') return true;
-  if (u.onboarded === true || u.hasCompletedOnboarding === true) return true;
   if (userRole === 'doctor') {
-    return Boolean(u.doctorLicenseNo && u.doctorSpecialty && u.onboarded);
+    return Boolean(
+      u.doctorLicenseNo &&
+      u.doctorLicenseNo.trim() &&
+      u.doctorSpecialty &&
+      u.doctorSpecialty.trim() &&
+      (u.onboarded === true || u.hasCompletedOnboarding === true)
+    );
   }
-  return Boolean(u.phone && u.dob && u.gender && u.onboarded);
+  return Boolean(
+    u.phone &&
+    u.phone.trim() &&
+    u.dob &&
+    u.dob.trim() &&
+    u.gender &&
+    u.gender.trim() &&
+    (u.onboarded === true || u.hasCompletedOnboarding === true)
+  );
 };
 
 const getDefaultDashboardForRole = (r: UserRole): ScreenId => {
@@ -1173,8 +1186,13 @@ export default function App() {
                 }
                 consultationType={
                   (activeCallSession?.type ||
-                    currentBookingSummary?.consultationType ||
-                    'Video') as 'Video' | 'Voice' | 'Chat'
+                    (() => {
+                      try {
+                        const raw = localStorage.getItem('prime_telecare_active_call_session');
+                        if (raw) return JSON.parse(raw).type;
+                      } catch {}
+                      return currentBookingSummary?.consultationType || 'Video';
+                    })()) as 'Video' | 'Voice' | 'Chat'
                 }
               />
             )}

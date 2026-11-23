@@ -338,6 +338,8 @@ export interface ChatMessage {
   senderName: string;
   text?: string;
   imageUrl?: string;
+  audioUrl?: string;
+  audioDuration?: string;
   timestamp: string;
   status?: MessageStatus;
   replyTo?: {

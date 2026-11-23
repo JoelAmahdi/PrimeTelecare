@@ -20,20 +20,125 @@ export interface HealthRecordExportPermission {
 }
 
 const STORAGE_KEY = 'prime_telecare_export_permissions_v1';
+const REQUESTS_LIST_KEY = 'prime_telecare_clinical_note_requests_v2';
 const EVENT_NAME = 'health-record-permission-change';
 
 const DEFAULT_PERMISSION: HealthRecordExportPermission = {
-  sessionId: '',
-  patientName: '',
-  doctorName: '',
-  doctorLicense: '',
-  status: 'not_requested',
-  purpose: '',
-  requestedAt: '',
+  sessionId: 'SESS-2026-9948',
+  patientName: 'Adaeze Okonkwo',
+  doctorName: 'Dr. Emeka Nnamdi',
+  doctorLicense: 'MDCN/2019/68421',
+  status: 'pending_doctor_approval',
+  purpose: 'Official Medical Record & Clinical Notes Release',
+  requestedAt: 'Nov 23, 2026, 09:30 AM',
   remindedCount: 0,
   isPaid: false,
   paymentAmount: 3000,
 };
+
+export function getClinicalNoteRequests(): HealthRecordExportPermission[] {
+  if (typeof window === 'undefined') return [DEFAULT_PERMISSION];
+  try {
+    const raw = localStorage.getItem(REQUESTS_LIST_KEY);
+    if (!raw) {
+      const initial = [DEFAULT_PERMISSION];
+      localStorage.setItem(REQUESTS_LIST_KEY, JSON.stringify(initial));
+      return initial;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [DEFAULT_PERMISSION];
+  } catch (e) {
+    console.error('Error reading clinical note requests', e);
+    return [DEFAULT_PERMISSION];
+  }
+}
+
+export function saveClinicalNoteRequestsList(requests: HealthRecordExportPermission[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(REQUESTS_LIST_KEY, JSON.stringify(requests));
+    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: requests[0] }));
+  } catch (e) {
+    console.error('Error saving clinical note requests list', e);
+  }
+}
+
+export function approveClinicalNoteRequest(
+  sessionId: string,
+  doctorName: string = 'Dr. Emeka Nnamdi',
+  doctorLicense: string = 'MDCN/2019/68421'
+): HealthRecordExportPermission {
+  const list = getClinicalNoteRequests();
+  const grantedAt = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  let matched: HealthRecordExportPermission | null = null;
+  const updatedList = list.map((item) => {
+    if (item.sessionId === sessionId || (!sessionId && item.status === 'pending_doctor_approval')) {
+      matched = {
+        ...item,
+        status: 'granted' as const,
+        doctorName: doctorName || item.doctorName,
+        doctorLicense: doctorLicense || item.doctorLicense,
+        grantedAt,
+      };
+      return matched;
+    }
+    return item;
+  });
+
+  if (!matched) {
+    matched = {
+      sessionId: sessionId || `SESS-${Date.now().toString().slice(-4)}`,
+      patientName: 'Adaeze Okonkwo',
+      doctorName,
+      doctorLicense,
+      status: 'granted',
+      purpose: 'Official Medical Record Release',
+      requestedAt: grantedAt,
+      grantedAt,
+      isPaid: false,
+      paymentAmount: 3000,
+    };
+    updatedList.unshift(matched);
+  }
+
+  saveClinicalNoteRequestsList(updatedList);
+  saveExportPermission(matched);
+  primeApi.authorizeExportRelease(sessionId, 'grant', doctorName, doctorLicense).catch(() => {});
+  return matched;
+}
+
+export function declineClinicalNoteRequest(
+  sessionId: string,
+  doctorName: string = 'Dr. Emeka Nnamdi'
+): HealthRecordExportPermission {
+  const list = getClinicalNoteRequests();
+  let matched: HealthRecordExportPermission | null = null;
+  const updatedList = list.map((item) => {
+    if (item.sessionId === sessionId) {
+      matched = {
+        ...item,
+        status: 'rejected' as const,
+        doctorName: doctorName || item.doctorName,
+      };
+      return matched;
+    }
+    return item;
+  });
+
+  if (matched) {
+    saveClinicalNoteRequestsList(updatedList);
+    saveExportPermission(matched);
+  }
+  primeApi.authorizeExportRelease(sessionId, 'reject', doctorName).catch(() => {});
+  return matched || list[0];
+}
 
 export function getExportPermissions(): HealthRecordExportPermission {
   if (typeof window === 'undefined') return DEFAULT_PERMISSION;
@@ -54,6 +159,15 @@ export function saveExportPermission(permission: HealthRecordExportPermission): 
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(permission));
+    // Also sync to requests list
+    const list = getClinicalNoteRequests();
+    const existingIndex = list.findIndex((r) => r.sessionId === permission.sessionId);
+    if (existingIndex >= 0) {
+      list[existingIndex] = { ...list[existingIndex], ...permission };
+    } else if (permission.sessionId) {
+      list.unshift(permission);
+    }
+    localStorage.setItem(REQUESTS_LIST_KEY, JSON.stringify(list));
     window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: permission }));
   } catch (e) {
     console.error('Error saving export permission', e);

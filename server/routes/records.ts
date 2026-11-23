@@ -27,6 +27,12 @@ recordsRouter.get('/export-status', (req: Request, res: Response) => {
   return res.json({ success: true, exportAuthorization: auth });
 });
 
+// GET /api/records/export-requests
+recordsRouter.get('/export-requests', (_req: Request, res: Response) => {
+  const requests = store.getAllExportAuthorizations();
+  return res.json({ success: true, requests });
+});
+
 // POST /api/records/export-request
 recordsRouter.post('/export-request', (req: Request, res: Response) => {
   const { sessionId = 'app-1', purpose, patientName = 'Patient' } = req.body;

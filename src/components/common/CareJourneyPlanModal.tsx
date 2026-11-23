@@ -43,15 +43,15 @@ function getDateOffsetIso(daysFromNow: number): string {
 }
 
 function normalizePlanItems(existingItems: CareJourneyItem[] = []): CareJourneyItem[] {
-  // Ensure the 3 core clinical checks always exist in order, preserving checked state
+  // Ensure the default core clinical checks always exist in order, preserving checked state
   const byId = new Map(existingItems.map((i) => [i.id, i]));
   const coreItems = DEFAULT_CARE_JOURNEY_ITEMS.map((def) => {
     const found = byId.get(def.id);
     return found
       ? {
           ...def,
-          checkedByDoctor: found.checkedByDoctor,
-          completedByPatient: found.completedByPatient,
+          checkedByDoctor: found.checkedByDoctor ?? false,
+          completedByPatient: found.completedByPatient ?? false,
           description: found.description || def.description,
           requiredDate: found.requiredDate,
         }
@@ -59,7 +59,8 @@ function normalizePlanItems(existingItems: CareJourneyItem[] = []): CareJourneyI
   });
 
   const coreIds = new Set(DEFAULT_CARE_JOURNEY_ITEMS.map((d) => d.id));
-  const customItems = existingItems.filter((i) => !coreIds.has(i.id));
+  // Exclude old/obsolete item-rx so "take drugs regularly" is removed even if previously cached
+  const customItems = existingItems.filter((i) => !coreIds.has(i.id) && i.id !== 'item-rx');
   return [...coreItems, ...customItems];
 }
 
@@ -368,13 +369,13 @@ export const CareJourneyPlanModal: React.FC<CareJourneyPlanModalProps> = ({
                 {item.id === 'item-lab' && item.checkedByDoctor && (
                   <div className="ml-6 pl-3 border-l-2 border-purple-200">
                     <label className="block text-[11px] font-bold text-purple-900 font-outfit mb-1">
-                      Specify Laboratory Investigation(s) (Optional):
+                      Specify Lab Test(s) Requested or Reviewed (Optional):
                     </label>
                     <input
                       type="text"
                       value={labInvestigationDetails}
                       onChange={(e) => setLabInvestigationDetails(e.target.value)}
-                      placeholder="Lab tests"
+                      placeholder="e.g. Full Blood Count, Fasting Blood Sugar, Urinalysis..."
                       className="w-full px-3 py-2 text-xs border border-purple-200 bg-purple-50/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-[#022434]"
                     />
                   </div>
