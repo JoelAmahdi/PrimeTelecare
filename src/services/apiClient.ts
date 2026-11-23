@@ -12,6 +12,7 @@ import {
   HealthRecordAuditLog,
   DependentProfile,
   ChatMessage,
+  MessageStatus,
   BookingSummary,
 } from '../types';
 import {
@@ -373,6 +374,13 @@ export const primeApi = {
     senderName: string;
     text: string;
     imageUrl?: string;
+    status?: MessageStatus;
+    timestamp?: string;
+    replyTo?: {
+      id: string;
+      senderName: string;
+      text?: string;
+    };
   }): Promise<ChatMessage> {
     try {
       const res = await request<{ success: boolean; message: ChatMessage }>(`/chat/${sessionId}/messages`, {
@@ -387,9 +395,42 @@ export const primeApi = {
         senderName: message.senderName,
         text: message.text,
         imageUrl: message.imageUrl,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: message.timestamp || new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true }),
         status: 'delivered',
+        replyTo: message.replyTo,
       };
+    }
+  },
+
+  async getTypingStatus(sessionId: string = 'default', role?: string): Promise<{ isTyping: boolean; user?: string }> {
+    try {
+      const query = role ? `?role=${encodeURIComponent(role)}` : '';
+      const res = await request<{ success: boolean; isTyping: boolean; user?: string }>(`/chat/${sessionId}/typing${query}`);
+      return { isTyping: !!res.isTyping, user: res.user };
+    } catch {
+      return { isTyping: false };
+    }
+  },
+
+  async setTypingStatus(sessionId: string = 'default', user: string, role: string, isTyping: boolean): Promise<void> {
+    try {
+      await request<{ success: boolean }>(`/chat/${sessionId}/typing`, {
+        method: 'POST',
+        body: JSON.stringify({ user, role, isTyping }),
+      });
+    } catch {
+      // offline fallback
+    }
+  },
+
+  async markChatRead(sessionId: string = 'default', readerRole: 'doctor' | 'patient'): Promise<void> {
+    try {
+      await request<{ success: boolean }>(`/chat/${sessionId}/read`, {
+        method: 'POST',
+        body: JSON.stringify({ readerRole }),
+      });
+    } catch {
+      // offline fallback
     }
   },
 

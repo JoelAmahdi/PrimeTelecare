@@ -4,7 +4,7 @@ import { StatusBar } from '../common/StatusBar';
 import {
   Video, MessageSquare, Phone, Search, Filter, Clock, Calendar, CheckCircle2, FileText, ChevronRight,
   ChevronDown, ChevronUp, ArrowUpDown, User, Sparkles, ArrowLeft, Send, Paperclip, Camera, MoreHorizontal,
-  Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill, Users, RotateCcw, Home
+  Check, CheckCheck, AlertCircle, Stethoscope, Plus, Mic, Pill, Users, RotateCcw, Home, Reply, PhoneOff, X
 } from 'lucide-react';
 import { ScreenId, ChatMessage, Doctor, UserRole, BookingSummary, ConsultationSummaryData, StructuredClinicalRecord } from '../../types';
 import { mockDoctors, currentUserPatient, currentUserDoctor } from '../../data/mockData';
@@ -274,10 +274,8 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         localStorage.removeItem('prime_telecare_active_call_session');
         window.dispatchEvent(new Event('active-call-session-updated'));
       } catch {}
-      setActiveSession(null);
-      if (role === 'patient') {
-        onNavigate('post-consultation-journey');
-      }
+      setActiveSession((prev) => (prev ? { ...prev, status: 'completed' } : null));
+      loadConsultations();
     }
   };
 
@@ -304,10 +302,8 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         window.dispatchEvent(new Event('active-call-session-updated'));
       } catch {}
       showToast('Consultation concluded.', 'info');
-      setActiveSession(null);
-      if (role === 'patient') {
-        onNavigate('post-consultation-journey');
-      }
+      setActiveSession((prev) => (prev ? { ...prev, status: 'completed' } : null));
+      loadConsultations();
     }
   };
 
@@ -355,6 +351,31 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Reply state, typing state, and smooth scroll handling
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [otherTyping, setOtherTyping] = useState(false);
+  const typingTimeoutRef = useRef<any>(null);
+  const isUserNearBottomRef = useRef(true);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isInitialLoadRef = useRef(true);
+
+  // Always use local phone time for accurate timestamps
+  const getPhoneTime = () =>
+    new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  const handleChatScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    isUserNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 120;
+  };
+
+  const scrollToBottom = (force = false) => {
+    if (force || isUserNearBottomRef.current || isInitialLoadRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: isInitialLoadRef.current ? 'auto' : 'smooth' });
+      isInitialLoadRef.current = false;
+    }
+  };
+
   // Live polling for two-way chat messages with native phone notifications
   const hasLoadedInitialRef = useRef(false);
   const lastMsgCountRef = useRef(0);
@@ -362,6 +383,8 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   useEffect(() => {
     hasLoadedInitialRef.current = false;
     lastMsgCountRef.current = 0;
+    isInitialLoadRef.current = true;
+    isUserNearBottomRef.current = true;
     if (activeSession?.id) {
       try {
         const cached = localStorage.getItem(`prime_telecare_chat_${activeSession.id}`);
@@ -369,6 +392,15 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
             setMessages(parsed);
+          }
+        }
+        // Auto-load matching clinical record for PDF viewer if already created
+        const existingRaw = localStorage.getItem('prime_telecare_clinical_records_v1');
+        if (existingRaw) {
+          const records: StructuredClinicalRecord[] = JSON.parse(existingRaw);
+          const match = records.find((r) => r.consultationId === activeSession.id);
+          if (match) {
+            setSelectedConsultationForPDF(match);
           }
         }
       } catch {}
@@ -399,10 +431,29 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
           }
           hasLoadedInitialRef.current = true;
           lastMsgCountRef.current = fetched.length;
-          setMessages(fetched);
+
+          // Only update state if messages array actually changed (prevent re-render lag & scroll yanks)
+          setMessages((prev) => {
+            if (
+              prev.length === fetched.length &&
+              prev[prev.length - 1]?.id === fetched[fetched.length - 1]?.id &&
+              prev[prev.length - 1]?.status === fetched[fetched.length - 1]?.status
+            ) {
+              return prev;
+            }
+            return fetched;
+          });
+
+          // Mark messages as read by reader
+          primeApi.markChatRead(activeSession.id, role === 'doctor' ? 'doctor' : 'patient');
+
           try {
             localStorage.setItem(`prime_telecare_chat_${activeSession.id}`, JSON.stringify(fetched));
           } catch {}
+
+          if (isUserNearBottomRef.current || isInitialLoadRef.current) {
+            scrollToBottom();
+          }
         }
       }).catch(() => {});
     };
@@ -410,13 +461,40 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
     fetchMessages();
     const interval = setInterval(fetchMessages, 2500);
     return () => clearInterval(interval);
-  }, [activeSession, role]);
+  }, [activeSession?.id, role]);
 
+  // Real-time typing status poller
   useEffect(() => {
-    if (activeSession) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, activeSession]);
+    if (!activeSession || activeSession.status === 'completed') return;
+    const checkTyping = async () => {
+      try {
+        const res = await primeApi.getTypingStatus(activeSession.id, role === 'doctor' ? 'doctor' : 'patient');
+        setOtherTyping(!!res.isTyping);
+      } catch {}
+    };
+    const interval = setInterval(checkTyping, 2000);
+    return () => clearInterval(interval);
+  }, [activeSession?.id, activeSession?.status, role]);
+
+  const handleInputChange = (val: string) => {
+    setChatMessage(val);
+    if (!activeSession || activeSession.status === 'completed') return;
+    primeApi.setTypingStatus(
+      activeSession.id,
+      role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
+      role === 'doctor' ? 'doctor' : 'patient',
+      true
+    );
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      primeApi.setTypingStatus(
+        activeSession.id,
+        role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
+        role === 'doctor' ? 'doctor' : 'patient',
+        false
+      );
+    }, 2000);
+  };
 
   const handleStartConsultationCall = (item: ConsultationItem) => {
     triggerHaptic('selection');
@@ -461,27 +539,53 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatMessage.trim() || !activeSession) return;
+    if (!chatMessage.trim() || !activeSession || activeSession.status === 'completed') return;
     
     triggerHaptic('light');
     const textToSend = chatMessage.trim();
+    const phoneTimestamp = getPhoneTime();
+    const replyPayload = replyingTo
+      ? {
+          id: replyingTo.id,
+          senderName: replyingTo.senderName,
+          text: replyingTo.text
+            ? replyingTo.text.length > 80
+              ? replyingTo.text.slice(0, 80) + '...'
+              : replyingTo.text
+            : '[Attachment]',
+        }
+      : undefined;
+
     const newMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: role === 'doctor' ? 'doctor' : 'patient',
       senderName: role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
       text: textToSend,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      status: 'sent'
+      timestamp: phoneTimestamp,
+      status: 'sent',
+      replyTo: replyPayload,
     };
     
-    setMessages(prev => [...prev, newMessage]);
+    setMessages((prev) => [...prev, newMessage]);
     setChatMessage('');
+    setReplyingTo(null);
+    scrollToBottom(true);
+
+    // Cancel typing status immediately
+    primeApi.setTypingStatus(
+      activeSession.id,
+      role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
+      role === 'doctor' ? 'doctor' : 'patient',
+      false
+    );
 
     try {
       await primeApi.sendChatMessage(activeSession.id, {
         sender: newMessage.sender,
         senderName: newMessage.senderName,
-        text: newMessage.text,
+        text: newMessage.text || '',
+        timestamp: phoneTimestamp,
+        replyTo: replyPayload,
       });
     } catch (err) {
       console.warn('Failed to send live message to server', err);
@@ -490,6 +594,7 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
 
   // Real device microphone recording for voice notes
   const handleToggleVoiceRecording = async () => {
+    if (activeSession?.status === 'completed') return;
     if (isRecordingAudio) {
       // Stop recording
       if (mediaRecorderRef.current) {
@@ -514,19 +619,22 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         stream.getTracks().forEach((t) => t.stop());
         if (audioBlob.size > 0 && activeSession) {
+          const phoneTimestamp = getPhoneTime();
           const voiceMsg: ChatMessage = {
             id: `msg-${Date.now()}`,
             sender: role === 'doctor' ? 'doctor' : 'patient',
             senderName: role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
             text: `🎤 Voice Note (${Math.round(audioBlob.size / 1024) || 1} KB)`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: phoneTimestamp,
             status: 'sent',
           };
           setMessages((prev) => [...prev, voiceMsg]);
+          scrollToBottom(true);
           await primeApi.sendChatMessage(activeSession.id, {
             sender: voiceMsg.sender,
             senderName: voiceMsg.senderName,
-            text: voiceMsg.text,
+            text: voiceMsg.text || '',
+            timestamp: phoneTimestamp,
           }).catch(() => {});
           showToast('Voice note sent to consultation');
         }
@@ -544,26 +652,29 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   // Real device photo / file attachment
   const handleFileAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !activeSession) return;
+    if (!file || !activeSession || activeSession.status === 'completed') return;
 
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = reader.result as string;
+      const phoneTimestamp = getPhoneTime();
       const imgMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
         sender: role === 'doctor' ? 'doctor' : 'patient',
         senderName: role === 'doctor' ? currentUserDoctor.name : currentUserPatient.name,
         text: `📷 Shared photo: ${file.name}`,
         imageUrl: base64,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: phoneTimestamp,
         status: 'sent',
       };
       setMessages((prev) => [...prev, imgMsg]);
+      scrollToBottom(true);
       await primeApi.sendChatMessage(activeSession.id, {
         sender: imgMsg.sender,
         senderName: imgMsg.senderName,
-        text: imgMsg.text,
+        text: imgMsg.text || '',
         imageUrl: imgMsg.imageUrl,
+        timestamp: phoneTimestamp,
       }).catch(() => {});
       showToast('Attachment uploaded to consultation');
     };
@@ -593,250 +704,374 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
   const newConsultations = filteredConsultations.filter(c => c.status === 'live' || c.status === 'upcoming');
   const previousConsultations = filteredConsultations.filter(c => c.status === 'completed' || c.status === 'cancelled');
 
-  if (activeSession) {
-    return (
-      <div className="flex flex-col h-[100dvh] bg-slate-100/70 font-outfit relative overflow-hidden">
-        <StatusBar className="md:hidden" />
-        {/* Chat Container */}
-        <div className="flex-1 flex flex-col w-full max-w-4xl mx-auto bg-white shadow-sm border-x border-slate-200 overflow-hidden">
-          {/* Chat Header */}
-          <div className="bg-white px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 z-10 shadow-2xs">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setActiveSession(null);
-                  try {
-                    localStorage.removeItem('prime_telecare_active_call_session');
-                    window.dispatchEvent(new Event('active-call-session-updated'));
-                  } catch {}
-                }}
-                className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
+  return (
+    <>
+      {activeSession ? (
+        <div className="flex flex-col h-[100dvh] bg-slate-100/70 font-outfit relative overflow-hidden">
+          <StatusBar className="md:hidden" />
+          {/* Chat Container */}
+          <div className="flex-1 flex flex-col w-full max-w-4xl mx-auto bg-white shadow-sm border-x border-slate-200 overflow-hidden">
+            {/* Chat Header */}
+            <div className="bg-white px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 z-10 shadow-2xs">
               <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <img
-                    src={role === 'doctor' ? activeSession.patientAvatar : activeSession.doctorAvatar}
-                    alt={role === 'doctor' ? activeSession.patientName : activeSession.doctorName}
-                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border border-slate-200 shadow-xs"
-                  />
-                  {activeSession.status === 'live' && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></div>
-                  )}
-                </div>
-                <div>
-                  <h2 className="font-bold text-sm sm:text-base text-[#022434] leading-tight">
-                    {role === 'doctor' ? activeSession.patientName : activeSession.doctorName}
-                  </h2>
-                  <p className="text-xs text-slate-500 font-nunito flex items-center space-x-1 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Online</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-1 sm:space-x-2">
-              {role === 'doctor' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic('medium');
-                      isEndingSessionRef.current = false;
-                      setIsConsultationSummaryModalOpen(true);
-                    }}
-                    className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-[#022434] hover:bg-[#1c3a4a] text-white rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
-                    title="Send Official Health Report to Patient"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-teal-300" />
-                    <span className="hidden sm:inline">Health Report</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic('medium');
-                      setSelectedPatientForRx(activeSession.patientName);
-                      setIsPrescriptionModalOpen(true);
-                    }}
-                    className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-[#006c44] hover:bg-[#005233] text-white rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
-                    title="Issue E-Prescription in Consultation"
-                  >
-                    <Pill className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Issue Rx</span>
-                  </button>
-                </>
-              )}
-              {selectedConsultationForPDF && (
                 <button
-                  type="button"
                   onClick={() => {
                     triggerHaptic('selection');
-                    setIsSummaryModalOpen(true);
+                    setActiveSession(null);
+                    try {
+                      localStorage.removeItem('prime_telecare_active_call_session');
+                      window.dispatchEvent(new Event('active-call-session-updated'));
+                    } catch {}
                   }}
-                  className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
-                  title="View Official Health Report PDF"
+                  className="p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
                 >
-                  <FileText className="w-3.5 h-3.5 text-teal-600" />
-                  <span className="hidden sm:inline">View PDF</span>
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => handleEndChatConsultation()}
-                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 font-bold font-outfit text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center space-x-1"
-                title="Conclude Consultation"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-rose-600" />
-                <span>End</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/70 font-nunito">
-            <div className="text-center my-4">
-              <span className="bg-slate-200/60 text-slate-600 text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                {activeSession.dateTimeStr}
-              </span>
-            </div>
-
-            <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 sm:p-5 max-w-sm mx-auto text-center space-y-2 shadow-xs">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600 mb-2">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <p className="text-xs sm:text-sm text-blue-900 font-medium">
-                This session is end-to-end encrypted.
-              </p>
-              <p className="text-[10px] sm:text-xs text-blue-700/80">
-                Only you and the {role === 'doctor' ? 'patient' : 'doctor'} can read these messages.
-              </p>
-            </div>
-
-            {messages.map((msg, idx) => {
-              const isMe = msg.sender === (role === 'doctor' ? 'doctor' : 'patient');
-              const showAvatar = !isMe && (idx === 0 || messages[idx - 1].sender !== msg.sender);
-
-              return (
-                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-4`}>
-                  <div className={`flex max-w-[85%] sm:max-w-[75%] ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2`}>
-                    {!isMe && (
-                      <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0">
-                        {showAvatar && (
-                          <img
-                            src={role === 'doctor' ? activeSession.patientAvatar : activeSession.doctorAvatar}
-                            alt="Avatar"
-                            className="w-full h-full rounded-full object-cover border border-slate-200 shadow-xs"
-                          />
-                        )}
-                      </div>
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <img
+                      src={role === 'doctor' ? activeSession.patientAvatar : activeSession.doctorAvatar}
+                      alt={role === 'doctor' ? activeSession.patientName : activeSession.doctorName}
+                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border border-slate-200 shadow-xs"
+                    />
+                    {activeSession.status === 'live' && (
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full"></div>
                     )}
-                    <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                      <div
-                        className={`px-4 py-2.5 rounded-2xl sm:rounded-3xl shadow-sm text-sm sm:text-base ${
-                          isMe
-                            ? 'bg-[#006c44] text-white rounded-br-sm'
-                            : 'bg-white border border-slate-200 text-[#022434] rounded-bl-sm'
-                        }`}
-                      >
-                        {msg.text}
-                        {msg.imageUrl && (
-                          <img
-                            src={msg.imageUrl}
-                            alt="Attached file"
-                            className="mt-2 rounded-xl max-w-[240px] max-h-[200px] object-cover border border-white/20 shadow-xs"
-                          />
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-1 mt-1 px-1">
-                        <span className="text-[10px] text-slate-400">{msg.timestamp}</span>
-                        {isMe && (
-                          msg.status === 'read' ? (
-                            <CheckCheck className="w-3 h-3 text-emerald-500" />
-                          ) : msg.status === 'delivered' ? (
-                            <CheckCheck className="w-3 h-3 text-slate-400" />
-                          ) : (
-                            <Check className="w-3 h-3 text-slate-400" />
-                          )
-                        )}
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-sm sm:text-base text-[#022434] leading-tight">
+                      {role === 'doctor' ? activeSession.patientName : activeSession.doctorName}
+                    </h2>
+                    {activeSession.status === 'completed' ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200 mt-0.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 mr-1" />
+                        Completed Consultation
+                      </span>
+                    ) : (
+                      <p className="text-xs text-slate-500 font-nunito flex items-center space-x-1 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Online</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-1 sm:space-x-2">
+                {role === 'doctor' && activeSession.status !== 'completed' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('medium');
+                        isEndingSessionRef.current = false;
+                        setIsConsultationSummaryModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-[#022434] hover:bg-[#1c3a4a] text-white rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                      title="Send Official Health Report to Patient"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-teal-300" />
+                      <span className="hidden sm:inline">Health Report</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('medium');
+                        setSelectedPatientForRx(activeSession.patientName);
+                        setIsPrescriptionModalOpen(true);
+                      }}
+                      className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-[#006c44] hover:bg-[#005233] text-white rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                      title="Issue E-Prescription in Consultation"
+                    >
+                      <Pill className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Issue Rx</span>
+                    </button>
+                  </>
+                )}
+                {selectedConsultationForPDF && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setIsSummaryModalOpen(true);
+                    }}
+                    className="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 rounded-xl text-xs font-bold font-outfit flex items-center space-x-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                    title="View Official Health Report PDF"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-teal-600" />
+                    <span className="hidden sm:inline">View PDF</span>
+                  </button>
+                )}
+                {activeSession.status !== 'completed' && (
+                  <button
+                    type="button"
+                    onClick={() => handleEndChatConsultation()}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 font-bold font-outfit text-xs rounded-xl transition-all active:scale-95 cursor-pointer flex items-center space-x-1"
+                    title="Conclude Consultation"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>End</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Chat Messages */}
+            <div
+              ref={chatContainerRef}
+              onScroll={handleChatScroll}
+              className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3 bg-slate-50/70 font-nunito"
+            >
+              <div className="text-center my-3">
+                <span className="bg-slate-200/60 text-slate-600 text-[10px] sm:text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                  {activeSession.dateTimeStr}
+                </span>
+              </div>
+
+              <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 sm:p-5 max-w-sm mx-auto text-center space-y-2 shadow-xs">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600 mb-2">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <p className="text-xs sm:text-sm text-blue-900 font-medium">
+                  This session is end-to-end encrypted.
+                </p>
+                <p className="text-[10px] sm:text-xs text-blue-700/80">
+                  Only you and the {role === 'doctor' ? 'patient' : 'doctor'} can read these messages.
+                </p>
+              </div>
+
+              {messages.map((msg, idx) => {
+                const isMe = msg.sender === (role === 'doctor' ? 'doctor' : 'patient');
+                const showAvatar = !isMe && (idx === 0 || messages[idx - 1].sender !== msg.sender);
+
+                return (
+                  <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-3 group`}>
+                    <div className={`flex max-w-[85%] sm:max-w-[75%] ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2`}>
+                      {!isMe && (
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 shrink-0">
+                          {showAvatar && (
+                            <img
+                              src={role === 'doctor' ? activeSession.patientAvatar : activeSession.doctorAvatar}
+                              alt="Avatar"
+                              className="w-full h-full rounded-full object-cover border border-slate-200 shadow-xs"
+                            />
+                          )}
+                        </div>
+                      )}
+                      <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                        <div
+                          className={`px-4 py-2.5 rounded-2xl sm:rounded-3xl shadow-sm text-sm sm:text-base relative ${
+                            isMe
+                              ? 'bg-[#006c44] text-white rounded-br-sm'
+                              : 'bg-white border border-slate-200 text-[#022434] rounded-bl-sm'
+                          }`}
+                        >
+                          {/* Quoted Tagged Reply Preview */}
+                          {msg.replyTo && (
+                            <div
+                              className={`mb-2 px-3 py-1.5 rounded-xl border-l-2 text-xs ${
+                                isMe
+                                  ? 'bg-black/20 border-white text-white/95'
+                                  : 'bg-slate-100 border-emerald-600 text-slate-700'
+                              }`}
+                            >
+                              <span className="font-bold text-[11px] block">{msg.replyTo.senderName}</span>
+                              <span className="text-[11px] opacity-90 line-clamp-1">{msg.replyTo.text}</span>
+                            </div>
+                          )}
+
+                          <div className="whitespace-pre-wrap break-words">{msg.text}</div>
+
+                          {msg.imageUrl && (
+                            <img
+                              src={msg.imageUrl}
+                              alt="Attached file"
+                              className="mt-2 rounded-xl max-w-[240px] max-h-[200px] object-cover border border-white/20 shadow-xs"
+                            />
+                          )}
+                        </div>
+
+                        <div className="flex items-center space-x-1.5 mt-1 px-1">
+                          <span className="text-[10px] text-slate-400">{msg.timestamp}</span>
+                          {isMe && (
+                            <span title={msg.status === 'read' ? 'Read' : msg.status === 'delivered' ? 'Delivered' : 'Sent'}>
+                              {msg.status === 'read' ? (
+                                <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : msg.status === 'delivered' ? (
+                                <CheckCheck className="w-3.5 h-3.5 text-slate-400" />
+                              ) : (
+                                <Check className="w-3.5 h-3.5 text-slate-400" />
+                              )}
+                            </span>
+                          )}
+                          {/* Tag & Reply button */}
+                          {activeSession.status !== 'completed' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                triggerHaptic('light');
+                                setReplyingTo(msg);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-emerald-600 p-0.5 rounded transition-opacity cursor-pointer"
+                              title="Reply to message"
+                            >
+                              <Reply className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
+                );
+              })}
+
+              {/* Real-time Typing animation indicator */}
+              {otherTyping && (
+                <div className="flex items-center space-x-2 my-2 animate-in fade-in duration-200">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden shrink-0 border border-slate-200">
+                    <img
+                      src={role === 'doctor' ? activeSession.patientAvatar : activeSession.doctorAvatar}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="bg-white border border-slate-200 px-3.5 py-2.5 rounded-2xl rounded-bl-sm shadow-2xs flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
                 </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Hidden File Input for Device Photos & Medical Documents */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileAttachment}
-            accept="image/*,application/pdf"
-            className="hidden"
-          />
-
-          {/* Input Area */}
-          <div className="bg-white px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-200 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
-            <form onSubmit={handleSendMessage} className="flex items-center space-x-2 sm:space-x-3">
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('light');
-                  fileInputRef.current?.click();
-                }}
-                className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 cursor-pointer"
-                title="Attach Document or Image from Device"
-              >
-                <Paperclip className="w-5 h-5" />
-              </button>
-              {role === 'doctor' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic('medium');
-                    setSelectedPatientForRx(activeSession.patientName);
-                    setIsPrescriptionModalOpen(true);
-                  }}
-                  className="p-2 sm:p-2.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-full transition-colors shrink-0 cursor-pointer"
-                  title="Issue Prescription"
-                >
-                  <Pill className="w-5 h-5" />
-                </button>
               )}
-              <div className="flex-1 bg-slate-100 rounded-full flex items-center px-4 py-1 sm:py-2 border border-slate-200 focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
-                <input
-                  type="text"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder="Type your message..."
-                  className="flex-1 bg-transparent border-none focus:outline-none text-sm sm:text-base text-[#022434] py-2 placeholder-slate-400 font-nunito"
-                />
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Hidden File Input for Device Photos & Medical Documents */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileAttachment}
+              accept="image/*,application/pdf"
+              className="hidden"
+            />
+
+            {/* Input Area or Completed Status Banner */}
+            {activeSession.status === 'completed' ? (
+              <div className="bg-slate-100 border-t border-slate-200 px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+                <div className="flex items-center space-x-2 text-slate-700 text-xs sm:text-sm font-medium">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>This consultation has ended and is marked completed. New messages cannot be sent.</span>
+                </div>
+                {selectedConsultationForPDF && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('selection');
+                      setIsSummaryModalOpen(true);
+                    }}
+                    className="px-4 py-2 bg-[#006c44] hover:bg-[#005233] text-white rounded-xl text-xs font-bold font-outfit shadow-xs transition-all flex items-center space-x-1.5 shrink-0 cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>View Official Health Report (PDF)</span>
+                  </button>
+                )}
               </div>
-              <button
-                type="submit"
-                disabled={!chatMessage.trim()}
-                className={`p-3 sm:p-3.5 rounded-full transition-all shrink-0 ${
-                  chatMessage.trim()
-                    ? 'bg-[#77daa4] hover:bg-[#006c44] text-[#022434] hover:text-white shadow-sm cursor-pointer active:scale-95'
-                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                }`}
-                title="Send Message"
-              >
-                <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5" />
-              </button>
-            </form>
+            ) : (
+              <div className="bg-white px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-200 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
+                {/* Replying banner */}
+                {replyingTo && (
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-t-xl text-xs text-slate-700 mb-2">
+                    <div className="flex items-center space-x-2 truncate">
+                      <Reply className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span className="font-semibold text-emerald-700">{replyingTo.senderName}:</span>
+                      <span className="truncate text-slate-500">{replyingTo.text || '[Attachment]'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      className="p-1 hover:bg-slate-200 text-slate-400 hover:text-slate-600 rounded-full"
+                      title="Cancel reply"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <form onSubmit={handleSendMessage} className="flex items-center space-x-2 sm:space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic('light');
+                      fileInputRef.current?.click();
+                    }}
+                    className="p-2 sm:p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors shrink-0 cursor-pointer"
+                    title="Attach Document or Image from Device"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
+                  {role === 'doctor' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('medium');
+                        setSelectedPatientForRx(activeSession.patientName);
+                        setIsPrescriptionModalOpen(true);
+                      }}
+                      className="p-2 sm:p-2.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-full transition-colors shrink-0 cursor-pointer"
+                      title="Issue Prescription"
+                    >
+                      <Pill className="w-5 h-5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleToggleVoiceRecording}
+                    className={`p-2 sm:p-2.5 rounded-full transition-colors shrink-0 cursor-pointer ${
+                      isRecordingAudio
+                        ? 'bg-rose-500 text-white animate-pulse'
+                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                    }`}
+                    title={isRecordingAudio ? 'Stop and send voice note' : 'Record voice note'}
+                  >
+                    <Mic className="w-5 h-5" />
+                  </button>
+                  <div className="flex-1 bg-slate-100 rounded-full flex items-center px-4 py-1 sm:py-2 border border-slate-200 focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
+                    <input
+                      type="text"
+                      value={chatMessage}
+                      onChange={(e) => handleInputChange(e.target.value)}
+                      placeholder="Type your message..."
+                      className="flex-1 bg-transparent border-none focus:outline-none text-sm sm:text-base text-[#022434] py-2 placeholder-slate-400 font-nunito"
+                    />
+                  </div>
+                  {/* End Consultation Button on bottom bar */}
+                  <button
+                    type="button"
+                    onClick={() => handleEndChatConsultation()}
+                    className="p-2.5 sm:p-3 rounded-full text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors shrink-0 cursor-pointer"
+                    title="End Consultation"
+                  >
+                    <PhoneOff className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!chatMessage.trim()}
+                    className={`p-3 sm:p-3.5 rounded-full transition-all shrink-0 ${
+                      chatMessage.trim()
+                        ? 'bg-[#77daa4] hover:bg-[#006c44] text-[#022434] hover:text-white shadow-sm cursor-pointer active:scale-95'
+                        : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                    }`}
+                    title="Send Message"
+                  >
+                    <Send className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5" />
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50/50 font-outfit relative overflow-hidden pb-20 sm:pb-0">
+      ) : (
+        <div className="flex flex-col h-full bg-slate-50/50 font-outfit relative overflow-hidden pb-20 sm:pb-0">
       <StatusBar />
       <Header
         title={role === 'doctor' ? 'Patients Queue & Clinic' : 'Consultations'}
@@ -1244,6 +1479,8 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
           </div>
         </div>
       </div>
+      </div>
+      )}
 
       {/* Patient Consultation Summary PDF Modal */}
       <ConsultationSummaryPDFModal
@@ -1276,17 +1513,24 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
           triggerHaptic('success');
           showToast(`E-Prescription #${rx.referenceNo} issued for ${rx.patientName}!`, 'success');
           if (activeSession) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `msg-rx-${Date.now()}`,
-                sender: 'doctor',
-                senderName: rx.doctorName && rx.doctorName !== 'Attending Physician' ? rx.doctorName : 'Doctor',
-                text: `📄 Official E-Prescription Issued (#${rx.referenceNo}) for ${rx.diagnosis}.\nMedications: ${rx.medications.map((m) => `${m.drugName} (${m.dosage}, ${m.frequency})`).join('; ')}. Instructions: ${rx.doctorNotes || 'Follow treatment regimen.'}`,
-                timestamp: 'Just now',
-                status: 'sent',
-              },
-            ]);
+            const rxMsg: ChatMessage = {
+              id: `msg-rx-${Date.now()}`,
+              sender: 'doctor',
+              senderName: rx.doctorName && rx.doctorName !== 'Attending Physician' ? rx.doctorName : 'Doctor',
+              text: `📄 Official E-Prescription Issued (#${rx.referenceNo}) for ${rx.diagnosis}.\nMedications: ${rx.medications.map((m) => `${m.drugName} (${m.dosage}, ${m.frequency})`).join('; ')}. Instructions: ${rx.doctorNotes || 'Follow treatment regimen.'}`,
+              timestamp: getPhoneTime(),
+              status: 'sent',
+            };
+            setMessages((prev) => [...prev, rxMsg]);
+            scrollToBottom(true);
+            primeApi
+              .sendChatMessage(activeSession.id, {
+                sender: rxMsg.sender,
+                senderName: rxMsg.senderName,
+                text: rxMsg.text || '',
+                timestamp: rxMsg.timestamp,
+              })
+              .catch(() => {});
           }
         }}
       />
@@ -1311,6 +1555,6 @@ export const ActiveChatScreen: React.FC<ActiveChatScreenProps> = ({
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
       />
-    </div>
+    </>
   );
 };

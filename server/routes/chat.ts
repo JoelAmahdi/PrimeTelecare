@@ -13,7 +13,7 @@ chatRouter.get('/:sessionId/messages', (req: Request, res: Response) => {
 // POST /api/chat/:sessionId/messages
 chatRouter.post('/:sessionId/messages', (req: Request, res: Response) => {
   const sessionId = req.params.sessionId || 'default';
-  const { sender, senderName, text, imageUrl, status } = req.body;
+  const { sender, senderName, text, imageUrl, status, timestamp, replyTo } = req.body;
 
   if (!sender || !text) {
     return res.status(400).json({ success: false, error: 'Sender and text are required' });
@@ -25,14 +25,37 @@ chatRouter.post('/:sessionId/messages', (req: Request, res: Response) => {
     text,
     imageUrl,
     status: status || 'delivered',
+    timestamp,
+    replyTo,
   });
 
   return res.status(201).json({ success: true, message });
 });
 
+// GET /api/chat/:sessionId/typing
+chatRouter.get('/:sessionId/typing', (req: Request, res: Response) => {
+  const sessionId = req.params.sessionId || 'default';
+  const role = req.query.role as string | undefined;
+  const status = store.getTyping(sessionId, role);
+  return res.json({ success: true, ...status });
+});
+
 // POST /api/chat/:sessionId/typing
 chatRouter.post('/:sessionId/typing', (req: Request, res: Response) => {
-  const { user } = req.body;
-  return res.json({ success: true, isTyping: true, user });
+  const sessionId = req.params.sessionId || 'default';
+  const { user, role, isTyping } = req.body;
+  store.setTyping(sessionId, user || 'User', role || 'patient', isTyping !== false);
+  return res.json({ success: true, isTyping: isTyping !== false, user });
+});
+
+// POST /api/chat/:sessionId/read
+chatRouter.post('/:sessionId/read', (req: Request, res: Response) => {
+  const sessionId = req.params.sessionId || 'default';
+  const { readerRole } = req.body;
+  if (!readerRole || (readerRole !== 'doctor' && readerRole !== 'patient')) {
+    return res.status(400).json({ success: false, error: 'readerRole must be "doctor" or "patient"' });
+  }
+  const messages = store.markMessagesRead(sessionId, readerRole);
+  return res.json({ success: true, count: messages.length, messages });
 });
 

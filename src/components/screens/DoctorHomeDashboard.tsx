@@ -798,7 +798,7 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="w-11 h-11 rounded-2xl bg-emerald-100/80 text-[#006c44] flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <Video className="w-5 h-5" />
+                        <Users className="w-5 h-5" />
                       </div>
                       {activeSession && (
                         <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-100 text-[#006c44] text-[10px] font-extrabold border border-emerald-300 animate-pulse">
@@ -900,13 +900,14 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                       triggerHaptic('selection');
                       setConsultationTab('queue');
                     }}
-                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-outfit transition-all cursor-pointer ${
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-outfit transition-all cursor-pointer inline-flex items-center space-x-1.5 ${
                       consultationTab === 'queue'
                         ? 'bg-[#006c44] text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    Patient Queue ({todaysPatients.length})
+                    <Users className="w-4 h-4" />
+                    <span>Patient Queue ({todaysPatients.length})</span>
                   </button>
                   <button
                     type="button"
@@ -914,13 +915,14 @@ export const DoctorHomeDashboard: React.FC<DoctorHomeDashboardProps> = ({ user, 
                       triggerHaptic('selection');
                       setConsultationTab('completed');
                     }}
-                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-outfit transition-all cursor-pointer ${
+                    className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold font-outfit transition-all cursor-pointer inline-flex items-center space-x-1.5 ${
                       consultationTab === 'completed'
                         ? 'bg-[#006c44] text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    Completed ({completedConsultations.length})
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Completed ({completedConsultations.length})</span>
                   </button>
                 </div>
               </div>

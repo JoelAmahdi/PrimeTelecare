@@ -340,6 +340,11 @@ export interface ChatMessage {
   imageUrl?: string;
   timestamp: string;
   status?: MessageStatus;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    text?: string;
+  };
 }
 
 export interface MedicalRecordFile {

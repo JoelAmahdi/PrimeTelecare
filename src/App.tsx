@@ -723,7 +723,8 @@ export default function App() {
     let lastSeenMsgCount = 0;
 
     const pollBackgroundMessages = async () => {
-      if (currentScreen === 'active-chat' || currentScreen === 'video-call') return;
+      const isOutOfBrowser = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      if (!isOutOfBrowser && (currentScreen === 'active-chat' || currentScreen === 'video-call')) return;
       try {
         const activeSess = localStorage.getItem('prime_telecare_active_call_session');
         const consultId = activeSess ? JSON.parse(activeSess)?.consultationId : 'consultation-live-room';

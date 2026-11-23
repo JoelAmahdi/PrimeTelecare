@@ -138,6 +138,7 @@ const LEGACY_PLACEHOLDER_AUDIT_IDS = new Set(['audit-1', 'audit-2', 'audit-3', '
 
 class MemoryStore {
   private state: ServerState;
+  private typingState: Record<string, Record<string, { user: string; isTyping: boolean; timestamp: number }>> = {};
 
   constructor() {
     this.state = this.loadFromDisk();
@@ -409,18 +410,64 @@ class MemoryStore {
     return this.state.chatMessages[sessionId] || this.state.chatMessages['default'] || [];
   }
 
-  addChatMessage(sessionId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>): ChatMessage {
+  addChatMessage(
+    sessionId: string,
+    message: Omit<ChatMessage, 'id' | 'timestamp'> & { timestamp?: string }
+  ): ChatMessage {
     if (!this.state.chatMessages[sessionId]) {
       this.state.chatMessages[sessionId] = [];
     }
     const newMsg: ChatMessage = {
       ...message,
-      id: `msg-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: message.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: message.status || 'delivered',
     };
     this.state.chatMessages[sessionId].push(newMsg);
     this.saveToDisk();
     return newMsg;
+  }
+
+  markMessagesRead(sessionId: string, readerRole: 'doctor' | 'patient'): ChatMessage[] {
+    const messages = this.state.chatMessages[sessionId];
+    if (!messages) return [];
+    let updated = false;
+    for (const msg of messages) {
+      if (msg.sender !== readerRole && msg.status !== 'read') {
+        msg.status = 'read';
+        updated = true;
+      }
+    }
+    if (updated) {
+      this.saveToDisk();
+    }
+    return messages;
+  }
+
+  // --- Typing Indicators ---
+  setTyping(sessionId: string, user: string, role: string, isTyping: boolean): void {
+    if (!this.typingState[sessionId]) {
+      this.typingState[sessionId] = {};
+    }
+    this.typingState[sessionId][role] = {
+      user,
+      isTyping,
+      timestamp: Date.now(),
+    };
+  }
+
+  getTyping(sessionId: string, excludeRole?: string): { isTyping: boolean; user?: string } {
+    const sessionTyping = this.typingState[sessionId];
+    if (!sessionTyping) return { isTyping: false };
+    const now = Date.now();
+    for (const [role, data] of Object.entries(sessionTyping)) {
+      if (excludeRole && role === excludeRole) continue;
+      // Active typing expires after 4 seconds
+      if (data.isTyping && (now - data.timestamp < 4000)) {
+        return { isTyping: true, user: data.user };
+      }
+    }
+    return { isTyping: false };
   }
 
   // --- Triage Cases ---
